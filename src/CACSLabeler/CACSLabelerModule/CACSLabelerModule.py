@@ -1,4 +1,6 @@
 from __main__ import vtk, qt, ctk, slicer
+import warnings
+warnings.simplefilter(action='ignore', category=FutureWarning)
 from slicer.ScriptedLoadableModule import ScriptedLoadableModule
 import unittest
 import os
@@ -503,31 +505,6 @@ class CACSLabelerModuleLogic:
         self.inputVolumeName = inputVolumeName
         self.calciumLabelNode = None
         self.CardiacAgatstonMeasuresLUTNode = None
-
-        # imports custom Slicer lookup color table file
-        # self.CardiacAgatstonMeasuresLUTNode = slicer.util.getNode(pattern='CardiacAgatstonMeasuresLUT')
-        # if not self.CardiacAgatstonMeasuresLUTNode:
-        #     import urllib
-        #     downloads = (
-        #         ('http://www.na-mic.org/Wiki/images/4/4e/CardiacAgatstonMeasures_TutorialContestSummer2014.zip',
-        #          'CardiacAgatstonMeasures_TutorialContestSummer2014.zip'),
-        #         )
-
-        #     for url,name in downloads:
-        #       filePath = os.path.join(slicer.app.temporaryPath, name)
-        #       if not os.path.exists(filePath) or os.stat(filePath).st_size == 0:
-        #         print('Requesting download %s from %s...\n' % (name, url))
-        #         urllib.urlretrieve(url, filePath)
-
-        #     zipFilePath = os.path.join(slicer.app.temporaryPath, 'CardiacAgatstonMeasures_TutorialContestSummer2014.zip')
-        #     extractPath = os.path.join(slicer.app.temporaryPath, 'CardiacAgatstonMeasures_TutorialContestSummer2014')
-        #     qt.QDir().mkpath(extractPath)
-        #     applicationLogic = slicer.app.applicationLogic()
-        #     applicationLogic.Unzip(zipFilePath, extractPath)
-
-        #     lutPath = os.path.join(extractPath, 'CardiacAgatstonMeasuresLUT.ctbl')
-        #     slicer.util.loadColorTable(lutPath)
-        
         lutPath = os.path.join('H:/cloud/cloud_data/Projects/CACSLabeler/code/src/CACSLabeler/CACSLabelerModule/CardiacAgatstonMeasuresLUT.ctbl')
         slicer.util.loadColorTable(lutPath)
 
@@ -535,9 +512,6 @@ class CACSLabelerModuleLogic:
 
         # Sets minimum threshold value based on KEV80 or KEV120
         if self.KEV80:
-            #self.lowerThresholdValue = 167
-            #calciumName = "{0}_80KEV_{1}HU_Calcium_Label".format(self.inputVolumeName, self.lowerThresholdValue)
-            #calciumName = "{0}-label-lesion".format(self.inputVolumeName)
             print('!!! Method for KEV80 not implemented !!!')
         elif self.KEV120:
             self.lowerThresholdValue = 130
@@ -549,20 +523,10 @@ class CACSLabelerModuleLogic:
         inputVolume = su.PullVolumeFromSlicer(self.inputVolumeName)
         thresholdImage = sitk.BinaryThreshold(inputVolume, self.lowerThresholdValue, self.upperThresholdValue)
         castedThresholdImage = sitk.Cast(thresholdImage, sitk.sitkInt16)
-        
-        #su.PushVolumeToSlicer(castedThresholdImage, name=calciumName)
-        #calciumLabelNode = slicer.util.getNode(calciumName)
-        #print('calciumLabelNode', calciumLabelNode)
-        #slicer.util.setSliceViewerLayers(label=calciumLabelNode)
-        #slicer.util.setSliceViewerLayers
-        
         su.PushLabel(castedThresholdImage, calciumName)
-
         self.assignLabelLUT(calciumName)
         self.setLowerPaintThreshold()
         
-
-
     def assignLabelLUT(self, calciumName):
         # Set the color lookup table (LUT) to the custom CardiacAgatstonMeasuresLUT
         self.calciumLabelNode = slicer.util.getNode(calciumName)
