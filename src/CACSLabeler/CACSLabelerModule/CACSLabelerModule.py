@@ -35,12 +35,12 @@ import csv
 #            writer.writerow(data)
 #except IOError:
 #    print("I/O error")
-    
+
 ############## CACSLabelerModule ##############
 
 def splitFilePath(filepath):
     """ Split filepath into folderpath, filename and file extension
-    
+
     :param filepath: Filepath
     :type filepath: str
     """
@@ -49,7 +49,7 @@ def splitFilePath(filepath):
     head, file_extension = os.path.splitext(filepath)
     filename = os.path.basename(head)
     return folderpath, filename, file_extension
-    
+
 class CACSLabelerModule(ScriptedLoadableModule):
   """Uses ScriptedLoadableModule base class, available at:
   https://github.com/Slicer/Slicer/blob/master/Base/Python/slicer/ScriptedLoadableModule.py
@@ -66,7 +66,7 @@ This is an example of scripted loadable module bundled in an extension.
 It performs a simple thresholding on the input volume and optionally captures a screenshot.
 """
     self.parent.helpText += self.getDefaultModuleDocumentationLink()
-    self.parent.acknowledgementText = """ 
+    self.parent.acknowledgementText = """
 This file was originally developed by Jean-Christophe Fillion-Robin, Kitware Inc.
 and Steve Pieper, Isomics, Inc. and was partially funded by NIH grant 3P41RR013218-12S1.
 """ # replace with organization, grant and thanks.
@@ -92,14 +92,14 @@ class CACSLabelerModuleWidget:
         if not parent:
             self.setup()
             self.parent.show()
-            
+
         # Settings filepath
         currentFile = os.path.dirname(os.path.abspath(__file__))
         self.filepath_settings = os.path.dirname(os.path.dirname(os.path.dirname(currentFile))) + '\\data\\settings.txt'
 
     def setup(self):
         # Instantiate and connect widgets ...
-        
+
         #
         # Reload and Test area
         #
@@ -110,7 +110,7 @@ class CACSLabelerModuleWidget:
             reloadCollapsibleButton.collapsed = False
             self.layout.addWidget(reloadCollapsibleButton)
             reloadFormLayout = qt.QFormLayout(reloadCollapsibleButton)
-            
+
             # reload button
             # (use this during development, but remove it when delivering
             #  your module to users)
@@ -128,7 +128,7 @@ class CACSLabelerModuleWidget:
 #            reloadFormLayout.addWidget(self.reloadAndTestButton)
 #            self.reloadAndTestButton.connect('clicked()', self.onReloadAndTest)
 
-        
+
         # Collapsible button for Input Parameters
         self.measuresCollapsibleButton = ctk.ctkCollapsibleButton()
         self.measuresCollapsibleButton.text = "Input Parameters"
@@ -142,27 +142,27 @@ class CACSLabelerModuleWidget:
         # Layout within the sample collapsible button
         self.measuresFormLayout = qt.QFormLayout(self.measuresCollapsibleButton)
         self.labelsFormLayout = qt.QFormLayout(self.labelsCollapsibleButton)
-        
+
 #        # Settings filepath
 #        currentFile = os.path.dirname(os.path.abspath(__file__))
 #        self.filepath_settings = os.path.dirname(os.path.dirname(os.path.dirname(currentFile))) + '\\data\\settings.txt'
-#        
-        
+#
+
 #        f1 = os.path.dirname(os.path.dirname(os.path.dirname(f)))
 #        f2 = f1 + '\\data\\settings.txt'
 #        print('f2',f2)
 #        print('isfile', os.path.isfile(f2))
-#        
+#
 #        print('f', f + '\\..\\..\\..\\data\\settings.txt')
 #        print('isfile', os.path.isfile(f))
 #        print('dir', os.path.dirname(os.path.dirname(os.path.dirname(f))))
-#        
+#
 #        self.fileSettingsEdit = qt.QLineEdit()
 #        self.measuresFormLayout.addRow(self.fileSettingsEdit)
 #        self.fileSettingsEdit.setText('Select settings file')
         # Check if settings file exist
-        
-        
+
+
         # Load input button
         loadInputButton = qt.QPushButton("Load input data")
         loadInputButton.toolTip = "Load data to label"
@@ -170,7 +170,7 @@ class CACSLabelerModuleWidget:
         loadInputButton.connect('clicked(bool)', self.onLoadInputButtonClicked)
         self.loadInputButton = loadInputButton
         self.measuresFormLayout.addRow(self.loadInputButton)
-        
+
         # Select data source
         self.RadioButtonsFrame = qt.QFrame(self.measuresCollapsibleButton)
         self.RadioButtonsFrame.setLayout(qt.QHBoxLayout())
@@ -209,7 +209,7 @@ class CACSLabelerModuleWidget:
         self.KEV120.checked = False
         self.KEV120.enabled = False
         self.RadioButtonsFrame.layout().addWidget(self.KEV120)
-        
+
         #self.fileDilaog = qt.QFileDialog.getExistingDirectory()
         #filepath = self.measuresFormLayout.addRow(self.fileDilaog)
 #        self.fileEdit = qt.QLineEdit()
@@ -224,14 +224,14 @@ class CACSLabelerModuleWidget:
 
         # Add vertical spacer
         self.layout.addStretch(1)
-        
+
         # Set local var as instance attribute
         self.thresholdButton = thresholdButton
 
         # sets the layout to Red Slice Only
         layoutManager = slicer.app.layoutManager()
         layoutManager.setLayout(slicer.vtkMRMLLayoutNode.SlicerLayoutOneUpRedSliceView)
-        
+
         # Save button
         self.saveButton = qt.QPushButton("Save")
         self.saveButton.toolTip = "Save data."
@@ -239,7 +239,7 @@ class CACSLabelerModuleWidget:
         self.saveButton.enabled = False
         self.parent.layout().addWidget(self.saveButton)
         self.saveButton.connect('clicked()', self.onSaveOutputButtonClicked)
-        
+
         # Delete scans button
         deleteButton = qt.QPushButton("Delete data")
         deleteButton.toolTip = "Delete data"
@@ -247,7 +247,7 @@ class CACSLabelerModuleWidget:
         deleteButton.connect('clicked(bool)', self.onDeleteButtonClicked)
         self.deleteButton = deleteButton
         self.parent.layout().addWidget(self.deleteButton)
-        
+
         # Compute agatston score
         agatstonButton = qt.QPushButton("Compute Agatston")
         agatstonButton.toolTip = "Compute Agatsto"
@@ -256,25 +256,25 @@ class CACSLabelerModuleWidget:
         agatstonButton.connect('clicked(bool)', self.onAgatstonButtonClicked)
         self.agatstonButton = agatstonButton
         self.parent.layout().addWidget(self.agatstonButton)
-        
+
         # Read settings file
         if os.path.isfile(self.filepath_settings):
             self.readSettings(self.filepath_settings)
         else:
             self.writeSettings(self.filepath_settings)
-            
-            
+
+
     def writeSettings(self, filepath_settings):
         """ Write settings into setting file
-        
+
         :param filepath_settings: Filepath to settings file
         :type filepath_settings: str
         """
-        
+
         # Initialize settings
         settings = {'folderpath_input': 'H:/cloud/cloud_data/Projects/DL/Code/src/experiments/EXP001/data/data_cacs',
                     'folderpath_output': 'H:/cloud/cloud_data/Projects/DL/Code/src/experiments/EXP001/data/data_cacs'}
-        
+
         # Write settings to file
         f = open(filepath_settings, "a")
         for key,value in settings.items():
@@ -284,11 +284,11 @@ class CACSLabelerModuleWidget:
 
     def readSettings(self, filepath_settings):
         """ Read settings from setting file
-        
+
         :param filepath_settings: Filepath to settings file
         :type filepath_settings: str
         """
-        
+
         if os.path.isfile(filepath_settings):
             print('Reading setting')
             settings=dict()
@@ -303,19 +303,19 @@ class CACSLabelerModuleWidget:
             self.settings = settings
         else:
             print('Settings file:' + filepath_settings + 'does not exist')
-    
+
     def onDeleteButtonClicked(self):
         """ Delete all images in slicer
-        
+
         """
         # Deleta all old nodes
         nodes=slicer.util.getNodesByClass('vtkMRMLScalarVolumeNode')
         for node in nodes:
             slicer.mrmlScene.RemoveNode(node)
-            
+
     def densityFactor(self, value):
         """ Compute density weigt factor for agatston score based on maximum HU value of a lesion
-        
+
         :param value: Maximum HU value of a lesion
         :type value: int
         """
@@ -333,7 +333,7 @@ class CACSLabelerModuleWidget:
 
     def CACSGrading(self, value):
         """ Compute agatston grading from agatston score
-        
+
         :param value: Agatston score
         :type value: float
         """
@@ -347,11 +347,11 @@ class CACSLabelerModuleWidget:
             grading = 'severe'
         else:
             grading='zero'
-        return grading            
-            
+        return grading
+
     def computeAgatston(self, image, imageLabel, pixelVolume):
         """ Compute agatston score from image and image label
-        
+
         :param image: Image
         :type image: np.ndarray
         :param imageLabel: Image label
@@ -359,7 +359,7 @@ class CACSLabelerModuleWidget:
         :param pixelVolume: Volume of apixel
         :type pixelVolume: float
         """
-        
+
         # Neighborhood of connected components (6-connectivity)
         structure = np.zeros((3,3,3))
         structure[1,1,1] = 1
@@ -409,7 +409,7 @@ class CACSLabelerModuleWidget:
                 writer.writerow(data)
         #except IOError:
         #    print("I/O error")
-        
+
     def onAgatstonButtonClicked(self):
         inputVolumeName = self.inputImageNode.GetName()
         inputVolumeNameLabel = inputVolumeName + '-label-lesion'
@@ -422,8 +422,8 @@ class CACSLabelerModuleWidget:
         agatston = self.computeAgatston(image, imageLabel, pixelVolume)
         agatstonGrading = self.CACSGrading(agatston['AgatstonScore'])
         agatston['SerisInstanceUID'] = inputVolumeName
-        
-        # Print calcium scoring 
+
+        # Print calcium scoring
         print('---------------------------')
         print('----- Agatston score per Artery-----')
         for key,value in agatston.items():
@@ -433,22 +433,22 @@ class CACSLabelerModuleWidget:
         print('----- Agatston grading-----')
         print(agatstonGrading)
         print('---------------------------')
-  
+
         # Sort keys
         #key_list = ['SerisInstanceUID', 'AgatstonScore', 'LAD', 'LXC', 'RCX']
         #agatston1 = dict([(key, agatston[key]) for key in key_list if key in agatston])
-         
+
         #print('agatston1', agatston1)
         # Export agatston results
-        filepath_csv = 'H:/cloud/cloud_data/Projects/CACSLabeler/code/data/export.csv'
+        filepath_csv = '/Users/marchiggins/Desktop/Hausarbeit/Agatston_Score/Results/Export.csv'
         agatstonDict = [agatston]
         self.exportAgatston(agatstonDict, filepath_csv)
 
 
     def onSaveOutputButtonClicked(self):
         print ('onSaveOutputButtonClicked')
-        # Save 
-        folderpath_output = self.settings['folderpath_output']
+        # Save
+        folderpath_output = '/Users/marchiggins/Desktop/Hausarbeit/Agatston_Score/Output'
         volumeNodes = slicer.util.getNodesByClass('vtkMRMLScalarVolumeNode')
         for node in volumeNodes:
             volume_name = node.GetName()
@@ -457,9 +457,9 @@ class CACSLabelerModuleWidget:
                 filename_output = volume_name
                 filepath = folderpath_output + '/' + filename_output + '.nrrd'
                 slicer.util.saveNode(node, filepath)
-        
+
     def onLoadInputButtonClicked(self):
-        
+
         # Deleta all old nodes
         nodes=slicer.util.getNodesByClass('vtkMRMLScalarVolumeNode')
         for node in nodes:
@@ -467,7 +467,12 @@ class CACSLabelerModuleWidget:
 
         # Filter filpath by existing labels
         NumImages = 1
-        folderpath_input = self.settings['folderpath_input']
+        #folderpath_input = self.settings['folderpath_input']
+        import os
+        #print(os.path.dirname(os.path.abspath(__file__)))
+        folderpath_input = "/Users/marchiggins/Desktop/Hausarbeit/Agatston_Score/Input"
+        #print(os.path.isdir(folderpath_input))
+        print(folderpath_input)
         filepathList_input_all = glob(folderpath_input + '/*.mhd')
         filepathList_label = glob(folderpath_input + '/*-label-lesion.nrrd')
         filepathList_input=[]
@@ -478,7 +483,7 @@ class CACSLabelerModuleWidget:
                     found = True
             if not found:
                 filepathList_input.append(f0)
-                
+
         # Filter if weak label exist
         if self.dataSourceButton.checked:
             filepathList_input_filt=[]
@@ -491,16 +496,16 @@ class CACSLabelerModuleWidget:
                 if found:
                     filepathList_input_filt.append(f0)
             filepathList_input = filepathList_input_filt
-            
+
         self.filepathList_input = filepathList_input
         random.shuffle(self.filepathList_input)
-        
+
         for filepath in  self.filepathList_input[0:NumImages]:
             _, name,_ = splitFilePath(filepath)
             properties={'Name': name}
             node = slicer.util.loadVolume(filepath, returnNode=True, properties=properties)[1]
             node.SetName(name)
-        
+
         # Enable radio button
         self.KEV80.enabled = True
         self.KEV120.enabled = True
@@ -530,7 +535,7 @@ class CACSLabelerModuleWidget:
 #                                                             self.localCardiacEditorWidget,
 #                                                             parent=self.parent)
         #self.localLabelStatisticsWidget.setup()
-        
+
         # Activate Save Button
         self.saveButton.enabled = True
         self.agatstonButton.enabled = True
@@ -564,7 +569,7 @@ class CACSLabelerModuleWidget:
             qt.QMessageBox.warning(slicer.util.mainWindow(),
               "Reload and Test", 'Exception!\n\n' + str(e) +
                                  "\n\nSee Python Console for Stack Trace")
-            
+
     def cleanup(self):
         pass
 
@@ -588,7 +593,7 @@ class CACSLabelerModuleLogic:
         self.inputVolumeName = inputVolumeName
         self.calciumLabelNode = None
         self.CardiacAgatstonMeasuresLUTNode = None
-        lutPath = os.path.join('H:/cloud/cloud_data/Projects/CACSLabeler/code/src/CACSLabeler/CACSLabelerModule/CardiacAgatstonMeasuresLUT.ctbl')
+        lutPath = os.path.join('/Users/marchiggins/Desktop/Hausarbeit/Code/CACSLabeler-main/src/CACSLabeler/CACSLabelerModule/CardiacAgatstonMeasuresLUT.ctbl')
         slicer.util.loadColorTable(lutPath)
 
     def runThreshold(self):
@@ -609,7 +614,7 @@ class CACSLabelerModuleLogic:
         su.PushLabel(castedThresholdImage, calciumName)
         self.assignLabelLUT(calciumName)
         self.setLowerPaintThreshold()
-        
+
     def assignLabelLUT(self, calciumName):
         # Set the color lookup table (LUT) to the custom CardiacAgatstonMeasuresLUT
         self.calciumLabelNode = slicer.util.getNode(calciumName)
@@ -946,12 +951,12 @@ class CardiacStatisticsWidget(LabelStatistics.LabelStatisticsWidget):
         selectionNode = slicer.app.applicationLogic().GetSelectionNode()
         self.grayscaleNode = slicer.util.getNode(selectionNode.GetActiveVolumeID())
         #self.labelNode = slicer.util.getNode(selectionNode.GetActiveLabelVolumeID())
-        
+
         #ID = selectionNode.GetActiveLabelVolumeID()
         volumeNodes = slicer.util.getNodesByClass('vtkMRMLScalarVolumeNode')
         volume = volumeNodes[1]
         volume_id = volume.GetID()
-        
+
         #print('ID', volume_id)
         self.labelNode = slicer.util.getNode(volume_id)
 
@@ -992,7 +997,7 @@ class CardiacStatisticsWidget(LabelStatistics.LabelStatisticsWidget):
         # connections
         #self.applyButton.connect('clicked()', self.onApply)
         self.chartButton.connect('clicked()', self.onChart)
-        
+
 
     def onApply(self):
         """Calculate the label statistics
@@ -1107,7 +1112,7 @@ class CardiacLabelStatisticsLogic(LabelStatistics.LabelStatisticsLogic):
 
         displayNode = labelNode.GetDisplayNode()
         colorNode = displayNode.GetColorNode()
-        
+
         self.colorNode = colorNode
 
         self.labelNode = labelNode
