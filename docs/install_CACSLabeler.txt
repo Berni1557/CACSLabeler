@@ -1,0 +1,8 @@
+
+---------- Code development installation ----------
+conda create -n env_CACSLabeler python=2.7.13
+activate env_CACSLabeler 
+pip install -U spyder
+conda install -c anaconda pyqt
+pip install spyder==3.0.0
+
