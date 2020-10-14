@@ -1,0 +1,2 @@
+folderpath_input:H:/cloud/cloud_data/Projects/DL/Code/src/experiments/EXP001/data/data_cacs
+folderpath_output:H:/cloud/cloud_data/Projects/DL/Code/src/experiments/EXP001/data/data_cacs

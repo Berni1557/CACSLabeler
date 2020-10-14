@@ -15,7 +15,27 @@ from glob import glob
 import random
 import numpy as np
 from SimpleITK import ConnectedComponentImageFilter
+import csv
 
+#import csv
+#csv_columns = ['No','Name','Country']
+#dict_data = [
+#{'No': 1, 'Name': 'Alex', 'Country': 'India'},
+#{'No': 2, 'Name': 'Ben', 'Country': 'USA'},
+#{'No': 3, 'Name': 'Shri Ram', 'Country': 'India'},
+#{'No': 4, 'Name': 'Smith', 'Country': 'USA'},
+#{'No': 5, 'Name': 'Yuva Raj', 'Country': 'India'},
+#]
+#csv_file = "H:/cloud/cloud_data/Projects/CACSLabeler/code/data/export.csv"
+#try:
+#    with open(csv_file, 'w') as csvfile:
+#        writer = csv.DictWriter(csvfile, fieldnames=csv_columns)
+#        writer.writeheader()
+#        for data in dict_data:
+#            writer.writerow(data)
+#except IOError:
+#    print("I/O error")
+    
 ############## CACSLabelerModule ##############
 
 def splitFilePath(filepath):
@@ -59,7 +79,7 @@ class CACSLabelerModuleWidget:
         self.editUtil = EditorLib.EditUtil.EditUtil()
         self.inputImageNode = None
         self.localCardiacEditorWidget = None
-        self.filepath_settings = 'H:/cloud/cloud_data/Projects/ALLabeler/code/src/data/settings.txt'
+        self.filepath_settings = None
         self.settings=None
 
         if not parent:
@@ -72,6 +92,10 @@ class CACSLabelerModuleWidget:
         if not parent:
             self.setup()
             self.parent.show()
+            
+        # Settings filepath
+        currentFile = os.path.dirname(os.path.abspath(__file__))
+        self.filepath_settings = os.path.dirname(os.path.dirname(os.path.dirname(currentFile))) + '\\data\\settings.txt'
 
     def setup(self):
         # Instantiate and connect widgets ...
@@ -99,10 +123,10 @@ class CACSLabelerModuleWidget:
             # reload and test button
             # (use this during development, but remove it when delivering
             #  your module to users)
-            self.reloadAndTestButton = qt.QPushButton("Reload and Test")
-            self.reloadAndTestButton.toolTip = "Reload this module and then run the self tests."
-            reloadFormLayout.addWidget(self.reloadAndTestButton)
-            self.reloadAndTestButton.connect('clicked()', self.onReloadAndTest)
+#            self.reloadAndTestButton = qt.QPushButton("Reload and Test")
+#            self.reloadAndTestButton.toolTip = "Reload this module and then run the self tests."
+#            reloadFormLayout.addWidget(self.reloadAndTestButton)
+#            self.reloadAndTestButton.connect('clicked()', self.onReloadAndTest)
 
         
         # Collapsible button for Input Parameters
@@ -118,6 +142,26 @@ class CACSLabelerModuleWidget:
         # Layout within the sample collapsible button
         self.measuresFormLayout = qt.QFormLayout(self.measuresCollapsibleButton)
         self.labelsFormLayout = qt.QFormLayout(self.labelsCollapsibleButton)
+        
+#        # Settings filepath
+#        currentFile = os.path.dirname(os.path.abspath(__file__))
+#        self.filepath_settings = os.path.dirname(os.path.dirname(os.path.dirname(currentFile))) + '\\data\\settings.txt'
+#        
+        
+#        f1 = os.path.dirname(os.path.dirname(os.path.dirname(f)))
+#        f2 = f1 + '\\data\\settings.txt'
+#        print('f2',f2)
+#        print('isfile', os.path.isfile(f2))
+#        
+#        print('f', f + '\\..\\..\\..\\data\\settings.txt')
+#        print('isfile', os.path.isfile(f))
+#        print('dir', os.path.dirname(os.path.dirname(os.path.dirname(f))))
+#        
+#        self.fileSettingsEdit = qt.QLineEdit()
+#        self.measuresFormLayout.addRow(self.fileSettingsEdit)
+#        self.fileSettingsEdit.setText('Select settings file')
+        # Check if settings file exist
+        
         
         # Load input button
         loadInputButton = qt.QPushButton("Load input data")
@@ -158,11 +202,18 @@ class CACSLabelerModuleWidget:
         self.KEV80 = qt.QRadioButton("80 KEV", self.RadioButtonsFrame)
         self.KEV80.setToolTip("Select 80 KEV.")
         self.KEV80.checked = False
+        self.KEV80.enabled = False
         self.RadioButtonsFrame.layout().addWidget(self.KEV80)
         self.KEV120 = qt.QRadioButton("120 KEV", self.RadioButtonsFrame)
         self.KEV120.setToolTip("Select 120 KEV.")
         self.KEV120.checked = False
+        self.KEV120.enabled = False
         self.RadioButtonsFrame.layout().addWidget(self.KEV120)
+        
+        #self.fileDilaog = qt.QFileDialog.getExistingDirectory()
+        #filepath = self.measuresFormLayout.addRow(self.fileDilaog)
+#        self.fileEdit = qt.QLineEdit()
+#        self.measuresFormLayout.addRow(self.fileEdit)
 
         # Threshold button
         thresholdButton = qt.QPushButton("Threshold Volume")
@@ -201,6 +252,7 @@ class CACSLabelerModuleWidget:
         agatstonButton = qt.QPushButton("Compute Agatston")
         agatstonButton.toolTip = "Compute Agatsto"
         agatstonButton.setStyleSheet("background-color: rgb(230,241,255)")
+        agatstonButton.enabled = False
         agatstonButton.connect('clicked(bool)', self.onAgatstonButtonClicked)
         self.agatstonButton = agatstonButton
         self.parent.layout().addWidget(self.agatstonButton)
@@ -237,16 +289,20 @@ class CACSLabelerModuleWidget:
         :type filepath_settings: str
         """
         
-        settings=dict()
-        f = open(filepath_settings, "r")
-        lines = f.readlines()
-        for l in lines:
-            s = l[0:-2].split(':')
-            key = s[0]
-            value = l[0:-1][len(key)+1:]
-            settings[key]=value
-        f.close()
-        self.settings = settings
+        if os.path.isfile(filepath_settings):
+            print('Reading setting')
+            settings=dict()
+            f = open(filepath_settings, "r")
+            lines = f.readlines()
+            for l in lines:
+                s = l[0:-2].split(':')
+                key = s[0]
+                value = l[0:-1][len(key)+1:]
+                settings[key]=value
+            f.close()
+            self.settings = settings
+        else:
+            print('Settings file:' + filepath_settings + 'does not exist')
     
     def onDeleteButtonClicked(self):
         """ Delete all images in slicer
@@ -339,8 +395,20 @@ class CACSLabelerModuleWidget:
                 agatstonLesion = volume * densfactor
                 agatstonArtery = agatstonArtery + agatstonLesion
             agatston[key] = agatstonArtery
+        agatstonScore = np.array(agatston.values()).sum()
+        agatston['AgatstonScore'] = agatstonScore
         return agatston
 
+    def exportAgatston(self, agatstonDict, filepath_csv):
+        #try:
+        csv_columns = agatstonDict[0].keys()
+        with open(filepath_csv, 'w') as csvfile:
+            writer = csv.DictWriter(csvfile, fieldnames=csv_columns)
+            writer.writeheader()
+            for data in agatstonDict:
+                writer.writerow(data)
+        #except IOError:
+        #    print("I/O error")
         
     def onAgatstonButtonClicked(self):
         inputVolumeName = self.inputImageNode.GetName()
@@ -352,19 +420,29 @@ class CACSLabelerModuleWidget:
         spacing = inputVolume.GetSpacing()
         pixelVolume = spacing[0]*spacing[1]*spacing[2]
         agatston = self.computeAgatston(image, imageLabel, pixelVolume)
-        agatstonScore = np.array(agatston.values()).sum()
-        agatstonGrading = self.CACSGrading(agatstonScore)
+        agatstonGrading = self.CACSGrading(agatston['AgatstonScore'])
+        agatston['SerisInstanceUID'] = inputVolumeName
         
-        # Print calcium scoring results
+        # Print calcium scoring 
+        print('---------------------------')
         print('----- Agatston score per Artery-----')
         for key,value in agatston.items():
             print(key,value)
-            
         print('----- Agatston score-----')
-        print(agatstonScore)
-        
+        print(agatston['AgatstonScore'])
         print('----- Agatston grading-----')
         print(agatstonGrading)
+        print('---------------------------')
+  
+        # Sort keys
+        #key_list = ['SerisInstanceUID', 'AgatstonScore', 'LAD', 'LXC', 'RCX']
+        #agatston1 = dict([(key, agatston[key]) for key in key_list if key in agatston])
+         
+        #print('agatston1', agatston1)
+        # Export agatston results
+        filepath_csv = 'H:/cloud/cloud_data/Projects/CACSLabeler/code/data/export.csv'
+        agatstonDict = [agatston]
+        self.exportAgatston(agatstonDict, filepath_csv)
 
 
     def onSaveOutputButtonClicked(self):
@@ -422,6 +500,10 @@ class CACSLabelerModuleWidget:
             properties={'Name': name}
             node = slicer.util.loadVolume(filepath, returnNode=True, properties=properties)[1]
             node.SetName(name)
+        
+        # Enable radio button
+        self.KEV80.enabled = True
+        self.KEV120.enabled = True
 
 
     def onThresholdButtonClicked(self):
@@ -451,6 +533,7 @@ class CACSLabelerModuleWidget:
         
         # Activate Save Button
         self.saveButton.enabled = True
+        self.agatstonButton.enabled = True
 
     def onReload(self,moduleName="CACSLabelerModule"):
         """Generic reload method for any scripted module.

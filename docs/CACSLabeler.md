@@ -18,3 +18,4 @@
 - Export results
 - Load scans from folder
 - Load scan by filename
+- Filepath to settings file
