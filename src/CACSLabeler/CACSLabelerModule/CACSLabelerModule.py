@@ -1,7 +1,4 @@
 from __main__ import vtk, qt, ctk, slicer
-import sys
-#sys.path.append('H:/ProgramFiles/Anaconda2/envs/env_CACSLabeler/Lib/site-packages')
-#from slicer.ScriptedLoadableModule import *
 from slicer.ScriptedLoadableModule import ScriptedLoadableModule
 import unittest
 import os
@@ -16,33 +13,8 @@ from glob import glob
 import random
 import numpy as np
 from SimpleITK import ConnectedComponentImageFilter
-#import scipy
-#from scipy.ndimage.measurements import label
 
-#
-# CACSLabelerModule
-#
-
-class CACSLabelerModule(ScriptedLoadableModule):
-  """Uses ScriptedLoadableModule base class, available at:
-  https://github.com/Slicer/Slicer/blob/master/Base/Python/slicer/ScriptedLoadableModule.py
-  """
-
-  def __init__(self, parent):
-    ScriptedLoadableModule.__init__(self, parent)
-    self.parent.title = "CACSLabelerModule" # TODO make this more human readable by adding spaces
-    self.parent.categories = ["Examples"]
-    self.parent.dependencies = []
-    self.parent.contributors = ["John Doe (AnyWare Corp.)"] # replace with "Firstname Lastname (Organization)"
-    self.parent.helpText = """
-This is an example of scripted loadable module bundled in an extension.
-It performs a simple thresholding on the input volume and optionally captures a screenshot.
-"""
-    self.parent.helpText += self.getDefaultModuleDocumentationLink()
-    self.parent.acknowledgementText = """
-This file was originally developed by Jean-Christophe Fillion-Robin, Kitware Inc.
-and Steve Pieper, Isomics, Inc. and was partially funded by NIH grant 3P41RR013218-12S1.
-""" # replace with organization, grant and thanks.
+############## CACSLabelerModule ##############
 
 def splitFilePath(filepath):
     """ Split filepath into folderpath, filename and file extension
@@ -56,10 +28,28 @@ def splitFilePath(filepath):
     filename = os.path.basename(head)
     return folderpath, filename, file_extension
     
-#
-# CACSLabelerModuleWidget
-#
+class CACSLabelerModule(ScriptedLoadableModule):
+  """Uses ScriptedLoadableModule base class, available at:
+  https://github.com/Slicer/Slicer/blob/master/Base/Python/slicer/ScriptedLoadableModule.py
+  """
 
+  def __init__(self, parent):
+    ScriptedLoadableModule.__init__(self, parent)
+    self.parent.title = "CACSLabelerModule"
+    self.parent.categories = ["Examples"]
+    self.parent.dependencies = []
+    self.parent.contributors = ["Bernhard Foellmer, Charite"] # replace with "Firstname Lastname (Organization)"
+    self.parent.helpText = """
+This is an example of scripted loadable module bundled in an extension.
+It performs a simple thresholding on the input volume and optionally captures a screenshot.
+"""
+    self.parent.helpText += self.getDefaultModuleDocumentationLink()
+    self.parent.acknowledgementText = """ 
+This file was originally developed by Jean-Christophe Fillion-Robin, Kitware Inc.
+and Steve Pieper, Isomics, Inc. and was partially funded by NIH grant 3P41RR013218-12S1.
+""" # replace with organization, grant and thanks.
+
+# CACSLabelerModuleWidget
 class CACSLabelerModuleWidget:
     def __init__(self, parent = None):
         self.currentRegistrationInterface = None
@@ -221,17 +211,30 @@ class CACSLabelerModuleWidget:
             
             
     def writeSettings(self, filepath_settings):
+        """ Write settings into setting file
+        
+        :param filepath_settings: Filepath to settings file
+        :type filepath_settings: str
+        """
+        
+        # Initialize settings
         settings = {'folderpath_input': 'H:/cloud/cloud_data/Projects/DL/Code/src/experiments/EXP001/data/data_cacs',
                     'folderpath_output': 'H:/cloud/cloud_data/Projects/DL/Code/src/experiments/EXP001/data/data_cacs'}
-             
+        
+        # Write settings to file
         f = open(filepath_settings, "a")
         for key,value in settings.items():
             f.write(key + ':' + value + "\n")
         f.close()
         self.settings = settings
-        
 
     def readSettings(self, filepath_settings):
+        """ Read settings from setting file
+        
+        :param filepath_settings: Filepath to settings file
+        :type filepath_settings: str
+        """
+        
         settings=dict()
         f = open(filepath_settings, "r")
         lines = f.readlines()
@@ -244,13 +247,20 @@ class CACSLabelerModuleWidget:
         self.settings = settings
     
     def onDeleteButtonClicked(self):
-        print ('onDeleteButtonClicked')
+        """ Delete all images in slicer
+        
+        """
         # Deleta all old nodes
         nodes=slicer.util.getNodesByClass('vtkMRMLScalarVolumeNode')
         for node in nodes:
             slicer.mrmlScene.RemoveNode(node)
             
     def densityFactor(self, value):
+        """ Compute density weigt factor for agatston score based on maximum HU value of a lesion
+        
+        :param value: Maximum HU value of a lesion
+        :type value: int
+        """
         if value<130:
             densfactor=0
         elif value>=130 and value<199:
@@ -264,6 +274,11 @@ class CACSLabelerModuleWidget:
         return densfactor
 
     def CACSGrading(self, value):
+        """ Compute agatston grading from agatston score
+        
+        :param value: Agatston score
+        :type value: float
+        """
         if value>1 and value<=10:
             grading = 'minimal'
         elif value>10 and value<=100:
@@ -277,6 +292,17 @@ class CACSLabelerModuleWidget:
         return grading            
             
     def computeAgatston(self, image, imageLabel, pixelVolume):
+        """ Compute agatston score from image and image label
+        
+        :param image: Image
+        :type image: np.ndarray
+        :param imageLabel: Image label
+        :type imageLabel: np.ndarray
+        :param pixelVolume: Volume of apixel
+        :type pixelVolume: float
+        """
+        
+        # Neighborhood of connected components (6-connectivity)
         structure = np.zeros((3,3,3))
         structure[1,1,1] = 1
         structure[2,1,1] = 1
@@ -285,22 +311,29 @@ class CACSLabelerModuleWidget:
         structure[0,1,1] = 1
         structure[1,0,1] = 1
         structure[1,1,0] = 1
-        # Iterate of artery classes
+
+        # Iterate over arteries
         agatston = defaultdict(lambda: None, {'LAD': 0, 'LCX': 0, 'RCX': 0})
         for k, key in enumerate(agatston.keys()):
+            # Extract binary mask of lesions from one artery
             imageLabelA = imageLabel==(k+2)
             image_sitk = sitk.GetImageFromArray(imageLabelA.astype(np.uint8))
+            # Extract connected components
             compFilter = ConnectedComponentImageFilter()
             labeled_sitk = compFilter.Execute(image_sitk)
             labeled = sitk.GetArrayFromImage(labeled_sitk)
             ncomponents = labeled.max()
             agatstonArtery = 0
+            # Iterate over lesions from an artery
             for c in range(1,ncomponents+1):
                 labeledc = labeled==c
                 image_mask = image * labeledc
+                # Extract maximum HU of alesion
                 attenuation = image_mask.max()
                 volume = labeledc.sum() * pixelVolume
+                # Calculate density weigt factor
                 densfactor = self.densityFactor(attenuation)
+                # Calculate agatston score for a lesion
                 agatstonLesion = volume * densfactor
                 agatstonArtery = agatstonArtery + agatstonLesion
             agatston[key] = agatstonArtery
@@ -320,6 +353,7 @@ class CACSLabelerModuleWidget:
         agatstonScore = np.array(agatston.values()).sum()
         agatstonGrading = self.CACSGrading(agatstonScore)
         
+        # Print calcium scoring results
         print('----- Agatston score per Artery-----')
         for key,value in agatston.items():
             print(key,value)
@@ -334,9 +368,7 @@ class CACSLabelerModuleWidget:
     def onSaveOutputButtonClicked(self):
         print ('onSaveOutputButtonClicked')
         # Save 
-        #folderpath_output = 'H:/cloud/cloud_data/Projects/DL/Code/src/datasets/DISCHARGE/data_cacs'
         folderpath_output = self.settings['folderpath_output']
-        #folderpath_output = 'H:/cloud/cloud_data/Projects/CACSLabeler/code/data/output'
         volumeNodes = slicer.util.getNodesByClass('vtkMRMLScalarVolumeNode')
         for node in volumeNodes:
             volume_name = node.GetName()
@@ -355,7 +387,6 @@ class CACSLabelerModuleWidget:
 
         # Filter filpath by existing labels
         NumImages = 1
-        #folderpath_input = 'H:/cloud/cloud_data/Projects/DL/Code/src/datasets/DISCHARGE/data_cacs'
         folderpath_input = self.settings['folderpath_input']
         filepathList_input_all = glob(folderpath_input + '/*.mhd')
         filepathList_label = glob(folderpath_input + '/*-label-lesion.nrrd')
@@ -389,14 +420,7 @@ class CACSLabelerModuleWidget:
             properties={'Name': name}
             node = slicer.util.loadVolume(filepath, returnNode=True, properties=properties)[1]
             node.SetName(name)
-            
-#        folderpath_input = 'H:/cloud/cloud_data/Projects/CACSLabeler/code/data/input'
-#        self.filepathList_input = glob(folderpath_input + '/*.mhd')
-#        for filepath in  self.filepathList_input:
-#            _, name,_ = splitFilePath(filepath)
-#            properties={'Name': name}
-#            node = slicer.util.loadVolume(filepath, returnNode=True, properties=properties)[1]
-#            node.SetName(name)
+
 
     def onThresholdButtonClicked(self):
         if not self.KEV120.checked and not self.KEV80.checked:

@@ -8,3 +8,13 @@
 ## Code repository
 
 - https://github.com/Berni1557/CACSLabeler.git
+
+
+
+## TODO
+
+- Put ComputeAgatston button at the end
+- Check statistics widget
+- Export results
+- Load scans from folder
+- Load scan by filename
