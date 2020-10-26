@@ -13,9 +13,16 @@
 
 ## TODO
 
-- Put ComputeAgatston button at the end
 - Check statistics widget
 - Export results
 - Load scans from folder
 - Load scan by filename
-- Filepath to settings file
+- Filepath to settings file -> Done
+
+
+
+BUGs:
+
+- Input folder/scan does not exist -> No error
+- Set active image corresponding to correct label
+

@@ -1,2 +1,10 @@
-folderpath_input:H:/cloud/cloud_data/Projects/DL/Code/src/experiments/EXP001/data/data_cacs
-folderpath_output:H:/cloud/cloud_data/Projects/DL/Code/src/experiments/EXP001/data/data_cacs
+{
+    "filepath_export": "H:/cloud/cloud_data/Projects/CACSLabeler/code/data/export.json", 
+    "CalciumScores": [
+        "agatston"
+    ], 
+    "filter_input": "(*.mhd)", 
+    "folderpath_references": "H:/cloud/cloud_data/Projects/CACSLabeler/code/data/References", 
+    "folderpath_images": "H:/cloud/cloud_data/Projects/CACSLabeler/code/data/Images", 
+    "filter_input_by_reference": true
+}

@@ -1,4 +1,3 @@
-#Test
 from __main__ import vtk, qt, ctk, slicer
 import warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
@@ -17,25 +16,12 @@ import random
 import numpy as np
 from SimpleITK import ConnectedComponentImageFilter
 import csv
-
-#import csv
-#csv_columns = ['No','Name','Country']
-#dict_data = [
-#{'No': 1, 'Name': 'Alex', 'Country': 'India'},
-#{'No': 2, 'Name': 'Ben', 'Country': 'USA'},
-#{'No': 3, 'Name': 'Shri Ram', 'Country': 'India'},
-#{'No': 4, 'Name': 'Smith', 'Country': 'USA'},
-#{'No': 5, 'Name': 'Yuva Raj', 'Country': 'India'},
-#]
-#csv_file = "H:/cloud/cloud_data/Projects/CACSLabeler/code/data/export.csv"
-#try:
-#    with open(csv_file, 'w') as csvfile:
-#        writer = csv.DictWriter(csvfile, fieldnames=csv_columns)
-#        writer.writeheader()
-#        for data in dict_data:
-#            writer.writerow(data)
-#except IOError:
-#    print("I/O error")
+import json
+import sys
+import time
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+from CalciumScores.Agatston import Agatston
+#from util import setSliceViewerLayers
 
 ############## CACSLabelerModule ##############
 
@@ -144,26 +130,6 @@ class CACSLabelerModuleWidget:
         self.measuresFormLayout = qt.QFormLayout(self.measuresCollapsibleButton)
         self.labelsFormLayout = qt.QFormLayout(self.labelsCollapsibleButton)
 
-#        # Settings filepath
-#        currentFile = os.path.dirname(os.path.abspath(__file__))
-#        self.filepath_settings = os.path.dirname(os.path.dirname(os.path.dirname(currentFile))) + '\\data\\settings.txt'
-#
-
-#        f1 = os.path.dirname(os.path.dirname(os.path.dirname(f)))
-#        f2 = f1 + '\\data\\settings.txt'
-#        print('f2',f2)
-#        print('isfile', os.path.isfile(f2))
-#
-#        print('f', f + '\\..\\..\\..\\data\\settings.txt')
-#        print('isfile', os.path.isfile(f))
-#        print('dir', os.path.dirname(os.path.dirname(os.path.dirname(f))))
-#
-#        self.fileSettingsEdit = qt.QLineEdit()
-#        self.measuresFormLayout.addRow(self.fileSettingsEdit)
-#        self.fileSettingsEdit.setText('Select settings file')
-        # Check if settings file exist
-
-
         # Load input button
         loadInputButton = qt.QPushButton("Load input data")
         loadInputButton.toolTip = "Load data to label"
@@ -173,14 +139,14 @@ class CACSLabelerModuleWidget:
         self.measuresFormLayout.addRow(self.loadInputButton)
 
         # Select data source
-        self.RadioButtonsFrame = qt.QFrame(self.measuresCollapsibleButton)
-        self.RadioButtonsFrame.setLayout(qt.QHBoxLayout())
-        self.measuresFormLayout.addRow(self.RadioButtonsFrame)
-        dataSourceButton = qt.QRadioButton("Select data with weak label.", self.RadioButtonsFrame)
-        dataSourceButton.setToolTip("Select data with weak label.")
-        dataSourceButton.checked = False
-        self.dataSourceButton = dataSourceButton
-        self.measuresFormLayout.addRow(self.dataSourceButton)
+
+        
+        # Select weak labels button
+#        dataSourceButton = qt.QRadioButton("Select data with weak label.", self.RadioButtonsFrame)
+#        dataSourceButton.setToolTip("Select data with weak label.")
+#        dataSourceButton.checked = False
+#        self.dataSourceButton = dataSourceButton
+#        self.measuresFormLayout.addRow(self.dataSourceButton)
 
         # The Input Volume Selector
         self.inputFrame = qt.QFrame(self.measuresCollapsibleButton)
@@ -200,6 +166,9 @@ class CACSLabelerModuleWidget:
 #        self.RadioButtonsFrame.setLayout(qt.QHBoxLayout())
 #        self.measuresFormLayout.addRow(self.RadioButtonsFrame)
 
+        self.RadioButtonsFrame = qt.QFrame(self.measuresCollapsibleButton)
+        self.RadioButtonsFrame.setLayout(qt.QHBoxLayout())
+        self.measuresFormLayout.addRow(self.RadioButtonsFrame)
         self.KEV80 = qt.QRadioButton("80 KEV", self.RadioButtonsFrame)
         self.KEV80.setToolTip("Select 80 KEV.")
         self.KEV80.checked = False
@@ -249,14 +218,31 @@ class CACSLabelerModuleWidget:
         self.deleteButton = deleteButton
         self.parent.layout().addWidget(self.deleteButton)
 
-        # Compute agatston score
-        agatstonButton = qt.QPushButton("Compute Agatston")
-        agatstonButton.toolTip = "Compute Agatsto"
-        agatstonButton.setStyleSheet("background-color: rgb(230,241,255)")
-        agatstonButton.enabled = False
-        agatstonButton.connect('clicked(bool)', self.onAgatstonButtonClicked)
-        self.agatstonButton = agatstonButton
-        self.parent.layout().addWidget(self.agatstonButton)
+        # Compute calcium scores
+        scoreButton = qt.QPushButton("Calculate Calcium Scores")
+        scoreButton.toolTip = "Compute Cacium scores"
+        scoreButton.setStyleSheet("background-color: rgb(230,241,255)")
+        scoreButton.enabled = False
+        scoreButton.connect('clicked(bool)', self.onScoreButtonClicked)
+        self.scoreButton = scoreButton
+        self.parent.layout().addWidget(self.scoreButton)
+        
+        # Add scores
+        self.calciumScores = [Agatston()]
+
+        # Export calcium scores
+        exportButton = qt.QPushButton("Export Calcium Scores")
+        exportButton.toolTip = "Export Cacium scores"
+        exportButton.setStyleSheet("background-color: rgb(230,241,255)")
+        exportButton.enabled = False
+        exportButton.connect('clicked(bool)', self.onExportScoreButtonClicked)
+        self.exportButton = exportButton
+        self.parent.layout().addWidget(self.exportButton)
+        
+        # Load color table
+        dirname = os.path.dirname(os.path.abspath(__file__))
+        filepath_colorTable = dirname + '\\CardiacAgatstonMeasuresLUT.ctbl'
+        slicer.util.loadColorTable(filepath_colorTable)
 
         # Read settings file
         if os.path.isfile(self.filepath_settings):
@@ -273,15 +259,17 @@ class CACSLabelerModuleWidget:
         """
 
         # Initialize settings
-        settings = {'folderpath_input': 'H:/cloud/cloud_data/Projects/DL/Code/src/experiments/EXP001/data/data_cacs',
-                    'folderpath_output': 'H:/cloud/cloud_data/Projects/DL/Code/src/experiments/EXP001/data/data_cacs'}
-
-        # Write settings to file
-        f = open(filepath_settings, "a")
-        for key,value in settings.items():
-            f.write(key + ':' + value + "\n")
-        f.close()
-        self.settings = settings
+        settingsDefault = {'folderpath_images': 'H:/cloud/cloud_data/Projects/CACSLabeler/code/data/Images',
+                           'folderpath_references': 'H:/cloud/cloud_data/Projects/CACSLabeler/code/data/References',
+                           'filepath_export': 'H:/cloud/cloud_data/Projects/CACSLabeler/code/data/export.csv',
+                           'filter_input': '(*.mhd)',
+                           'CalciumScores': ['agatston'],
+                           'filter_input_by_reference': True}
+                           
+        print('Writing setting to ' + filepath_settings)
+        with open(filepath_settings, 'a') as file:
+            file.write(json.dumps(settingsDefault, indent=4)) # use `json.loads` to do the reverse
+        self.settings = settingsDefault
 
     def readSettings(self, filepath_settings):
         """ Read settings from setting file
@@ -289,21 +277,21 @@ class CACSLabelerModuleWidget:
         :param filepath_settings: Filepath to settings file
         :type filepath_settings: str
         """
-
+        
         if os.path.isfile(filepath_settings):
-            print('Reading setting')
-            settings=dict()
-            f = open(filepath_settings, "r")
-            lines = f.readlines()
-            for l in lines:
-                s = l[0:-2].split(':')
-                key = s[0]
-                value = l[0:-1][len(key)+1:]
-                settings[key]=value
-            f.close()
-            self.settings = settings
+            print('Reading setting from ' + filepath_settings)
+            with open(filepath_settings) as f:
+                settings = json.load(f)
+                self.settings = settings
         else:
             print('Settings file:' + filepath_settings + 'does not exist')
+            
+        # Check if folders exist
+        if not os.path.isdir(self.settings['folderpath_images']):
+            raise ValueError("Folderpath of image " + self.settings['folderpath_images'] + ' does not exist')
+        if not os.path.isdir(self.settings['folderpath_references']):
+            raise ValueError("Folderpath of references " + self.settings['folderpath_images'] + ' does not exist')
+            
 
     def onDeleteButtonClicked(self):
         """ Delete all images in slicer
@@ -314,194 +302,100 @@ class CACSLabelerModuleWidget:
         for node in nodes:
             slicer.mrmlScene.RemoveNode(node)
 
-    def densityFactor(self, value):
-        """ Compute density weigt factor for agatston score based on maximum HU value of a lesion
+#    def exportAgatston(self, agatstonDict, filepath_csv):
+#        #try:
+#        csv_columns = agatstonDict[0].keys()
+#        with open(filepath_csv, 'w') as csvfile:
+#            writer = csv.DictWriter(csvfile, fieldnames=csv_columns)
+#            writer.writeheader()
+#            for data in agatstonDict:
+#                writer.writerow(data)
+#        #except IOError:
+#        #    print("I/O error")
 
-        :param value: Maximum HU value of a lesion
-        :type value: int
-        """
-        if value<130:
-            densfactor=0
-        elif value>=130 and value<199:
-            densfactor=1
-        elif value>=199 and value<299:
-            densfactor=2
-        elif value>=299 and value<399:
-            densfactor=3
-        else:
-            densfactor=4
-        return densfactor
-
-    def CACSGrading(self, value):
-        """ Compute agatston grading from agatston score
-
-        :param value: Agatston score
-        :type value: float
-        """
-        if value>1 and value<=10:
-            grading = 'minimal'
-        elif value>10 and value<=100:
-            grading = 'mild'
-        elif value>100 and value<=400:
-            grading = 'moderate'
-        elif value>400:
-            grading = 'severe'
-        else:
-            grading='zero'
-        return grading
-
-    def computeAgatston(self, image, imageLabel, pixelVolume):
-        """ Compute agatston score from image and image label
-
-        :param image: Image
-        :type image: np.ndarray
-        :param imageLabel: Image label
-        :type imageLabel: np.ndarray
-        :param pixelVolume: Volume of apixel
-        :type pixelVolume: float
-        """
-
-        # Neighborhood of connected components (6-connectivity)
-        structure = np.zeros((3,3,3))
-        structure[1,1,1] = 1
-        structure[2,1,1] = 1
-        structure[1,2,1] = 1
-        structure[1,1,2] = 1
-        structure[0,1,1] = 1
-        structure[1,0,1] = 1
-        structure[1,1,0] = 1
-
-        # Iterate over arteries
-        agatston = defaultdict(lambda: None, {'LAD': 0, 'LCX': 0, 'RCX': 0})
-        for k, key in enumerate(agatston.keys()):
-            # Extract binary mask of lesions from one artery
-            imageLabelA = imageLabel==(k+2)
-            image_sitk = sitk.GetImageFromArray(imageLabelA.astype(np.uint8))
-            # Extract connected components
-            compFilter = ConnectedComponentImageFilter()
-            labeled_sitk = compFilter.Execute(image_sitk)
-            labeled = sitk.GetArrayFromImage(labeled_sitk)
-            ncomponents = labeled.max()
-            agatstonArtery = 0
-            # Iterate over lesions from an artery
-            for c in range(1,ncomponents+1):
-                labeledc = labeled==c
-                image_mask = image * labeledc
-                # Extract maximum HU of alesion
-                attenuation = image_mask.max()
-                volume = labeledc.sum() * pixelVolume
-                # Calculate density weigt factor
-                densfactor = self.densityFactor(attenuation)
-                # Calculate agatston score for a lesion
-                agatstonLesion = volume * densfactor
-                agatstonArtery = agatstonArtery + agatstonLesion
-            agatston[key] = agatstonArtery
-        agatstonScore = np.array(agatston.values()).sum()
-        agatston['AgatstonScore'] = agatstonScore
-        return agatston
-
-    def exportAgatston(self, agatstonDict, filepath_csv):
-        #try:
-        csv_columns = agatstonDict[0].keys()
-        with open(filepath_csv, 'w') as csvfile:
-            writer = csv.DictWriter(csvfile, fieldnames=csv_columns)
-            writer.writeheader()
-            for data in agatstonDict:
-                writer.writerow(data)
-        #except IOError:
-        #    print("I/O error")
-
-    def onAgatstonButtonClicked(self):
+    def onScoreButtonClicked(self):
+        # Get image and imageLabel
         inputVolumeName = self.inputImageNode.GetName()
         inputVolumeNameLabel = inputVolumeName + '-label-lesion'
         inputVolume = su.PullVolumeFromSlicer(inputVolumeName)
         inputVolumeLabel = su.PullVolumeFromSlicer(inputVolumeNameLabel)
-        image = sitk.GetArrayFromImage(inputVolume)
-        imageLabel = sitk.GetArrayFromImage(inputVolumeLabel)
-        spacing = inputVolume.GetSpacing()
-        pixelVolume = spacing[0]*spacing[1]*spacing[2]
-        agatston = self.computeAgatston(image, imageLabel, pixelVolume)
-        agatstonGrading = self.CACSGrading(agatston['AgatstonScore'])
-        agatston['SerisInstanceUID'] = inputVolumeName
-
-        # Print calcium scoring
-        print('---------------------------')
-        print('----- Agatston score per Artery-----')
-        for key,value in agatston.items():
-            print(key,value)
-        print('----- Agatston score-----')
-        print(agatston['AgatstonScore'])
-        print('----- Agatston grading-----')
-        print(agatstonGrading)
-        print('---------------------------')
-
-        # Sort keys
-        #key_list = ['SerisInstanceUID', 'AgatstonScore', 'LAD', 'LXC', 'RCX']
-        #agatston1 = dict([(key, agatston[key]) for key in key_list if key in agatston])
-
-        #print('agatston1', agatston1)
-        # Export agatston results
-        filepath_csv = '/Users/marchiggins/Desktop/Hausarbeit/Agatston_Score/Results/Export.csv'
-        agatstonDict = [agatston]
-        self.exportAgatston(agatstonDict, filepath_csv)
-
+        #image = sitk.GetArrayFromImage(inputVolume)
+        #imageLabel = sitk.GetArrayFromImage(inputVolumeLabel)
+        
+        # Compute calcium scores
+        self.calciumScoresResult=[]
+        for score in self.calciumScores:
+            for scorename in self.settings['CalciumScores']:
+                if score.name in scorename:
+                    s = score.compute(inputVolume, inputVolumeLabel)
+                    score.show()
+                    self.calciumScoresResult.append(s)
+        
+    def onExportScoreButtonClicked(self):
+        # Export labels
+        filepath_export = self.settings['filepath_export']
+        volumeNodes = slicer.util.getNodesByClass('vtkMRMLScalarVolumeNode')
+        self.calciumScoresResult=[]
+        for node in volumeNodes:
+            volume_name = node.GetName()
+            if 'label' in volume_name:
+                # Compute calcium scores
+                scoreResult=[]
+                for score in self.calciumScores:
+                    for scorename in self.settings['CalciumScores']:
+                        if score.name in scorename:
+                            inputVolumeNameLabel = volume_name
+                            inputVolumeName = inputVolumeNameLabel[0:-13]
+                            inputVolumeLabel = su.PullVolumeFromSlicer(inputVolumeNameLabel)
+                            inputVolume = su.PullVolumeFromSlicer(inputVolumeName)
+                            s = score.compute(inputVolume, inputVolumeLabel)
+                            scoreResult.append(s)
+                self.calciumScoresResult.append({'ImageName':volume_name, 'Scores': scoreResult})
+        
+        # Export information
+        print('Exporting:')
+        for res in self.calciumScoresResult:
+            print(res['ImageName'])
+            
+        # Save json
+        with open(filepath_export, 'a') as file:
+            file.write(json.dumps(self.calciumScoresResult, indent=4)) # use `json.loads` to do the reverse
 
     def onSaveOutputButtonClicked(self):
-        print ('onSaveOutputButtonClicked')
         # Save
-        folderpath_output = '/Users/marchiggins/Desktop/Hausarbeit/Agatston_Score/Output'
+        folderpath_output = self.settings['folderpath_references']
         volumeNodes = slicer.util.getNodesByClass('vtkMRMLScalarVolumeNode')
         for node in volumeNodes:
             volume_name = node.GetName()
             if 'label' in volume_name:
-                print('volume_name', volume_name)
                 filename_output = volume_name
                 filepath = folderpath_output + '/' + filename_output + '.nrrd'
                 slicer.util.saveNode(node, filepath)
+                print('Saveing:', filename_output)
+            
 
     def onLoadInputButtonClicked(self):
-
-        # Deleta all old nodes
-        nodes=slicer.util.getNodesByClass('vtkMRMLScalarVolumeNode')
-        for node in nodes:
-            slicer.mrmlScene.RemoveNode(node)
-
-        # Filter filpath by existing labels
-        NumImages = 1
-        #folderpath_input = self.settings['folderpath_input']
-        import os
-        #print(os.path.dirname(os.path.abspath(__file__)))
-        folderpath_input = "/Users/marchiggins/Desktop/Hausarbeit/Agatston_Score/Input"
-        #print(os.path.isdir(folderpath_input))
-        print(folderpath_input)
-        filepathList_input_all = glob(folderpath_input + '/*.mhd')
-        filepathList_label = glob(folderpath_input + '/*-label-lesion.nrrd')
-        filepathList_input=[]
-        for f0 in filepathList_input_all:
-            found = False
-            for f1 in filepathList_label:
-                if f1.split('-')[0] in f0:
-                    found = True
-            if not found:
-                filepathList_input.append(f0)
-
-        # Filter if weak label exist
-        if self.dataSourceButton.checked:
-            filepathList_input_filt=[]
-            filepathList_label_weak = glob(folderpath_input + '/*-label.nrrd')
-            for f0 in filepathList_input:
-                found = False
-                for f1 in filepathList_label_weak:
-                    if f1.split('-')[0] in f0:
-                        found = True
-                if found:
-                    filepathList_input_filt.append(f0)
-            filepathList_input = filepathList_input_filt
-
-        self.filepathList_input = filepathList_input
-        random.shuffle(self.filepathList_input)
-
-        for filepath in  self.filepathList_input[0:NumImages]:
+        
+        filenames = qt.QFileDialog.getOpenFileNames(self.parent, 
+                                               'Open files', 
+                                               self.settings['folderpath_images'],
+                                               self.settings['filter_input'])
+        
+        filenames_ref = glob(self.settings['folderpath_references'] + '/*label.nrrd')
+        
+        # Filter input files by reference
+        filenames_filt=[]
+        if self.settings['filter_input_by_reference']:
+            for f in filenames:
+                _,fname,_ = splitFilePath(f)
+                ref_found = False
+                for ref in filenames_ref:
+                    ref_found = ref_found or (fname in ref)
+                if not ref_found:
+                    filenames_filt.append(f)
+                        
+        # Read images
+        for filepath in filenames_filt:
             _, name,_ = splitFilePath(filepath)
             properties={'Name': name}
             node = slicer.util.loadVolume(filepath, returnNode=True, properties=properties)[1]
@@ -510,8 +404,40 @@ class CACSLabelerModuleWidget:
         # Enable radio button
         self.KEV80.enabled = True
         self.KEV120.enabled = True
-
-
+   
+#    def updateLabelMap(self, caller, event):
+#        print('caller', caller)
+#        print('event', event)
+#        
+#        layoutManager = slicer.app.layoutManager()
+#        renderWindow = layoutManager.sliceWidget('Red').sliceView().renderWindow()
+#        pos = renderWindow.GetInteractor().GetEventPosition()
+#        ras = self.xyToRas(xy, viewWidget)
+#        print('ras', ras)
+#        
+#        #xy = caller.GetEventXYZ()
+#        #print('xy', xy)
+#        inputVolumeLabel = self.CACSLabelerModuleLogic.calciumNode
+#        imageLabel = sitk.GetArrayFromImage(inputVolumeLabel)
+#        #imageLabelA = imageLabel==(k+2)
+#        image_sitk = sitk.GetImageFromArray(imageLabel.astype(np.uint8))
+#        # Extract connected components
+#        compFilter = ConnectedComponentImageFilter()
+#        labeled_sitk = compFilter.Execute(image_sitk)
+#        labeled = sitk.GetArrayFromImage(labeled_sitk)
+#        print('labeled', labeled.shape)
+#        print('labeled max', labeled.max())
+#        start = time.time()
+#
+#
+#        for c in range(100):
+#            maskbin = labeled[4,:,:]==c
+#            #mask = labeled[maskbin]
+#            #print('c', c, 'maskbin', maskbin.sum(), 'maskbin', mask.sum()/mask.max())
+#            #print('c', c)
+#        print('time0', time.time() - start)
+            
+        
     def onThresholdButtonClicked(self):
         if not self.KEV120.checked and not self.KEV80.checked:
             qt.QMessageBox.warning(slicer.util.mainWindow(),
@@ -520,11 +446,20 @@ class CACSLabelerModuleWidget:
 
         self.inputImageNode = self.inputSelector.currentNode()
         inputVolumeName = self.inputImageNode.GetName()
-
+        
+        # Threshold image
         self.CACSLabelerModuleLogic = CACSLabelerModuleLogic(self.KEV80.checked, self.KEV120.checked, inputVolumeName)
         self.CACSLabelerModuleLogic.runThreshold()
-
-        #self.thresholdButton.enabled = False
+        
+        # View thresholded image as label map and image as background image in red widget
+        node = slicer.util.getFirstNodeByName(self.CACSLabelerModuleLogic.calciumName[0:-13])
+        slicer.util.setSliceViewerLayers(background=node)
+        
+        # Set slicer offset
+        layoutManager = slicer.app.layoutManager()
+        red = layoutManager.sliceWidget('Red')
+        redLogic = red.sliceLogic()
+        redLogic.SetSliceOffset(-100)
 
         # Creates and adds the custom Editor Widget to the module
         self.localCardiacEditorWidget = CardiacEditorWidget(parent=self.parent, showVolumesFrame=False)
@@ -537,9 +472,20 @@ class CACSLabelerModuleWidget:
 #                                                             parent=self.parent)
         #self.localLabelStatisticsWidget.setup()
 
+        # Add mouse click observer to recalculate label map
+#        layoutManager = slicer.app.layoutManager()
+#        renderWindow = layoutManager.sliceWidget('Red').sliceView().renderWindow()
+#        style = renderWindow.GetInteractor().GetInteractorStyle()
+#        renderWindow.GetInteractor().SetInteractorStyle(style)
+#        style.AddObserver('LeftButtonReleaseEvent', self.updateLabelMap)
+        
+        #pos = renderWindow.GetInteractor().GetEventPosition()
+        #print('pos', pos)
+
         # Activate Save Button
         self.saveButton.enabled = True
-        self.agatstonButton.enabled = True
+        self.scoreButton.enabled = True
+        self.exportButton.enabled = True
 
     def onReload(self,moduleName="CACSLabelerModule"):
         """Generic reload method for any scripted module.
@@ -594,8 +540,11 @@ class CACSLabelerModuleLogic:
         self.inputVolumeName = inputVolumeName
         self.calciumLabelNode = None
         self.CardiacAgatstonMeasuresLUTNode = None
-        lutPath = os.path.join('/Users/marchiggins/Desktop/Hausarbeit/Code/CACSLabeler-main/src/CACSLabeler/CACSLabelerModule/CardiacAgatstonMeasuresLUT.ctbl')
-        slicer.util.loadColorTable(lutPath)
+        
+    def test02(self,caller,event):
+        print('test01')
+        print('caller', caller)
+        print('event', event)
 
     def runThreshold(self):
 
@@ -615,6 +564,9 @@ class CACSLabelerModuleLogic:
         su.PushLabel(castedThresholdImage, calciumName)
         self.assignLabelLUT(calciumName)
         self.setLowerPaintThreshold()
+        self.calciumName=calciumName
+        self.calciumNode = su.PullVolumeFromSlicer(calciumName)
+        #self.addObserver(self.calciumNode, vtk.vtkCommand.ModifiedEvent, self.test02)
 
     def assignLabelLUT(self, calciumName):
         # Set the color lookup table (LUT) to the custom CardiacAgatstonMeasuresLUT
@@ -1313,7 +1265,12 @@ class CardiacEditorWidget(Editor.EditorWidget):
             self.shortcuts.append(shortcut)
 
 class CardiacEditBox(EditorLib.EditBox):
-
+    
+    def test01(self,caller,event):
+        print('test01')
+        print('caller', caller)
+        print('event', event)
+        
     # create the edit box
     def create(self):
 
@@ -1340,6 +1297,22 @@ class CardiacEditBox(EditorLib.EditBox):
         defaultChangeIslandButton.setStyleSheet("background-color: rgb(81,208,35)")
         self.mainFrame.layout().addWidget(defaultChangeIslandButton)
         defaultChangeIslandButton.connect('clicked(bool)', self.onDefaultChangeIslandButtonClicked)
+        
+        
+        #self.parameterNode = EditUtil.getParameterNode()
+        #self.addObserver(self.parameterNode, vtk.vtkCommand.ModifiedEvent, self.test01)
+        #self.addObserver(self.calciumNode, vtk.vtkCommand.ModifiedEvent, self.test01)
+
+        
+        #node = EditUtil.getBackgroundImage()
+        #print('node', node)
+        #node.AddObserver("ModifiedEvent", self.test01)
+        
+        #interactionNode = slicer.app.applicationLogic().GetInteractionNode()
+        #self.addObserver(interactionNode, interactionNode.InteractionModeChangedEvent, self.test01)
+        
+        #self.parameterNode = EditUtil.getBackgroundImage()
+        #self.addObserver(self.parameterNode, vtk.vtkCommand.ModifiedEvent, self.test01)
 
         # The Input Left Main (LM) Label Selector
 #        LMchangeIslandButton = qt.QPushButton("LM")
@@ -1405,6 +1378,10 @@ class CardiacEditBox(EditorLib.EditBox):
         self.updateUndoRedoButtons()
         #self._onParameterNodeModified(self.editUtil.getParameterNode())
         self._onParameterNodeModified(EditUtil.getParameterNode())
+        
+        #labelimage = EditUtil.getLabelImage()
+        #dims = labelimage.GetDimensions()
+
 
 #    def onLMchangeIslandButtonClicked(self):
 #        self.changeIslandButtonClicked(2)
@@ -1422,7 +1399,5 @@ class CardiacEditBox(EditorLib.EditBox):
         self.changeIslandButtonClicked(1)
 
     def changeIslandButtonClicked(self, label):
-        #self.selectEffect("ChangeIslandEffect")
         self.selectEffect("PaintEffect")
-        #self.editUtil.setLabel(label)
         EditUtil.setLabel(label)
