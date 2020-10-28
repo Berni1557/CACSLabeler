@@ -1,10 +1,16 @@
 {
-    "filepath_export": "H:/cloud/cloud_data/Projects/CACSLabeler/code/data/export.json", 
+    "filter_input": "(*.mhd)", 
+    "filter_reference_with": [
+        "-label."
+    ], 
+    "folderpath_images": "H:/cloud/cloud_data/Projects/DL/Code/src/experiments/EXP001/data/data_cacs/Images", 
     "CalciumScores": [
         "agatston"
     ], 
-    "filter_input": "(*.mhd)", 
-    "folderpath_references": "H:/cloud/cloud_data/Projects/CACSLabeler/code/data/References", 
-    "folderpath_images": "H:/cloud/cloud_data/Projects/CACSLabeler/code/data/Images", 
-    "filter_input_by_reference": true
+    "filepath_export": "H:/cloud/cloud_data/Projects/CACSLabeler/code/data/export.csv", 
+    "filter_reference_without": [
+        "label-lesion."
+    ], 
+    "filter_input_by_reference": true, 
+    "folderpath_references": "H:/cloud/cloud_data/Projects/DL/Code/src/experiments/EXP001/data/data_cacs/References"
 }

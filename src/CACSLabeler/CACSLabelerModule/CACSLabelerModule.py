@@ -82,7 +82,7 @@ class CACSLabelerModuleWidget:
 
         # Settings filepath
         currentFile = os.path.dirname(os.path.abspath(__file__))
-        self.filepath_settings = os.path.dirname(os.path.dirname(os.path.dirname(currentFile))) + '\\data\\settings.txt'
+        self.filepath_settings = os.path.dirname(os.path.dirname(os.path.dirname(currentFile))) + '/data/settings.txt'
 
     def setup(self):
         # Instantiate and connect widgets ...
@@ -241,7 +241,7 @@ class CACSLabelerModuleWidget:
         
         # Load color table
         dirname = os.path.dirname(os.path.abspath(__file__))
-        filepath_colorTable = dirname + '\\CardiacAgatstonMeasuresLUT.ctbl'
+        filepath_colorTable = dirname + '/CardiacAgatstonMeasuresLUT.ctbl'
         slicer.util.loadColorTable(filepath_colorTable)
 
         # Read settings file
@@ -259,12 +259,14 @@ class CACSLabelerModuleWidget:
         """
 
         # Initialize settings
-        settingsDefault = {'folderpath_images': 'H:/cloud/cloud_data/Projects/CACSLabeler/code/data/Images',
-                           'folderpath_references': 'H:/cloud/cloud_data/Projects/CACSLabeler/code/data/References',
+        settingsDefault = {'folderpath_images': 'H:/cloud/cloud_data/Projects/DL/Code/src/experiments/EXP001/data/data_cacs/Images',
+                           'folderpath_references': 'H:/cloud/cloud_data/Projects/DL/Code/src/experiments/EXP001/data/data_cacs/References',
                            'filepath_export': 'H:/cloud/cloud_data/Projects/CACSLabeler/code/data/export.csv',
                            'filter_input': '(*.mhd)',
                            'CalciumScores': ['agatston'],
-                           'filter_input_by_reference': True}
+                           'filter_input_by_reference': True,
+                           'filter_reference_with': ['-label.'],
+                           'filter_reference_without': ['label-lesion.']}
                            
         print('Writing setting to ' + filepath_settings)
         with open(filepath_settings, 'a') as file:
@@ -290,7 +292,7 @@ class CACSLabelerModuleWidget:
         if not os.path.isdir(self.settings['folderpath_images']):
             raise ValueError("Folderpath of image " + self.settings['folderpath_images'] + ' does not exist')
         if not os.path.isdir(self.settings['folderpath_references']):
-            raise ValueError("Folderpath of references " + self.settings['folderpath_images'] + ' does not exist')
+            raise ValueError("Folderpath of references " + self.settings['folderpath_references'] + ' does not exist')
             
 
     def onDeleteButtonClicked(self):
@@ -371,39 +373,105 @@ class CACSLabelerModuleWidget:
                 filename_output = volume_name
                 filepath = folderpath_output + '/' + filename_output + '.nrrd'
                 slicer.util.saveNode(node, filepath)
-                print('Saveing:', filename_output)
-            
+                print('Saveing reference to: ', filepath)
+    
+                
+#    filepaths = ['data/1.3.12.2.1107.5.1.4.55569.30000016112106385826500000283.mhd', 'data/1.3.12.2.1107.5.1.4.96509.30000018072306224707000036347.mhd']
+#    filepaths_ref = ['ref/1.3.12.2.1107.5.1.4.55569.30000016112106385826500000283-label-lesion.nrrd', 'ref/1.3.12.2.1107.5.1.4.55569.30000016112106385826500000283-labe.nrrd']
+#    filter_reference_with = ['-label.']
+#    filter_reference_without = ['-label-lesion.']
 
-    def onLoadInputButtonClicked(self):
-        
-        filenames = qt.QFileDialog.getOpenFileNames(self.parent, 
-                                               'Open files', 
-                                               self.settings['folderpath_images'],
-                                               self.settings['filter_input'])
-        
-        filenames_ref = glob(self.settings['folderpath_references'] + '/*label.nrrd')
-        
-        # Filter input files by reference
+    def filter_by_reference(self, filepaths, filepaths_ref, filter_reference_with, filter_reference_without):
         filenames_filt=[]
+        for f in filepaths:
+            _,fname,_ = splitFilePath(f)
+            ref_same = False
+            ref_with = False
+            ref_without = False
+            for ref in filepaths_ref:
+                _,refname,_ = splitFilePath(ref)
+                ref_same = fname in refname
+                if ref_same:
+                    ref_with = ref_with or all([x in ref for x in filter_reference_with])
+                    ref_without = ref_without or any([x in ref for x in filter_reference_without])
+            if ref_with and not ref_without:
+                filenames_filt.append(f)
+        return filenames_filt
+                    
+        
+    def onLoadInputButtonClicked(self):
+                   
         if self.settings['filter_input_by_reference']:
-            for f in filenames:
+            
+            filter_input = self.settings['filter_input'].decode('utf-8')[1:-1]
+            filepaths = glob(self.settings['folderpath_images'] + '/' + filter_input)
+            filepaths_ref = glob(self.settings['folderpath_references'] + '/*.nrrd')
+            
+            # Filter files by filter_reference_with and filter_reference_without
+            filenames_filt = self.filter_by_reference(filepaths, filepaths_ref, self.settings['filter_reference_with'], self.settings['filter_reference_without'])
+
+            filter_input_ref = ''
+            for f in filenames_filt:
                 _,fname,_ = splitFilePath(f)
-                ref_found = False
-                for ref in filenames_ref:
-                    ref_found = ref_found or (fname in ref)
-                if not ref_found:
-                    filenames_filt.append(f)
-                        
+                filter_input_ref = filter_input_ref + fname + '.mhd '
+            if len(filenames_filt)>0:
+                filter_input_ref = '(' + filter_input_ref + ')'
+            else:
+                filter_input_ref = '(_)'
+                
+            filenames = qt.QFileDialog.getOpenFileNames(self.parent, 
+                                                   'Open files', 
+                                                   self.settings['folderpath_images'],
+                                                   filter_input_ref)
+            
+        else:
+            filenames = qt.QFileDialog.getOpenFileNames(self.parent, 
+                                                   'Open files', 
+                                                   self.settings['folderpath_images'],
+                                                   self.settings['filter_input'])
+        
         # Read images
-        for filepath in filenames_filt:
+        imagenames = []
+        for filepath in filenames:
             _, name,_ = splitFilePath(filepath)
             properties={'Name': name}
             node = slicer.util.loadVolume(filepath, returnNode=True, properties=properties)[1]
             node.SetName(name)
-
+            imagenames.append(name)
+            
         # Enable radio button
         self.KEV80.enabled = True
         self.KEV120.enabled = True
+            
+        
+#        filenames = qt.QFileDialog.getOpenFileNames(self.parent, 
+#                                               'Open files', 
+#                                               self.settings['folderpath_images'],
+#                                               self.settings['filter_input'])
+#        
+#        filenames_ref = glob(self.settings['folderpath_references'] + '/*label.nrrd')
+#        
+#        # Filter input files by reference
+#        filenames_filt=[]
+#        if self.settings['filter_input_by_reference']:
+#            for f in filenames:
+#                _,fname,_ = splitFilePath(f)
+#                ref_found = False
+#                for ref in filenames_ref:
+#                    ref_found = ref_found or (fname in ref)
+#                if not ref_found:
+#                    filenames_filt.append(f)
+#                        
+#        # Read images
+#        for filepath in filenames_filt:
+#            _, name,_ = splitFilePath(filepath)
+#            properties={'Name': name}
+#            node = slicer.util.loadVolume(filepath, returnNode=True, properties=properties)[1]
+#            node.SetName(name)
+#
+#        # Enable radio button
+#        self.KEV80.enabled = True
+#        self.KEV120.enabled = True
    
 #    def updateLabelMap(self, caller, event):
 #        print('caller', caller)

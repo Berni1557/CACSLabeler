@@ -25,4 +25,7 @@ BUGs:
 
 - Input folder/scan does not exist -> No error
 - Set active image corresponding to correct label
+- Settings are saved in other folder in mac?? -> slashes corrected
+- slicer.util.loadColorTable(filepath_colorTable) -> Problem!
+- If images are labeled twice label_1 file is createt -> export failes
 
