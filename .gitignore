@@ -132,4 +132,5 @@ dmypy.json
 # Labeler specific ignores
 *.mhd
 *.raw
+*.zraw
 *.nrrd

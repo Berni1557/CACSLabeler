@@ -21,6 +21,15 @@ import sys
 import time
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from CalciumScores.Agatston import Agatston
+from CalciumScores.VolumeScore import VolumeScore
+from CalciumScores.DensityScore import DensityScore
+
+
+#reload(CalciumScores)
+
+#import importlib
+#importlib.reload(Agatston)
+
 #from util import setSliceViewerLayers
 
 ############## CACSLabelerModule ##############
@@ -228,7 +237,7 @@ class CACSLabelerModuleWidget:
         self.parent.layout().addWidget(self.scoreButton)
         
         # Add scores
-        self.calciumScores = [Agatston()]
+        self.calciumScores = [Agatston(), VolumeScore(), DensityScore()]
 
         # Export calcium scores
         exportButton = qt.QPushButton("Export Calcium Scores")
@@ -259,11 +268,11 @@ class CACSLabelerModuleWidget:
         """
 
         # Initialize settings
-        settingsDefault = {'folderpath_images': 'H:/cloud/cloud_data/Projects/DL/Code/src/experiments/EXP001/data/data_cacs/Images',
-                           'folderpath_references': 'H:/cloud/cloud_data/Projects/DL/Code/src/experiments/EXP001/data/data_cacs/References',
+        settingsDefault = {'folderpath_images': 'H:/cloud/cloud_data/Projects/DL/Code/src/datasets/DISCHARGE/data_cacs/Images',
+                           'folderpath_references': 'H:/cloud/cloud_data/Projects/DL/Code/src/datasets/DISCHARGE/data_cacs/References',
                            'filepath_export': 'H:/cloud/cloud_data/Projects/CACSLabeler/code/data/export.csv',
                            'filter_input': '(*.mhd)',
-                           'CalciumScores': ['agatston'],
+                           'CalciumScores': ['agatston', 'VolumeScore', 'DensityScore'],
                            'filter_input_by_reference': True,
                            'filter_reference_with': ['-label.'],
                            'filter_reference_without': ['label-lesion.']}

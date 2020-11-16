@@ -1,9 +1,11 @@
 # -*- coding: utf-8 -*-
+# Reference: V. Sandfort and D. A. Bluemke, “CT calcium scoring . History , current status and outlook,” Diagn. Interv. Imaging, vol. 98, no. 1, pp. 3–10, 2017.
+
 import numpy as np
 from collections import defaultdict
 from SimpleITK import ConnectedComponentImageFilter
 import SimpleITK as sitk
-#import CalciumScoreBase
+
 
 # Agatston score
 class Agatston():
@@ -23,11 +25,11 @@ class Agatston():
         """
         if value<130:
             densfactor=0
-        elif value>=130 and value<199:
+        elif value>=130 and value<=199:
             densfactor=1
-        elif value>=199 and value<299:
+        elif value>199 and value<=299:
             densfactor=2
-        elif value>=299 and value<399:
+        elif value>299 and value<=399:
             densfactor=3
         else:
             densfactor=4
@@ -65,7 +67,7 @@ class Agatston():
         image = sitk.GetArrayFromImage(inputVolume)
         imageLabel = sitk.GetArrayFromImage(inputVolumeLabel)
         spacing = inputVolume.GetSpacing()
-        pixelVolume = spacing[0]*spacing[1]*spacing[2]
+        pixelArea = spacing[0]*spacing[1]
 
         # Neighborhood of connected components (6-connectivity)
         structure = np.zeros((3,3,3))
@@ -93,16 +95,21 @@ class Agatston():
             for c in range(1,ncomponents+1):
                 labeledc = labeled==c
                 image_mask = image * labeledc
-                # Extract maximum HU of alesion
-                attenuation = image_mask.max()
-                volume = labeledc.sum() * pixelVolume
-                # Calculate density weigt factor
-                densfactor = self.densityFactor(attenuation)
-                # Calculate agatston score for a lesion
-                agatstonLesion = volume * densfactor
-                agatstonArtery = agatstonArtery + agatstonLesion
+                #volume = labeledc.sum() * pixelVolume
+                # Iterate over slices
+                for s in range(0,labeled.shape[0]):
+                    image_mask_slice = image_mask[s,:,:]
+                    labeledc_slice = labeledc[s,:,:]
+                    # Extract maximum HU of a lesion
+                    attenuation = image_mask_slice.max()
+                    area = labeledc_slice.sum() * pixelArea
+                    # Calculate density weigt factor
+                    densfactor = self.densityFactor(attenuation)
+                    # Calculate agatston score for a lesion
+                    agatstonLesionSlice = area * densfactor
+                    agatstonArtery = agatstonArtery + agatstonLesionSlice
             agatston[key] = agatstonArtery
-        
+
         # Sum agatston score over arteries
         agatstonScore=0.0
         for key in self.arteries:
