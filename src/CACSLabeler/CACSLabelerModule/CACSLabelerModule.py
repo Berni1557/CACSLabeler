@@ -9,13 +9,12 @@ import sitkUtils as su
 import EditorLib
 import Editor
 import LabelStatistics
-from collections import defaultdict
+from collections import defaultdict, OrderedDict
 from EditorLib.EditUtil import EditUtil
 from glob import glob
 import random
 import numpy as np
 from SimpleITK import ConnectedComponentImageFilter
-import csv
 import json
 import sys
 import time
@@ -23,14 +22,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from CalciumScores.Agatston import Agatston
 from CalciumScores.VolumeScore import VolumeScore
 from CalciumScores.DensityScore import DensityScore
-
-
-#reload(CalciumScores)
-
-#import importlib
-#importlib.reload(Agatston)
-
-#from util import setSliceViewerLayers
+from collections import defaultdict
 
 ############## CACSLabelerModule ##############
 
@@ -46,6 +38,60 @@ def splitFilePath(filepath):
     filename = os.path.basename(head)
     return folderpath, filename, file_extension
 
+class Lesion():
+    def __init__(self, name, parent, color):
+        self.name = name
+        self.parent = parent
+        self.color = color
+
+class CACSTree():
+    def __init__(self):
+        self.lesionList=[]
+        
+    def createTree(self, CACSTreeDict):
+        self.root = Lesion(name='CACSTreeDict', parent=None, color=CACSTreeDict['COLOR'])
+        self.lesionList.append(self.root)
+        self.addChildren(CACSTreeDict, 'CACSTreeDict')
+        
+    def addChildren(self, parent, parent_name):
+        for key in parent.keys():
+            key = key.encode("utf-8")
+            if not key =='COLOR':
+                lesion = Lesion(name=key, parent=parent_name, color = parent[key]['COLOR'])
+                self.lesionList.append(lesion)
+                self.addChildren(parent[key], key)
+                    
+    def getChildrenByName(self, name):
+        childrens = []
+        parent = ''
+        for lesion in self.lesionList:
+            if lesion.name == name:
+                parent = lesion.name
+                break
+        if not parent == '':
+            for lesion in self.lesionList:
+                if lesion.parent == parent:
+                    childrens.append(lesion)
+        return childrens
+        
+    def getIndexByName(self, name):
+        idx=0
+        for idx, lesion in enumerate(self.lesionList):
+            if lesion.name == name:
+                return idx
+
+    def getColorByName(self, name):
+        for idx, lesion in enumerate(self.lesionList):
+            if lesion.name == name:
+                return lesion.color
+        return None
+
+    def getLesionByName(self, name):
+        for idx, lesion in enumerate(self.lesionList):
+            if lesion.name == name:
+                return lesion
+        return None                
+                
 class CACSLabelerModule(ScriptedLoadableModule):
   """Uses ScriptedLoadableModule base class, available at:
   https://github.com/Slicer/Slicer/blob/master/Base/Python/slicer/ScriptedLoadableModule.py
@@ -91,7 +137,7 @@ class CACSLabelerModuleWidget:
 
         # Settings filepath
         currentFile = os.path.dirname(os.path.abspath(__file__))
-        self.filepath_settings = os.path.dirname(os.path.dirname(os.path.dirname(currentFile))) + '/data/settings.txt'
+        self.filepath_settings = os.path.dirname(os.path.dirname(os.path.dirname(currentFile))) + '/data/settings.json'
 
     def setup(self):
         # Instantiate and connect widgets ...
@@ -116,15 +162,6 @@ class CACSLabelerModuleWidget:
             reloadFormLayout.addWidget(self.reloadButton)
             self.reloadButton.connect('clicked()', self.onReload)
 
-            # reload and test button
-            # (use this during development, but remove it when delivering
-            #  your module to users)
-#            self.reloadAndTestButton = qt.QPushButton("Reload and Test")
-#            self.reloadAndTestButton.toolTip = "Reload this module and then run the self tests."
-#            reloadFormLayout.addWidget(self.reloadAndTestButton)
-#            self.reloadAndTestButton.connect('clicked()', self.onReloadAndTest)
-
-
         # Collapsible button for Input Parameters
         self.measuresCollapsibleButton = ctk.ctkCollapsibleButton()
         self.measuresCollapsibleButton.text = "Input Parameters"
@@ -147,16 +184,6 @@ class CACSLabelerModuleWidget:
         self.loadInputButton = loadInputButton
         self.measuresFormLayout.addRow(self.loadInputButton)
 
-        # Select data source
-
-        
-        # Select weak labels button
-#        dataSourceButton = qt.QRadioButton("Select data with weak label.", self.RadioButtonsFrame)
-#        dataSourceButton.setToolTip("Select data with weak label.")
-#        dataSourceButton.checked = False
-#        self.dataSourceButton = dataSourceButton
-#        self.measuresFormLayout.addRow(self.dataSourceButton)
-
         # The Input Volume Selector
         self.inputFrame = qt.QFrame(self.measuresCollapsibleButton)
         self.inputFrame.setLayout(qt.QHBoxLayout())
@@ -169,11 +196,6 @@ class CACSLabelerModuleWidget:
         self.inputSelector.removeEnabled = False
         self.inputSelector.setMRMLScene( slicer.mrmlScene )
         self.inputFrame.layout().addWidget(self.inputSelector)
-
-        # Radio Buttons for Selecting 80 KEV or 120 KEV
-#        self.RadioButtonsFrame = qt.QFrame(self.measuresCollapsibleButton)
-#        self.RadioButtonsFrame.setLayout(qt.QHBoxLayout())
-#        self.measuresFormLayout.addRow(self.RadioButtonsFrame)
 
         self.RadioButtonsFrame = qt.QFrame(self.measuresCollapsibleButton)
         self.RadioButtonsFrame.setLayout(qt.QHBoxLayout())
@@ -188,11 +210,6 @@ class CACSLabelerModuleWidget:
         self.KEV120.checked = False
         self.KEV120.enabled = False
         self.RadioButtonsFrame.layout().addWidget(self.KEV120)
-
-        #self.fileDilaog = qt.QFileDialog.getExistingDirectory()
-        #filepath = self.measuresFormLayout.addRow(self.fileDilaog)
-#        self.fileEdit = qt.QLineEdit()
-#        self.measuresFormLayout.addRow(self.fileEdit)
 
         # Threshold button
         thresholdButton = qt.QPushButton("Threshold Volume")
@@ -248,38 +265,119 @@ class CACSLabelerModuleWidget:
         self.exportButton = exportButton
         self.parent.layout().addWidget(self.exportButton)
         
-        # Load color table
-        dirname = os.path.dirname(os.path.abspath(__file__))
-        filepath_colorTable = dirname + '/CardiacAgatstonMeasuresLUT.ctbl'
-        slicer.util.loadColorTable(filepath_colorTable)
-
         # Read settings file
         if os.path.isfile(self.filepath_settings):
+            #self.writeSettings(self.filepath_settings)
             self.readSettings(self.filepath_settings)
         else:
             self.writeSettings(self.filepath_settings)
+            self.readSettings(self.filepath_settings)
+            
+        
+        dirname = os.path.dirname(os.path.abspath(__file__))
+        filepath_colorTable = dirname + '/CardiacAgatstonMeasuresLUT.ctbl'
+        # Create color table
+        self.createColorTable(filepath_colorTable, self.settings['CACSTree'])
+        # Load color table
+        slicer.util.loadColorTable(filepath_colorTable)
+    
+    def createColorTable(self, filepath_colorTable, CACSTree):
+        f = open(filepath_colorTable, 'w')
+        f.write('# Color\n')
+        f.close()
+        for idx, lesion in enumerate(CACSTree.lesionList):
+            f = open(filepath_colorTable, 'a')
+            color_str = str(lesion.color[0]) + ' ' + str(lesion.color[1]) + ' ' + str(lesion.color[2]) + ' ' + str(lesion.color[3])
+            f.write(str(idx) + ' ' + lesion.name + ' ' + color_str + '\n')
+            f.close()
 
 
+    def initCACSTreeDict(self):
+        
+        OTHER = defaultdict(lambda: None, {'COLOR': (111, 184, 210, 255)})
+        
+        RCA_PROXIMAL = defaultdict(lambda: None, {'COLOR': (11, 184, 110, 255)})
+        RCA_MID = defaultdict(lambda: None, {'COLOR': (100,100,100, 255)})
+        RCA_DISTAL = defaultdict(lambda: None, {'COLOR': (100,100,100, 255)})
+        RCA_SIDE_BRANCH = defaultdict(lambda: None, {'COLOR': (100,100,100, 255)})
+        RCA = defaultdict(lambda: None, {'RCA_PROXIMAL': RCA_PROXIMAL, 'RCA_MID': RCA_MID, 
+                                         'RCA_DISTAL': RCA_DISTAL, 'RCA_SIDE_BRANCH': RCA_SIDE_BRANCH, 'COLOR': (100,100,100, 255)})
+        
+        LM = defaultdict(lambda: None, {'COLOR': (100,100,100, 255)})
+        
+        LAD_PROXIMAL = defaultdict(lambda: None, {'COLOR': (100,100,100, 255)})
+        LAD_MID = defaultdict(lambda: None, {'COLOR': (100,100,100, 255)})
+        LAD_DISTAL = defaultdict(lambda: None, {'COLOR': (100,100,100, 255)})
+        LAD_SIDE_BRANCH = defaultdict(lambda: None, {'COLOR': (100,100,100, 255)})
+        LAD = defaultdict(lambda: None, {'LAD_PROXIMAL': LAD_PROXIMAL, 'LAD_MID': LAD_MID, 
+                                         'LAD_DISTAL': LAD_DISTAL, 'LAD_SIDE_BRANCH': LAD_SIDE_BRANCH, 'COLOR': (100,100,100, 255)})
+        
+        LCX_PROXIMAL = defaultdict(lambda: None, {'COLOR': (100,100,100, 255)})
+        LCX_MID = defaultdict(lambda: None, {'COLOR': (100,100,100, 255)})
+        LCX_DISTAL = defaultdict(lambda: None, {'COLOR': (100,100,100, 255)})
+        LCX_SIDE_BRANCH = defaultdict(lambda: None, {'COLOR': (100,100,100, 255)})
+        LCX = defaultdict(lambda: None, {'LCX_PROXIMAL': LCX_PROXIMAL, 'LCX_MID': LCX_MID, 
+                                         'LCX_DISTAL': LCX_DISTAL, 'LCX_SIDE_BRANCH': LCX_SIDE_BRANCH, 'COLOR': (100,100,100, 255)})
+
+        CC = defaultdict(lambda: None, {'RCA': RCA, 'LM': LM, 'LAD': LAD, 'LCX': LCX, 'COLOR': (248, 242, 60, 255)})
+        
+        AORTA_ASC = defaultdict(lambda: None, {'COLOR': (100,100,100, 255)})
+        AORTA_DSC = defaultdict(lambda: None, {'COLOR': (100,100,100, 255)})
+        AORTA = defaultdict(lambda: None, {'AORTA_ASC': AORTA_ASC, 'AORTA_DSC': AORTA_DSC, 'COLOR': (100,100,100, 255)})
+
+        NCC = defaultdict(lambda: None, {'COLOR': (100,100,100, 255)})
+        LCC = defaultdict(lambda: None, {'COLOR': (100,100,100, 255)})
+        RCC = defaultdict(lambda: None, {'COLOR': (100,100,100, 255)})
+        VALVE_PULMONIC = defaultdict(lambda: None, {'COLOR': (100,100,100, 255)})
+        VALVE_MITRAL = defaultdict(lambda: None, {'COLOR': (100,100,100, 255)})
+        VALVE_TRICUSPID = defaultdict(lambda: None, {'COLOR': (100,100,100, 255)})
+        VALVES = defaultdict(lambda: None, {'NCC': NCC, 'LCC': LCC, 'RCC': RCC,
+                                            'VALVE_PULMONIC': VALVE_PULMONIC, 'VALVE_MITRAL': VALVE_MITRAL,
+                                            'VALVE_TRICUSPID': VALVE_TRICUSPID, 'COLOR': (100,100,100, 255)})
+        
+        LUNG_PARENCHYMA = defaultdict(lambda: None, {'COLOR': (100,100,100, 255)})
+        LUNG_ARTERY = defaultdict(lambda: None, {'COLOR': (100,100,100, 255)})
+        LUNG_VESSEL = defaultdict(lambda: None, {'COLOR': (100,100,100, 255)})
+        BRONCHUS = defaultdict(lambda: None, {'COLOR': (100,100,100, 255)})
+        CALCIFIED_LUNG_NODULE = defaultdict(lambda: None, {'COLOR': (100,100,100, 255)})
+        LUNG = defaultdict(lambda: None, {'LUNG_PARENCHYMA': LUNG_PARENCHYMA, 'LUNG_ARTERY': LUNG_ARTERY,
+                                          'LUNG_VESSEL': LUNG_VESSEL, 'BRONCHUS': BRONCHUS,
+                                          'CALCIFIED_LUNG_NODULE': CALCIFIED_LUNG_NODULE, 'COLOR': (100,100,100, 255)})
+        
+        VERTEBRA = defaultdict(lambda: None, {'COLOR': (100,100,100, 255)})
+        BONE = defaultdict(lambda: None, {'VERTEBRA': VERTEBRA, 'COLOR': (100,100,100, 255)})
+        
+        STERNUM = defaultdict(lambda: None, {'COLOR': (100,100,100, 255)})
+        ECC = defaultdict(lambda: None, {'STERNUM': STERNUM, 'AORTA': AORTA, 'VALVES': VALVES,
+                                         'LUNG': LUNG, 'BONE': BONE, 'COLOR': (95, 212, 45, 255)})    
+
+        CACSTreeDict = defaultdict(lambda: None, {'OTHER': OTHER, 'ECC': ECC, 'CC': CC, 'COLOR': (10,23,120,0)})
+        return CACSTreeDict
+        
     def writeSettings(self, filepath_settings):
         """ Write settings into setting file
 
         :param filepath_settings: Filepath to settings file
         :type filepath_settings: str
         """
-
+        
+        CACSTreeDict = self.initCACSTreeDict()
+        
         # Initialize settings
         settingsDefault = {'folderpath_images': 'H:/cloud/cloud_data/Projects/DL/Code/src/datasets/DISCHARGE/data_cacs/Images',
                            'folderpath_references': 'H:/cloud/cloud_data/Projects/DL/Code/src/datasets/DISCHARGE/data_cacs/References',
                            'filepath_export': 'H:/cloud/cloud_data/Projects/CACSLabeler/code/data/export.csv',
                            'filter_input': '(*.mhd)',
                            'CalciumScores': ['agatston', 'VolumeScore', 'DensityScore'],
-                           'filter_input_by_reference': True,
+                           'filter_input_by_reference': False,
                            'filter_reference_with': ['-label.'],
-                           'filter_reference_without': ['label-lesion.']}
+                           'filter_reference_without': ['label-lesion.'],
+                           'CACSTreeDict': CACSTreeDict,
+                           'MODE': 'CACSTREE'}
                            
         print('Writing setting to ' + filepath_settings)
         with open(filepath_settings, 'a') as file:
-            file.write(json.dumps(settingsDefault, indent=4)) # use `json.loads` to do the reverse
+            file.write(json.dumps(settingsDefault, indent=4, encoding='utf-8'))
         self.settings = settingsDefault
 
     def readSettings(self, filepath_settings):
@@ -289,10 +387,40 @@ class CACSLabelerModuleWidget:
         :type filepath_settings: str
         """
         
+        def _decode_list(data):
+            rv = []
+            for item in data:
+                if isinstance(item, unicode):
+                    item = item.encode('utf-8')
+                elif isinstance(item, list):
+                    item = _decode_list(item)
+                elif isinstance(item, dict):
+                    item = _decode_dict(item)
+                rv.append(item)
+            return rv
+            
+        def _decode_dict(data):
+            rv = {}
+            for key, value in data.iteritems():
+                if isinstance(key, unicode):
+                    key = key.encode('utf-8')
+                if isinstance(value, unicode):
+                    value = value.encode('utf-8')
+                elif isinstance(value, list):
+                    value = _decode_list(value)
+                elif isinstance(value, dict):
+                    value = _decode_dict(value)
+                rv[key] = value
+            return rv
+    
         if os.path.isfile(filepath_settings):
             print('Reading setting from ' + filepath_settings)
             with open(filepath_settings) as f:
-                settings = json.load(f)
+                settings = json.load(f, object_hook=_decode_dict)
+                settings = defaultdict(lambda: None, settings)
+                # CreateCACSTree
+                settings['CACSTree'] = CACSTree()
+                settings['CACSTree'].createTree(settings['CACSTreeDict'])
                 self.settings = settings
         else:
             print('Settings file:' + filepath_settings + 'does not exist')
@@ -303,6 +431,8 @@ class CACSLabelerModuleWidget:
         if not os.path.isdir(self.settings['folderpath_references']):
             raise ValueError("Folderpath of references " + self.settings['folderpath_references'] + ' does not exist')
             
+            
+            
 
     def onDeleteButtonClicked(self):
         """ Delete all images in slicer
@@ -312,17 +442,6 @@ class CACSLabelerModuleWidget:
         nodes=slicer.util.getNodesByClass('vtkMRMLScalarVolumeNode')
         for node in nodes:
             slicer.mrmlScene.RemoveNode(node)
-
-#    def exportAgatston(self, agatstonDict, filepath_csv):
-#        #try:
-#        csv_columns = agatstonDict[0].keys()
-#        with open(filepath_csv, 'w') as csvfile:
-#            writer = csv.DictWriter(csvfile, fieldnames=csv_columns)
-#            writer.writeheader()
-#            for data in agatstonDict:
-#                writer.writerow(data)
-#        #except IOError:
-#        #    print("I/O error")
 
     def onScoreButtonClicked(self):
         # Get image and imageLabel
@@ -383,12 +502,6 @@ class CACSLabelerModuleWidget:
                 filepath = folderpath_output + '/' + filename_output + '.nrrd'
                 slicer.util.saveNode(node, filepath)
                 print('Saveing reference to: ', filepath)
-    
-                
-#    filepaths = ['data/1.3.12.2.1107.5.1.4.55569.30000016112106385826500000283.mhd', 'data/1.3.12.2.1107.5.1.4.96509.30000018072306224707000036347.mhd']
-#    filepaths_ref = ['ref/1.3.12.2.1107.5.1.4.55569.30000016112106385826500000283-label-lesion.nrrd', 'ref/1.3.12.2.1107.5.1.4.55569.30000016112106385826500000283-labe.nrrd']
-#    filter_reference_with = ['-label.']
-#    filter_reference_without = ['-label-lesion.']
 
     def filter_by_reference(self, filepaths, filepaths_ref, filter_reference_with, filter_reference_without):
         filenames_filt=[]
@@ -451,69 +564,6 @@ class CACSLabelerModuleWidget:
         # Enable radio button
         self.KEV80.enabled = True
         self.KEV120.enabled = True
-            
-        
-#        filenames = qt.QFileDialog.getOpenFileNames(self.parent, 
-#                                               'Open files', 
-#                                               self.settings['folderpath_images'],
-#                                               self.settings['filter_input'])
-#        
-#        filenames_ref = glob(self.settings['folderpath_references'] + '/*label.nrrd')
-#        
-#        # Filter input files by reference
-#        filenames_filt=[]
-#        if self.settings['filter_input_by_reference']:
-#            for f in filenames:
-#                _,fname,_ = splitFilePath(f)
-#                ref_found = False
-#                for ref in filenames_ref:
-#                    ref_found = ref_found or (fname in ref)
-#                if not ref_found:
-#                    filenames_filt.append(f)
-#                        
-#        # Read images
-#        for filepath in filenames_filt:
-#            _, name,_ = splitFilePath(filepath)
-#            properties={'Name': name}
-#            node = slicer.util.loadVolume(filepath, returnNode=True, properties=properties)[1]
-#            node.SetName(name)
-#
-#        # Enable radio button
-#        self.KEV80.enabled = True
-#        self.KEV120.enabled = True
-   
-#    def updateLabelMap(self, caller, event):
-#        print('caller', caller)
-#        print('event', event)
-#        
-#        layoutManager = slicer.app.layoutManager()
-#        renderWindow = layoutManager.sliceWidget('Red').sliceView().renderWindow()
-#        pos = renderWindow.GetInteractor().GetEventPosition()
-#        ras = self.xyToRas(xy, viewWidget)
-#        print('ras', ras)
-#        
-#        #xy = caller.GetEventXYZ()
-#        #print('xy', xy)
-#        inputVolumeLabel = self.CACSLabelerModuleLogic.calciumNode
-#        imageLabel = sitk.GetArrayFromImage(inputVolumeLabel)
-#        #imageLabelA = imageLabel==(k+2)
-#        image_sitk = sitk.GetImageFromArray(imageLabel.astype(np.uint8))
-#        # Extract connected components
-#        compFilter = ConnectedComponentImageFilter()
-#        labeled_sitk = compFilter.Execute(image_sitk)
-#        labeled = sitk.GetArrayFromImage(labeled_sitk)
-#        print('labeled', labeled.shape)
-#        print('labeled max', labeled.max())
-#        start = time.time()
-#
-#
-#        for c in range(100):
-#            maskbin = labeled[4,:,:]==c
-#            #mask = labeled[maskbin]
-#            #print('c', c, 'maskbin', maskbin.sum(), 'maskbin', mask.sum()/mask.max())
-#            #print('c', c)
-#        print('time0', time.time() - start)
-            
         
     def onThresholdButtonClicked(self):
         if not self.KEV120.checked and not self.KEV80.checked:
@@ -539,25 +589,9 @@ class CACSLabelerModuleWidget:
         redLogic.SetSliceOffset(-100)
 
         # Creates and adds the custom Editor Widget to the module
-        self.localCardiacEditorWidget = CardiacEditorWidget(parent=self.parent, showVolumesFrame=False)
+        self.localCardiacEditorWidget = CardiacEditorWidget(parent=self.parent, showVolumesFrame=False, settings=self.settings)
         self.localCardiacEditorWidget.setup()
         self.localCardiacEditorWidget.enter()
-
-        # Adds Label Statistics Widget to Module
-#        self.localLabelStatisticsWidget = CardiacStatisticsWidget(self.KEV120, self.KEV80,
-#                                                             self.localCardiacEditorWidget,
-#                                                             parent=self.parent)
-        #self.localLabelStatisticsWidget.setup()
-
-        # Add mouse click observer to recalculate label map
-#        layoutManager = slicer.app.layoutManager()
-#        renderWindow = layoutManager.sliceWidget('Red').sliceView().renderWindow()
-#        style = renderWindow.GetInteractor().GetInteractorStyle()
-#        renderWindow.GetInteractor().SetInteractorStyle(style)
-#        style.AddObserver('LeftButtonReleaseEvent', self.updateLabelMap)
-        
-        #pos = renderWindow.GetInteractor().GetEventPosition()
-        #print('pos', pos)
 
         # Activate Save Button
         self.saveButton.enabled = True
@@ -754,566 +788,18 @@ class CACSLabelerModuleLogic:
 
         return True
 
-class CACSLabelerModuleTest(unittest.TestCase):
-    """
-    This is the test case for your scripted module.
-    """
-
-    def delayDisplay(self,message,msec=1000):
-        """This utility method displays a small dialog and waits.
-        This does two things: 1) it lets the event loop catch up
-        to the state of the test so that rendering and widget updates
-        have all taken place before the test continues and 2) it
-        shows the user/developer/tester the state of the test
-        so that we'll know when it breaks.
-        """
-        print(message)
-        self.info = qt.QDialog()
-        self.infoLayout = qt.QVBoxLayout()
-        self.info.setLayout(self.infoLayout)
-        self.label = qt.QLabel(message,self.info)
-        self.infoLayout.addWidget(self.label)
-        qt.QTimer.singleShot(msec, self.info.close)
-        self.info.exec_()
-
-    def setUp(self):
-        """ Do whatever is needed to reset the state - typically a scene clear will be enough.
-        """
-        self.delayDisplay("Closing the scene")
-        layoutManager = slicer.app.layoutManager()
-        layoutManager.setLayout(slicer.vtkMRMLLayoutNode.SlicerLayoutOneUpRedSliceView)
-        slicer.mrmlScene.Clear(0)
-
-    def runTest(self):
-        """Run as few or as many tests as needed here.
-        """
-        self.setUp()
-        self.test_CardiacAgatstonMeasures1()
-        self.test_CardiacAgatstonMeasures2()
-        self.test_CardiacAgatstonMeasures3()
-
-    def test_CardiacAgatstonMeasures1(self):
-        """ Ideally you should have several levels of tests.  At the lowest level
-        tests sould exercise the functionality of the logic with different inputs
-        (both valid and invalid).  At higher levels your tests should emulate the
-        way the user would interact with your code and confirm that it still works
-        the way you intended.
-        One of the most important features of the tests is that it should alert other
-        developers when their changes will have an impact on the behavior of your
-        module.  For example, if a developer removes a feature that you depend on,
-        your test should break so they know that the feature is needed.
-        """
-
-        self.delayDisplay("Starting Test Part 1 - Importing heart scan")
-
-        try:
-            #
-            # first, get some data
-            #
-            m = slicer.util.mainWindow()
-            m.moduleSelector().selectModule('CACSLabelerModule')
-
-            import urllib
-            downloads = (
-                ('http://www.na-mic.org/Wiki/images/4/4e/CardiacAgatstonMeasures_TutorialContestSummer2014.zip',
-                 'CardiacAgatstonMeasures_TutorialContestSummer2014.zip'),
-                )
-
-            self.delayDisplay("Downloading")
-
-            for url,name in downloads:
-              filePath = os.path.join(slicer.app.temporaryPath, name)
-              if not os.path.exists(filePath) or os.stat(filePath).st_size == 0:
-                print('Requesting download %s from %s...\n' % (name, url))
-                urllib.urlretrieve(url, filePath)
-            self.delayDisplay('Finished with download\n')
-
-            self.delayDisplay("Unzipping to  %s" % (slicer.app.temporaryPath))
-            zipFilePath = os.path.join(slicer.app.temporaryPath, 'CardiacAgatstonMeasures_TutorialContestSummer2014.zip')
-            extractPath = os.path.join(slicer.app.temporaryPath, 'CardiacAgatstonMeasures_TutorialContestSummer2014')
-            qt.QDir().mkpath(extractPath)
-            self.delayDisplay("Using extract path  %s" % (extractPath))
-            applicationLogic = slicer.app.applicationLogic()
-            applicationLogic.Unzip(zipFilePath, extractPath)
-
-            self.delayDisplay("Loading CardiacAgatstonMeasuresTestInput.nii.gz")
-            inputImagePath = os.path.join(extractPath, 'CardiacAgatstonMeasuresTestInput.nii.gz')
-            slicer.util.loadVolume(inputImagePath)
-            volumeNode = slicer.util.getNode(pattern="CardiacAgatstonMeasuresTestInput")
-            logic = CACSLabelerModuleLogic()
-            self.assertTrue( logic.hasImageData(volumeNode) )
-            self.delayDisplay('Finished with downloading and loading CardiacAgatstonMeasuresTestInput.nii.gz')
-
-            CardiacAgatstonMeasuresLUTNode = slicer.util.getNode(pattern='CardiacAgatstonMeasuresLUT')
-            if not CardiacAgatstonMeasuresLUTNode:
-                self.delayDisplay("Loading CardiacAgatstonMeasuresLUT.ctbl")
-                lutPath = os.path.join(extractPath, 'CardiacAgatstonMeasuresLUT.ctbl')
-                slicer.util.loadColorTable(lutPath)
-                CardiacAgatstonMeasuresLUTNode = slicer.util.getNode(pattern="CardiacAgatstonMeasuresLUT")
-            logic = CACSLabelerModuleLogic()
-            self.assertTrue( logic.hasCorrectLUTData(CardiacAgatstonMeasuresLUTNode) )
-            self.delayDisplay('Finished with downloading and loading CardiacAgatstonMeasuresLUT.ctbl')
-
-            self.delayDisplay('Test Part 1 passed!\n')
-        except Exception, e:
-            import traceback
-            traceback.print_exc()
-            self.delayDisplay('Test caused exception!\n' + str(e))
-
-    def test_CardiacAgatstonMeasures2(self):
-        """ Level two test. Tests if the thresholded label
-        image is created and if CardiacAgatstonMeasuresLUT file was
-        imported correctly.
-        """
-        self.delayDisplay("Starting Test Part 2 - Thresholding")
-
-        try:
-            widget = slicer.modules.CardiacAgatstonMeasuresWidget
-            self.delayDisplay("Opened CardiacAgatstonMeasuresWidget")
-
-            widget.KEV120.setChecked(1)
-            self.delayDisplay("Checked the KEV120 button")
-
-            widget.onThresholdButtonClicked()
-            self.delayDisplay("Threshold button selected")
-
-            logic = CACSLabelerModuleLogic()
-
-            labelNode = slicer.util.getNode(pattern="CardiacAgatstonMeasuresTestInput_120KEV_130HU_Calcium_Label")
-            self.assertTrue( logic.hasImageData(labelNode) )
-            self.delayDisplay("Thresholded label created and pushed to Slicer")
-
-            self.delayDisplay('Test Part 2 passed!\n')
-        except Exception, e:
-            import traceback
-            traceback.print_exc()
-            self.delayDisplay('Test caused exception!\n' + str(e))
-
-    def test_CardiacAgatstonMeasures3(self):
-        """ Level three test. Tests if the Editor tools
-        and five label buttons work properly.
-        """
-        self.delayDisplay("Starting Test Part 3 - Paint and Statistics")
-
-        try:
-            widget = slicer.modules.CardiacAgatstonMeasuresWidget
-            self.delayDisplay("Opened CardiacAgatstonMeasuresWidget")
-
-            # toolsBox = widget.localCardiacEditorWidget.toolsBox
-            # toolsBox.onLCXchangeIslandButtonClicked()
-
-            #
-            # got to the editor and do some drawing
-            #
-            self.delayDisplay("Paint some things")
-            editUtil = EditorLib.EditUtil.EditUtil()
-            lm = slicer.app.layoutManager()
-            paintEffect = EditorLib.PaintEffectOptions()
-            paintEffect.setMRMLDefaults()
-            paintEffect.__del__()
-            sliceWidget = lm.sliceWidget('Red')
-            paintTool = EditorLib.PaintEffectTool(sliceWidget)
-            editUtil.setLabel(5)
-            (x, y) = self.rasToXY((38,165,-122), sliceWidget)
-            paintTool.paintAddPoint(x, y)
-            paintTool.paintApply()
-            editUtil.setLabel(3)
-            (x, y) = self.rasToXY((12.5,171,-122), sliceWidget)
-            paintTool.paintAddPoint(x, y)
-            paintTool.paintApply()
-            paintTool.cleanup()
-            paintTool = None
-            self.delayDisplay("Painted calcium for LAD and RCA labels")
-
-            self.delayDisplay("Apply pressed - calculating Agatston scores/statistics")
-            widget.localLabelStatisticsWidget.onApply()
-
-            scores = widget.localLabelStatisticsWidget.logic.AgatstonScoresPerLabel
-            testScores = {0: 0, 1: 0, 2: 0, 3: 2.8703041076660174,
-                          4: 0, 5: 45.22903442382816, 6: 48.099338531494176}
-            self.assertTrue( scores == testScores )
-            self.delayDisplay("Agatston scores/statistics are correct")
-
-            self.delayDisplay("Test Part 3 passed!\n")
-
-        except Exception, e:
-            import traceback
-            traceback.print_exc()
-            self.delayDisplay('Test caused exception!\n' + str(e))
-
-    def rasToXY(self, rasPoint, sliceWidget):
-        sliceLogic = sliceWidget.sliceLogic()
-        sliceNode = sliceLogic.GetSliceNode()
-        rasToXY = vtk.vtkMatrix4x4()
-        rasToXY.DeepCopy(sliceNode.GetXYToRAS())
-        rasToXY.Invert()
-        xyzw = rasToXY.MultiplyPoint(rasPoint+(1,))
-        x = int(round(xyzw[0]))
-        y = int(round(xyzw[1]))
-        return x, y
-
-class CardiacStatisticsWidget(LabelStatistics.LabelStatisticsWidget):
-    def __init__(self, KEV120, KEV80, localCardiacEditorWidget, parent=None):
-        self.chartOptions = ("Agatston Score", "Count", "Volume mm^3", "Volume cc", "Min", "Max", "Mean", "StdDev")
-        if not parent:
-            self.parent = slicer.qMRMLWidget()
-            self.parent.setLayout(qt.QVBoxLayout())
-            self.parent.setMRMLScene(slicer.mrmlScene)
-        else:
-            self.parent = parent
-        self.logic = None
-        self.grayscaleNode = None
-        self.labelNode = None
-        self.fileName = None
-        self.fileDialog = None
-        self.KEV120 = KEV120
-        self.KEV80 = KEV80
-        self.localCardiacEditorWidget = localCardiacEditorWidget
-        if not parent:
-            self.setup()
-            self.grayscaleSelector.setMRMLScene(slicer.mrmlScene)
-            self.labelSelector.setMRMLScene(slicer.mrmlScene)
-            self.parent.show()
-
-    def setup(self):
-
-        # Set the grayscaleNode and labelNode to the current active volume and label
-        selectionNode = slicer.app.applicationLogic().GetSelectionNode()
-        self.grayscaleNode = slicer.util.getNode(selectionNode.GetActiveVolumeID())
-        #self.labelNode = slicer.util.getNode(selectionNode.GetActiveLabelVolumeID())
-
-        #ID = selectionNode.GetActiveLabelVolumeID()
-        volumeNodes = slicer.util.getNodesByClass('vtkMRMLScalarVolumeNode')
-        volume = volumeNodes[1]
-        volume_id = volume.GetID()
-
-        #print('ID', volume_id)
-        self.labelNode = slicer.util.getNode(volume_id)
-
-#        # Apply button
-#        self.applyButton = qt.QPushButton("Apply")
-#        self.applyButton.toolTip = "Calculate Statistics."
-#        self.applyButton.setStyleSheet("background-color: rgb(230,241,255)")
-#        self.applyButton.enabled = True
-#        self.parent.layout().addWidget(self.applyButton)
-
-        # model and view for stats table
-        self.view = qt.QTableView()
-        self.view.sortingEnabled = True
-        self.parent.layout().addWidget(self.view)
-
-        # Chart button
-        self.chartFrame = qt.QFrame()
-        self.chartFrame.setLayout(qt.QHBoxLayout())
-        self.parent.layout().addWidget(self.chartFrame)
-        self.chartButton = qt.QPushButton("Chart")
-        self.chartButton.toolTip = "Make a chart from the current statistics."
-        self.chartFrame.layout().addWidget(self.chartButton)
-        self.chartOption = qt.QComboBox()
-        self.chartOption.addItems(self.chartOptions)
-        self.chartFrame.layout().addWidget(self.chartOption)
-        self.chartIgnoreZero = qt.QCheckBox()
-        self.chartIgnoreZero.setText('Ignore Zero')
-        self.chartIgnoreZero.checked = False
-        self.chartIgnoreZero.setToolTip('Do not include the zero index in the chart to avoid dwarfing other bars')
-        self.chartFrame.layout().addWidget(self.chartIgnoreZero)
-        self.chartFrame.enabled = False
-
-
-
-        # Add vertical spacer
-        self.parent.layout().addStretch(1)
-
-        # connections
-        #self.applyButton.connect('clicked()', self.onApply)
-        self.chartButton.connect('clicked()', self.onChart)
-
-
-    def onApply(self):
-        """Calculate the label statistics
-        """
-        # selects default tool to stop the ChangeIslandTool
-        self.localCardiacEditorWidget.toolsBox.selectEffect("DefaultTool")
-
-        self.applyButton.text = "Working..."
-        # TODO: why doesn't processEvents alone make the label text change?
-        self.applyButton.repaint()
-        slicer.app.processEvents()
-        volumesLogic = slicer.modules.volumes.logic()
-        warnings = volumesLogic.CheckForLabelVolumeValidity(self.grayscaleNode, self.labelNode)
-        resampledLabelNode = None
-        if warnings != "":
-            if 'mismatch' in warnings:
-                resampledLabelNode = volumesLogic.ResampleVolumeToReferenceVolume(self.labelNode, self.grayscaleNode)
-                self.logic = CardiacLabelStatisticsLogic(self.grayscaleNode, resampledLabelNode, self.KEV120, self.KEV80)
-            else:
-                qt.QMessageBox.warning(slicer.util.mainWindow(),
-                    "Label Statistics", "Volumes do not have the same geometry.\n%s" % warnings)
-                return
-        else:
-            self.logic = CardiacLabelStatisticsLogic(self.grayscaleNode, self.labelNode, self.KEV120, self.KEV80)
-        self.populateStats()
-        if resampledLabelNode:
-            slicer.mrmlScene.RemoveNode(resampledLabelNode)
-        self.chartFrame.enabled = True
-        self.saveButton.enabled = True
-        self.applyButton.text = "Apply"
-
-
-
-    def onDirSelected(self, dirName):
-        # saves the current scene to selected folder
-        l = slicer.app.applicationLogic()
-        l.SaveSceneToSlicerDataBundleDirectory(dirName, None)
-
-        # saves the csv files to selected folder
-        csvFileName = os.path.join(dirName, "{0}_Agatston_Scores.csv".format(os.path.split(dirName)[1]))
-        self.logic.saveStats(csvFileName)
-
-    def populateStats(self):
-        if not self.logic:
-            return
-        displayNode = self.labelNode.GetDisplayNode()
-        colorNode = displayNode.GetColorNode()
-        lut = colorNode.GetLookupTable()
-        self.items = []
-        self.model = qt.QStandardItemModel()
-        self.view.setModel(self.model)
-        self.view.verticalHeader().visible = False
-        row = 0
-        for i in self.logic.labelStats["Labels"]:
-            color = qt.QColor()
-            rgb = lut.GetTableValue(i)
-            color.setRgb(rgb[0]*255,rgb[1]*255,rgb[2]*255)
-            item = qt.QStandardItem()
-            item.setData(color,qt.Qt.DecorationRole)
-            item.setToolTip(colorNode.GetColorName(i))
-            self.model.setItem(row,0,item)
-            self.items.append(item)
-            col = 1
-            for k in self.logic.keys:
-                item = qt.QStandardItem()
-                if k == "Label Name":
-                    item.setData(self.logic.labelStats[i,k],qt.Qt.DisplayRole)
-                else:
-                    # set data as float with Qt::DisplayRole
-                    item.setData(float(self.logic.labelStats[i,k]),qt.Qt.DisplayRole)
-                item.setToolTip(colorNode.GetColorName(i))
-                self.model.setItem(row,col,item)
-                self.items.append(item)
-                col += 1
-            row += 1
-
-        self.view.setColumnWidth(0,30)
-        self.model.setHeaderData(0,1," ")
-        col = 1
-        for k in self.logic.keys:
-            self.view.setColumnWidth(col,15*len(k))
-            self.model.setHeaderData(col,1,k)
-            col += 1
-
-class CardiacLabelStatisticsLogic(LabelStatistics.LabelStatisticsLogic):
-    """Implement the logic to calculate label statistics.
-      Nodes are passed in as arguments.
-      Results are stored as 'statistics' instance variable.
-      """
-
-    def __init__(self, grayscaleNode, labelNode, KEV120, KEV80, fileName=None):
-        #import numpy
-
-        self.keys = ("Index", "Label Name", "Agatston Score", "Count", "Volume mm^3", "Volume cc", "Min", "Max", "Mean", "StdDev")
-        cubicMMPerVoxel = reduce(lambda x,y: x*y, labelNode.GetSpacing())
-        ccPerCubicMM = 0.001
-
-        # TODO: progress and status updates
-        # this->InvokeEvent(vtkLabelStatisticsLogic::StartLabelStats, (void*)"start label stats")
-
-        self.labelStats = {}
-        self.labelStats['Labels'] = []
-
-        stataccum = vtk.vtkImageAccumulate()
-        if vtk.VTK_MAJOR_VERSION <= 5:
-            stataccum.SetInput(labelNode.GetImageData())
-        else:
-            stataccum.SetInputConnection(labelNode.GetImageDataConnection())
-        stataccum.Update()
-        lo = int(stataccum.GetMin()[0])
-        hi = int(stataccum.GetMax()[0])
-
-        displayNode = labelNode.GetDisplayNode()
-        colorNode = displayNode.GetColorNode()
-
-        self.colorNode = colorNode
-
-        self.labelNode = labelNode
-        self.grayscaleNode = grayscaleNode
-        self.KEV80 = KEV80
-        self.KEV120 = KEV120
-        self.calculateAgatstonScores()
-
-        for i in xrange(lo,7):
-            # skip indices 0 (background) and 1 (default threshold pixels)
-            # because these are not calcium and do not have an Agatston score
-            if i == 0 or i == 1:
-                continue
-
-            # this->SetProgress((float)i/hi);
-            # std::string event_message = "Label "; std::stringstream s; s << i; event_message.append(s.str());
-            # this->InvokeEvent(vtkLabelStatisticsLogic::LabelStatsOuterLoop, (void*)event_message.c_str());
-
-            # logic copied from slicer3 LabelStatistics
-            # to create the binary volume of the label
-            # //logic copied from slicer2 LabelStatistics MaskStat
-            # // create the binary volume of the label
-            thresholder = vtk.vtkImageThreshold()
-            if vtk.VTK_MAJOR_VERSION <= 5:
-                thresholder.SetInput(labelNode.GetImageData())
-            else:
-                thresholder.SetInputConnection(labelNode.GetImageDataConnection())
-            thresholder.SetInValue(1)
-            thresholder.SetOutValue(0)
-            thresholder.ReplaceOutOn()
-            if i != 6:
-                thresholder.ThresholdBetween(i,i)
-            else: # label 6 is the total calcium pixels in labels 2, 3, 4 and 5
-                thresholder.ThresholdBetween(2,5)
-            thresholder.SetOutputScalarType(grayscaleNode.GetImageData().GetScalarType())
-            thresholder.Update()
-
-            # this.InvokeEvent(vtkLabelStatisticsLogic::LabelStatsInnerLoop, (void*)"0.25");
-
-            #  use vtk's statistics class with the binary labelmap as a stencil
-            stencil = vtk.vtkImageToImageStencil()
-            if vtk.VTK_MAJOR_VERSION <= 5:
-                stencil.SetInput(thresholder.GetOutput())
-            else:
-                stencil.SetInputConnection(thresholder.GetOutputPort())
-            stencil.ThresholdBetween(1, 1)
-
-            # this.InvokeEvent(vtkLabelStatisticsLogic::LabelStatsInnerLoop, (void*)"0.5")
-
-            stat1 = vtk.vtkImageAccumulate()
-            if vtk.VTK_MAJOR_VERSION <= 5:
-                stat1.SetInput(grayscaleNode.GetImageData())
-                stat1.SetStencil(stencil.GetOutput())
-            else:
-                stat1.SetInputConnection(grayscaleNode.GetImageDataConnection())
-                stencil.Update()
-                stat1.SetStencilData(stencil.GetOutput())
-            stat1.Update()
-
-            # this.InvokeEvent(vtkLabelStatisticsLogic::LabelStatsInnerLoop, (void*)"0.75")
-
-            if stat1.GetVoxelCount() > 0:
-                # add an entry to the LabelStats list
-                self.labelStats["Labels"].append(i)
-                self.labelStats[i,"Index"] = i
-                self.labelStats[i,"Label Name"] = colorNode.GetColorName(i)
-                self.labelStats[i,"Agatston Score"] = self.AgatstonScoresPerLabel[i]
-                self.labelStats[i,"Count"] = stat1.GetVoxelCount()
-                self.labelStats[i,"Volume mm^3"] = self.labelStats[i,"Count"] * cubicMMPerVoxel
-                self.labelStats[i,"Volume cc"] = self.labelStats[i,"Volume mm^3"] * ccPerCubicMM
-                self.labelStats[i,"Min"] = stat1.GetMin()[0]
-                self.labelStats[i,"Max"] = stat1.GetMax()[0]
-                self.labelStats[i,"Mean"] = stat1.GetMean()[0]
-                self.labelStats[i,"StdDev"] = stat1.GetStandardDeviation()[0]
-
-            # this.InvokeEvent(vtkLabelStatisticsLogic::LabelStatsInnerLoop, (void*)"1")
-
-        # this.InvokeEvent(vtkLabelStatisticsLogic::EndLabelStats, (void*)"end label stats")
-
-    def calculateAgatstonScores(self):
-
-        #Just temporary code, will calculate statistics and show in table
-        print "Calculating Statistics"
-        calcium = su.PullVolumeFromSlicer(self.labelNode.GetName())
-        all_labels = [0, 1, 2, 3, 4, 5, 6]
-        heart = su.PullVolumeFromSlicer(self.grayscaleNode.GetName())
-        sliceAgatstonPerLabel = self.computeSlicewiseAgatstonScores(calcium, heart, all_labels)
-        #print sliceAgatstonPerLabel
-        self.computeOverallAgatstonScore(sliceAgatstonPerLabel)
-
-    def computeOverallAgatstonScore(self, sliceAgatstonPerLabel):
-        self.AgatstonScoresPerLabel = {}
-        # labels 0 and 1 should not have an Agatston score
-        self.AgatstonScoresPerLabel[0] = 0
-        self.AgatstonScoresPerLabel[1] = 0
-        for (label, scores) in sliceAgatstonPerLabel.items():
-            labelScore =  sum(scores)
-            self.AgatstonScoresPerLabel[label] = labelScore
-        # label 6 is the total of all of labels 2 - 5
-        self.AgatstonScoresPerLabel[6] = sum(self.AgatstonScoresPerLabel.values())
-
-    def KEV2AgatstonIndex(self, kev):
-        AgatstonIndex = 0.0
-        if self.KEV120.checked:
-            if kev >= 130:   #range = 130-199
-                AgatstonIndex = 1.0
-            if kev >= 200:   #range = 200-299
-                AgatstonIndex = 2.0
-            if kev >= 300:   #range = 300-399
-                AgatstonIndex = 3.0
-            if kev >= 400:   #range >= 400
-                AgatstonIndex = 4.0
-        elif self.KEV80.checked:
-            if kev >= 167:   #range = 167-265
-                AgatstonIndex = 1.0
-            if kev >= 266:   #range = 266-407
-                AgatstonIndex = 2.0
-            if kev >= 408:   #range = 408-550
-                AgatstonIndex = 3.0
-            if kev >= 551:   #range >= 551
-                AgatstonIndex = 4.0
-        return AgatstonIndex
-
-    def computeSlicewiseAgatstonScores(self, calcium, heart, all_labels):
-        sliceAgatstonPerLabel=dict() ## A dictionary { labels : [AgatstonValues] }
-        ##Initialize Dictionary entries with empty list
-        for label in all_labels:
-            if label == 0 or label == 1:
-                continue
-            sliceAgatstonPerLabel[label]=list()
-
-        for label in all_labels:
-            if label == 0 or label == 1:
-                continue
-            binaryThresholdFilterImage = sitk.BinaryThreshold(calcium, label, label)
-            ConnectedComponentImage = sitk.ConnectedComponent(binaryThresholdFilterImage)
-            RelabeledComponentImage = sitk.RelabelComponent(ConnectedComponentImage)
-            ImageSpacing = RelabeledComponentImage.GetSpacing()
-            ImageIndex = range(0, RelabeledComponentImage.GetSize()[2])
-            for index in ImageIndex:
-                slice_calcium = RelabeledComponentImage[:,:,index]
-                slice_img = heart[:,:,index]
-                slice_ls = sitk.LabelStatisticsImageFilter()
-                slice_ls.Execute(slice_img,slice_calcium)
-                if sitk.Version().MajorVersion() > 0 or sitk.Version().MinorVersion() >= 9:
-                    compontent_labels = slice_ls.GetLabels()
-                else: #if sitk version < 0.9 then use older function call GetValidLabels
-                    compontent_labels = slice_ls.GetValidLabels()
-                for sublabel in compontent_labels:
-                    if sublabel == 0:
-                        continue
-                    AgatstonValue = 0.0
-                    if slice_ls.HasLabel(sublabel):
-                        slice_count = slice_ls.GetCount(sublabel)
-                        slice_area = slice_count*ImageSpacing[0]*ImageSpacing[1]
-                        slice_max = slice_ls.GetMaximum(sublabel)
-                        slice_Agatston = slice_area * self.KEV2AgatstonIndex( slice_max )
-                        AgatstonValue = slice_Agatston
-
-                    sliceAgatstonPerLabel[label].append(AgatstonValue)
-        return sliceAgatstonPerLabel
-
 class CardiacEditorWidget(Editor.EditorWidget):
-
+    def __init__(self, parent=None, showVolumesFrame=None, settings=None):
+        self.settings = settings
+        super(CardiacEditorWidget, self).__init__(parent=parent, showVolumesFrame=showVolumesFrame)
+        
     def createEditBox(self):
         self.editLabelMapsFrame.collapsed = False
         self.editBoxFrame = qt.QFrame(self.effectsToolsFrame)
         self.editBoxFrame.objectName = 'EditBoxFrame'
         self.editBoxFrame.setLayout(qt.QVBoxLayout())
         self.effectsToolsFrame.layout().addWidget(self.editBoxFrame)
-        self.toolsBox = CardiacEditBox(self.editBoxFrame, optionsFrame=self.effectOptionsFrame)
+        self.toolsBox = CardiacEditBox(self.settings, self.editBoxFrame, optionsFrame=self.effectOptionsFrame)
 
     def installShortcutKeys(self):
         """Turn on editor-wide shortcuts.  These are active independent
@@ -1342,82 +828,101 @@ class CardiacEditorWidget(Editor.EditorWidget):
             self.shortcuts.append(shortcut)
 
 class CardiacEditBox(EditorLib.EditBox):
-    
-    def test01(self,caller,event):
-        print('test01')
-        print('caller', caller)
-        print('event', event)
-        
+    def __init__(self, settings, *args, **kwargs):
+        self.settings = settings
+        super(CardiacEditBox, self).__init__(*args, **kwargs)
+
     # create the edit box
     def create(self):
 
         self.findEffects()
 
-        self.mainFrame = qt.QFrame(self.parent)
-        self.mainFrame.objectName = 'MainFrame'
-        vbox = qt.QVBoxLayout()
-        self.mainFrame.setLayout(vbox)
-        self.parent.layout().addWidget(self.mainFrame)
-
-        #
-        # the buttons
-        #
         self.rowFrames = []
         self.actions = {}
         self.buttons = {}
         self.icons = {}
         self.callbacks = {}
 
-        # The Default Label Selector
-        defaultChangeIslandButton = qt.QPushButton("Default")
-        defaultChangeIslandButton.toolTip = "Label - Default"
-        defaultChangeIslandButton.setStyleSheet("background-color: rgb(81,208,35)")
-        self.mainFrame.layout().addWidget(defaultChangeIslandButton)
-        defaultChangeIslandButton.connect('clicked(bool)', self.onDefaultChangeIslandButtonClicked)
-        
-        
-        #self.parameterNode = EditUtil.getParameterNode()
-        #self.addObserver(self.parameterNode, vtk.vtkCommand.ModifiedEvent, self.test01)
-        #self.addObserver(self.calciumNode, vtk.vtkCommand.ModifiedEvent, self.test01)
+        if self.settings['MODE']=='CACSTREE':
+            self.mainFrame = qt.QFrame(self.parent)
+            self.mainFrame.objectName = 'TreeFrame'
+            vbox = qt.QVBoxLayout()
+            self.mainFrame.setLayout(vbox)
+            self.parent.layout().addWidget(self.mainFrame)
+            
+            def addCombo(CACSTreeDict, NumCombos):
+                for i in range(NumCombos):
+                    combo = qt.QComboBox()
+                    if i==0:
+                        items = list(CACSTreeDict.keys())
+                        items = [x for x in items if not x=='COLOR']
+                        combo.addItems(items)
+                        combo.setCurrentIndex(items.index('OTHER'))
+                        combo.toolTip = "Label - Default"
+                        color = CACSTreeDict['OTHER']['COLOR']
+                        color_str = 'background-color: rgb(' + str(color[0]) + ',' + str(color[1]) + ',' + str(color[2]) + ')'
+                        combo.setStyleSheet(color_str)
+                        combo.setVisible(True)
+                        combo.setAccessibleName(str(i))
+                    else:
+                        combo.addItems([''])
+                        combo.toolTip = "Label - Default"
+                        combo.setStyleSheet("background-color: rgb(100,100,100)")
+                        combo.setVisible(False)
+                        combo.setAccessibleName(str(i))
+                        
+                    #combo.currentIndexChanged.connect(self.selectionchange)
+                    combo.currentIndexChanged.connect(self.selectionChangeFunc(i))
+                    self.mainFrame.layout().addWidget(combo)
+                    self.comboList.append(combo)
+                    
+                    
 
+            # Create combo boxes
+            CACSTreeDict = self.settings['CACSTreeDict']
+            self.comboList = []
+            addCombo(CACSTreeDict, NumCombos=5)
         
-        #node = EditUtil.getBackgroundImage()
-        #print('node', node)
-        #node.AddObserver("ModifiedEvent", self.test01)
-        
-        #interactionNode = slicer.app.applicationLogic().GetInteractionNode()
-        #self.addObserver(interactionNode, interactionNode.InteractionModeChangedEvent, self.test01)
-        
-        #self.parameterNode = EditUtil.getBackgroundImage()
-        #self.addObserver(self.parameterNode, vtk.vtkCommand.ModifiedEvent, self.test01)
+        ####################################################
+        else:
+            self.mainFrame = qt.QFrame(self.parent)
+            self.mainFrame.objectName = 'MainFrame'
+            vbox = qt.QVBoxLayout()
+            self.mainFrame.setLayout(vbox)
+            self.parent.layout().addWidget(self.mainFrame)
 
-        # The Input Left Main (LM) Label Selector
-#        LMchangeIslandButton = qt.QPushButton("LM")
-#        LMchangeIslandButton.toolTip = "Label - Left Main (LM)"
-#        LMchangeIslandButton.setStyleSheet("background-color: rgb(220,0,250)")
-#        self.mainFrame.layout().addWidget(LMchangeIslandButton)
-#        LMchangeIslandButton.connect('clicked(bool)', self.onLMchangeIslandButtonClicked)
-
-        # The Input Left Arterial Descending (LAD) Label Selector
-        LADchangeIslandButton = qt.QPushButton("LAD")
-        LADchangeIslandButton.toolTip = "Label - Left Arterial Descending (LAD)"
-        LADchangeIslandButton.setStyleSheet("background-color: rgb(246,243,48)")
-        self.mainFrame.layout().addWidget(LADchangeIslandButton)
-        LADchangeIslandButton.connect('clicked(bool)', self.onLADchangeIslandButtonClicked)
-
-        # The Input Left Circumflex (LCX) Label Selector
-        LCXchangeIslandButton = qt.QPushButton("LCX")
-        LCXchangeIslandButton.toolTip = "Label - Left Circumflex (LCX)"
-        LCXchangeIslandButton.setStyleSheet("background-color: rgb(94,170,200)")
-        self.mainFrame.layout().addWidget(LCXchangeIslandButton)
-        LCXchangeIslandButton.connect('clicked(bool)', self.onLCXchangeIslandButtonClicked)
-
-        # The Input Right Coronary Artery (RCA) Label Selector
-        RCAchangeIslandButton = qt.QPushButton("RCA")
-        RCAchangeIslandButton.toolTip = "Label - Right Coronary Artery (RCA)"
-        RCAchangeIslandButton.setStyleSheet("background-color: rgb(222,60,30)")
-        self.mainFrame.layout().addWidget(RCAchangeIslandButton)
-        RCAchangeIslandButton.connect('clicked(bool)', self.onRCAchangeIslandButtonClicked)
+            # The Default Label Selector
+            defaultChangeIslandButton = qt.QPushButton("Default")
+            defaultChangeIslandButton.toolTip = "Label - Default"
+            defaultChangeIslandButton.setStyleSheet("background-color: rgb(81,208,35)")
+            self.mainFrame.layout().addWidget(defaultChangeIslandButton)
+            defaultChangeIslandButton.connect('clicked(bool)', self.onDefaultChangeIslandButtonClicked)
+    
+            # The Input Left Arterial Descending (LAD) Label Selector
+            LADchangeIslandButton = qt.QPushButton("LADX")
+            LADchangeIslandButton.toolTip = "Label - Left Arterial Descending (LAD)"
+            LADchangeIslandButton.setStyleSheet("background-color: rgb(246,243,48)")
+            self.mainFrame.layout().addWidget(LADchangeIslandButton)
+            LADchangeIslandButton.connect('clicked(bool)', self.onLADchangeIslandButtonClicked)
+    
+            # The Input Left Circumflex (LCX) Label Selector
+            LCXchangeIslandButton = qt.QPushButton("LCX")
+            LCXchangeIslandButton.toolTip = "Label - Left Circumflex (LCX)"
+            LCXchangeIslandButton.setStyleSheet("background-color: rgb(94,170,200)")
+            self.mainFrame.layout().addWidget(LCXchangeIslandButton)
+            LCXchangeIslandButton.connect('clicked(bool)', self.onLCXchangeIslandButtonClicked)
+    
+            # The Input Right Coronary Artery (RCA) Label Selector
+            RCAchangeIslandButton = qt.QPushButton("RCA")
+            RCAchangeIslandButton.toolTip = "Label - Right Coronary Artery (RCA)"
+            RCAchangeIslandButton.setStyleSheet("background-color: rgb(222,60,30)")
+            self.mainFrame.layout().addWidget(RCAchangeIslandButton)
+            RCAchangeIslandButton.connect('clicked(bool)', self.onRCAchangeIslandButtonClicked)
+            
+            self.LADchangeIslandButton = LADchangeIslandButton
+            self.LCXchangeIslandButton = LCXchangeIslandButton
+            self.RCAchangeIslandButton = RCAchangeIslandButton
+            self.defaultChangeIslandButton = defaultChangeIslandButton
 
         # create all of the buttons
         # createButtonRow() ensures that only effects in self.effects are exposed,
@@ -1444,24 +949,55 @@ class CardiacEditBox(EditorLib.EditBox):
         self.toolsActiveToolName.setStyleSheet("background-color: rgb(232,230,235)")
         self.toolsActiveToolFrame.layout().addWidget(self.toolsActiveToolName)
 
-        #self.LMchangeIslandButton = LMchangeIslandButton
-        self.LADchangeIslandButton = LADchangeIslandButton
-        self.LCXchangeIslandButton = LCXchangeIslandButton
-        self.RCAchangeIslandButton = RCAchangeIslandButton
-        self.defaultChangeIslandButton = defaultChangeIslandButton
+        
 
         vbox.addStretch(1)
 
         self.updateUndoRedoButtons()
-        #self._onParameterNodeModified(self.editUtil.getParameterNode())
         self._onParameterNodeModified(EditUtil.getParameterNode())
+
+    def selectionChangeFunc(self, comboIdx):
+        CACSTree = self.settings['CACSTree']
+        def selectionChange(idx):
+            if idx>-1:
+                combo = self.comboList[comboIdx]
+                value = combo.itemText(idx)
+                childrens = CACSTree.getChildrenByName(value)
+                if len(childrens) > 0:
+                    items = ['UNDEFINED'] + [x.name for x in childrens]
+                    self.comboList[comboIdx+1].clear()
+                    self.comboList[comboIdx+1].addItems(items)
+                    self.comboList[comboIdx+1].setVisible(True)
+
+                else:
+                    self.comboList[comboIdx+1].setVisible(False)
+                    
+                # ChangeIsland
+                label = CACSTree.getIndexByName(value)
+                if label is not None:
+                    self.selectEffect("PaintEffect")
+                    EditUtil.setLabel(label)
+                    
+                # Adapt color
+                if label is not None:
+                    # ChangeIsland
+                    self.selectEffect("PaintEffect")
+                    EditUtil.setLabel(label)
+                    # Update color
+                    color = CACSTree.getColorByName(value)
+                    color_str = 'background-color: rgb(' + str(color[0]) + ',' + str(color[1]) + ',' + str(color[2]) + ')'
+                    combo.setStyleSheet(color_str)
+                if value=='UNDEFINED':
+                    comboUp = self.comboList[comboIdx-1]
+                    valueUp = comboUp.currentText
+                    color = CACSTree.getColorByName(valueUp)
+                    color_str = 'background-color: rgb(' + str(color[0]) + ',' + str(color[1]) + ',' + str(color[2]) + ')'
+                    combo.setStyleSheet(color_str)
         
-        #labelimage = EditUtil.getLabelImage()
-        #dims = labelimage.GetDimensions()
+        return selectionChange
 
-
-#    def onLMchangeIslandButtonClicked(self):
-#        self.changeIslandButtonClicked(2)
+    def onTestButtonClicked1(self):
+        print('onTestButtonClicked1')
 
     def onLADchangeIslandButtonClicked(self):
         self.changeIslandButtonClicked(2)
@@ -1478,3 +1014,4 @@ class CardiacEditBox(EditorLib.EditBox):
     def changeIslandButtonClicked(self, label):
         self.selectEffect("PaintEffect")
         EditUtil.setLabel(label)
+
