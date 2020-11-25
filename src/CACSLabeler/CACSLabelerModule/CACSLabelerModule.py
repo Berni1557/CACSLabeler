@@ -38,6 +38,7 @@ def splitFilePath(filepath):
     filename = os.path.basename(head)
     return folderpath, filename, file_extension
 
+   
 class Lesion():
     def __init__(self, name, parent, color):
         self.name = name
@@ -57,6 +58,7 @@ class CACSTree():
         for key in parent.keys():
             key = key.encode("utf-8")
             if not key =='COLOR':
+                print('key', key)
                 lesion = Lesion(name=key, parent=parent_name, color = parent[key]['COLOR'])
                 self.lesionList.append(lesion)
                 self.addChildren(parent[key], key)
@@ -104,14 +106,14 @@ class CACSLabelerModule(ScriptedLoadableModule):
     self.parent.dependencies = []
     self.parent.contributors = ["Bernhard Foellmer, Charite"] # replace with "Firstname Lastname (Organization)"
     self.parent.helpText = """
-This is an example of scripted loadable module bundled in an extension.
-It performs a simple thresholding on the input volume and optionally captures a screenshot.
-"""
+                            This is an example of scripted loadable module bundled in an extension.
+                            It performs a simple thresholding on the input volume and optionally captures a screenshot.
+                            """
     self.parent.helpText += self.getDefaultModuleDocumentationLink()
     self.parent.acknowledgementText = """
-This file was originally developed by Jean-Christophe Fillion-Robin, Kitware Inc.
-and Steve Pieper, Isomics, Inc. and was partially funded by NIH grant 3P41RR013218-12S1.
-""" # replace with organization, grant and thanks.
+                            This file was originally developed by Jean-Christophe Fillion-Robin, Kitware Inc.
+                            and Steve Pieper, Isomics, Inc. and was partially funded by NIH grant 3P41RR013218-12S1.
+                            """ # replace with organization, grant and thanks.
 
 # CACSLabelerModuleWidget
 class CACSLabelerModuleWidget:
@@ -294,64 +296,62 @@ class CACSLabelerModuleWidget:
 
     def initCACSTreeDict(self):
         
-        OTHER = defaultdict(lambda: None, {'COLOR': (111, 184, 210, 255)})
+        OTHER = OrderedDict([('COLOR', (100, 100, 100, 255))])
         
-        RCA_PROXIMAL = defaultdict(lambda: None, {'COLOR': (11, 184, 110, 255)})
-        RCA_MID = defaultdict(lambda: None, {'COLOR': (100,100,100, 255)})
-        RCA_DISTAL = defaultdict(lambda: None, {'COLOR': (100,100,100, 255)})
-        RCA_SIDE_BRANCH = defaultdict(lambda: None, {'COLOR': (100,100,100, 255)})
-        RCA = defaultdict(lambda: None, {'RCA_PROXIMAL': RCA_PROXIMAL, 'RCA_MID': RCA_MID, 
-                                         'RCA_DISTAL': RCA_DISTAL, 'RCA_SIDE_BRANCH': RCA_SIDE_BRANCH, 'COLOR': (100,100,100, 255)})
+        RCA_PROXIMAL = OrderedDict([('COLOR', (255, 155, 155, 255))])
+        RCA_MID = OrderedDict([('COLOR', (255,67,67, 255))])
+        RCA_DISTAL = OrderedDict([('COLOR', (108,0,0, 255))])
+        RCA_SIDE_BRANCH = OrderedDict([('COLOR', (168,0,0, 255))])
+        RCA = OrderedDict([('RCA_PROXIMAL', RCA_PROXIMAL), ('RCA_MID', RCA_MID), 
+                                ('RCA_DISTAL', RCA_DISTAL), ('RCA_SIDE_BRANCH', RCA_SIDE_BRANCH), ('COLOR', (238,0,0, 255))])
         
-        LM = defaultdict(lambda: None, {'COLOR': (100,100,100, 255)})
+        LM = OrderedDict([('COLOR', (26,203,238, 255))])
         
-        LAD_PROXIMAL = defaultdict(lambda: None, {'COLOR': (100,100,100, 255)})
-        LAD_MID = defaultdict(lambda: None, {'COLOR': (100,100,100, 255)})
-        LAD_DISTAL = defaultdict(lambda: None, {'COLOR': (100,100,100, 255)})
-        LAD_SIDE_BRANCH = defaultdict(lambda: None, {'COLOR': (100,100,100, 255)})
-        LAD = defaultdict(lambda: None, {'LAD_PROXIMAL': LAD_PROXIMAL, 'LAD_MID': LAD_MID, 
-                                         'LAD_DISTAL': LAD_DISTAL, 'LAD_SIDE_BRANCH': LAD_SIDE_BRANCH, 'COLOR': (100,100,100, 255)})
+        LAD_PROXIMAL = OrderedDict([('COLOR', (12,252,155, 255))])
+        LAD_MID = OrderedDict([('COLOR', (136,248,227, 255))])
+        LAD_DISTAL = OrderedDict([('COLOR', (12,176,198, 255))])
+        LAD_SIDE_BRANCH = OrderedDict([('COLOR', (11,253,244, 255))])
+        LAD = OrderedDict([('LAD_PROXIMAL', LAD_PROXIMAL), ('LAD_MID', LAD_MID), ('LAD_DISTAL', LAD_DISTAL), ('LAD_SIDE_BRANCH', LAD_SIDE_BRANCH), ('COLOR', (12,252,52, 255))])
         
-        LCX_PROXIMAL = defaultdict(lambda: None, {'COLOR': (100,100,100, 255)})
-        LCX_MID = defaultdict(lambda: None, {'COLOR': (100,100,100, 255)})
-        LCX_DISTAL = defaultdict(lambda: None, {'COLOR': (100,100,100, 255)})
-        LCX_SIDE_BRANCH = defaultdict(lambda: None, {'COLOR': (100,100,100, 255)})
-        LCX = defaultdict(lambda: None, {'LCX_PROXIMAL': LCX_PROXIMAL, 'LCX_MID': LCX_MID, 
-                                         'LCX_DISTAL': LCX_DISTAL, 'LCX_SIDE_BRANCH': LCX_SIDE_BRANCH, 'COLOR': (100,100,100, 255)})
+        LCX_PROXIMAL = OrderedDict([('COLOR', (139,133,255, 255))])
+        LCX_MID = OrderedDict([('COLOR', (72,63,255, 255))])
+        LCX_DISTAL = OrderedDict([('COLOR', (4,0,84, 255))])
+        LCX_SIDE_BRANCH = OrderedDict([('COLOR', (9,0,118, 255))])
+        LCX = OrderedDict([('LCX_PROXIMAL', LCX_PROXIMAL), ('LCX_MID', LCX_MID), ('LCX_DISTAL', LCX_DISTAL), ('LCX_SIDE_BRANCH', LCX_SIDE_BRANCH), ('COLOR', (12,0,246, 255))])
 
-        CC = defaultdict(lambda: None, {'RCA': RCA, 'LM': LM, 'LAD': LAD, 'LCX': LCX, 'COLOR': (248, 242, 60, 255)})
+        CC = OrderedDict([('RCA', RCA), ('LM', LM), ('LAD', LAD), ('LCX', LCX), ('COLOR', (179, 59, 70, 255))])
         
-        AORTA_ASC = defaultdict(lambda: None, {'COLOR': (100,100,100, 255)})
-        AORTA_DSC = defaultdict(lambda: None, {'COLOR': (100,100,100, 255)})
-        AORTA = defaultdict(lambda: None, {'AORTA_ASC': AORTA_ASC, 'AORTA_DSC': AORTA_DSC, 'COLOR': (100,100,100, 255)})
+        AORTA_ASC = OrderedDict([('COLOR', (242,253,103, 255))])
+        AORTA_DSC = OrderedDict([('COLOR', (151,162,2, 255))])
+        AORTA = OrderedDict([('AORTA_ASC', AORTA_ASC), ('AORTA_DSC', AORTA_DSC), ('COLOR', (234,252,4, 255))])
 
-        NCC = defaultdict(lambda: None, {'COLOR': (100,100,100, 255)})
-        LCC = defaultdict(lambda: None, {'COLOR': (100,100,100, 255)})
-        RCC = defaultdict(lambda: None, {'COLOR': (100,100,100, 255)})
-        VALVE_PULMONIC = defaultdict(lambda: None, {'COLOR': (100,100,100, 255)})
-        VALVE_MITRAL = defaultdict(lambda: None, {'COLOR': (100,100,100, 255)})
-        VALVE_TRICUSPID = defaultdict(lambda: None, {'COLOR': (100,100,100, 255)})
-        VALVES = defaultdict(lambda: None, {'NCC': NCC, 'LCC': LCC, 'RCC': RCC,
-                                            'VALVE_PULMONIC': VALVE_PULMONIC, 'VALVE_MITRAL': VALVE_MITRAL,
-                                            'VALVE_TRICUSPID': VALVE_TRICUSPID, 'COLOR': (100,100,100, 255)})
+        NCC = OrderedDict([('COLOR', (1,58,61, 255))])
+        LCC = OrderedDict([('COLOR', (2,101,106, 255))])
+        RCC = OrderedDict([('COLOR', (0,25,26, 255))])
+        VALVE_PULMONIC = OrderedDict([('COLOR', (3,133,139, 255))])
+        VALVE_MITRAL = OrderedDict([('COLOR', (198,251,254, 255))])
+        VALVE_TRICUSPID = OrderedDict([('COLOR', (138,246,252, 255))])
+        VALVES = OrderedDict([('NCC', NCC), ('LCC', LCC), ('RCC', RCC),
+                                            ('VALVE_PULMONIC', VALVE_PULMONIC), ('VALVE_MITRAL', VALVE_MITRAL),
+                                            ('VALVE_TRICUSPID', VALVE_TRICUSPID), ('COLOR', (5,226,237, 255))])
         
-        LUNG_PARENCHYMA = defaultdict(lambda: None, {'COLOR': (100,100,100, 255)})
-        LUNG_ARTERY = defaultdict(lambda: None, {'COLOR': (100,100,100, 255)})
-        LUNG_VESSEL = defaultdict(lambda: None, {'COLOR': (100,100,100, 255)})
-        BRONCHUS = defaultdict(lambda: None, {'COLOR': (100,100,100, 255)})
-        CALCIFIED_LUNG_NODULE = defaultdict(lambda: None, {'COLOR': (100,100,100, 255)})
-        LUNG = defaultdict(lambda: None, {'LUNG_PARENCHYMA': LUNG_PARENCHYMA, 'LUNG_ARTERY': LUNG_ARTERY,
-                                          'LUNG_VESSEL': LUNG_VESSEL, 'BRONCHUS': BRONCHUS,
-                                          'CALCIFIED_LUNG_NODULE': CALCIFIED_LUNG_NODULE, 'COLOR': (100,100,100, 255)})
+        LUNG_PARENCHYMA = OrderedDict([('COLOR', (5,91,21, 255))])
+        LUNG_ARTERY = OrderedDict([('COLOR', (10,198,46, 255))])
+        LUNG_VESSEL = OrderedDict([('COLOR', (4,68,16, 255))])
+        BRONCHUS = OrderedDict([('COLOR', (99,247,127, 255))])
+        CALCIFIED_LUNG_NODULE = OrderedDict([('COLOR', (6,112,100, 26))])
+        LUNG = OrderedDict([('LUNG_PARENCHYMA', LUNG_PARENCHYMA), ('LUNG_ARTERY', LUNG_ARTERY),
+                                          ('LUNG_VESSEL', LUNG_VESSEL), ('BRONCHUS', BRONCHUS),
+                                          ('CALCIFIED_LUNG_NODULE', CALCIFIED_LUNG_NODULE), ('COLOR', (8,160,37, 255))])
         
-        VERTEBRA = defaultdict(lambda: None, {'COLOR': (100,100,100, 255)})
-        BONE = defaultdict(lambda: None, {'VERTEBRA': VERTEBRA, 'COLOR': (100,100,100, 255)})
+        VERTEBRA = OrderedDict([('COLOR', (198,185,128, 255))])
+        BONE = OrderedDict([('VERTEBRA', VERTEBRA), ('COLOR', (100,100,100, 255))])
         
-        STERNUM = defaultdict(lambda: None, {'COLOR': (100,100,100, 255)})
-        ECC = defaultdict(lambda: None, {'STERNUM': STERNUM, 'AORTA': AORTA, 'VALVES': VALVES,
-                                         'LUNG': LUNG, 'BONE': BONE, 'COLOR': (95, 212, 45, 255)})    
+        STERNUM = OrderedDict([('COLOR', (254,110,237, 255))])
+        ECC = OrderedDict([('STERNUM', STERNUM), ('AORTA', AORTA), ('VALVES', VALVES),
+                                         ('LUNG', LUNG), ('BONE', BONE), ('COLOR', (240, 2, 212, 255))])    
 
-        CACSTreeDict = defaultdict(lambda: None, {'OTHER': OTHER, 'ECC': ECC, 'CC': CC, 'COLOR': (10,23,120,0)})
+        CACSTreeDict = OrderedDict([('OTHER', OTHER), ('ECC', ECC), ('CC', CC), ('COLOR', (0,0,0,0))])
         return CACSTreeDict
         
     def writeSettings(self, filepath_settings):
@@ -416,8 +416,9 @@ class CACSLabelerModuleWidget:
         if os.path.isfile(filepath_settings):
             print('Reading setting from ' + filepath_settings)
             with open(filepath_settings) as f:
-                settings = json.load(f, object_hook=_decode_dict)
-                settings = defaultdict(lambda: None, settings)
+                settings = json.load(f, object_hook=_decode_dict, object_pairs_hook=OrderedDict)
+                print('settings',settings)
+                settings = OrderedDict(settings)
                 # CreateCACSTree
                 settings['CACSTree'] = CACSTree()
                 settings['CACSTree'].createTree(settings['CACSTreeDict'])
@@ -583,15 +584,13 @@ class CACSLabelerModuleWidget:
         slicer.util.setSliceViewerLayers(background=node)
         
         # Set slicer offset
-        layoutManager = slicer.app.layoutManager()
-        red = layoutManager.sliceWidget('Red')
-        redLogic = red.sliceLogic()
-        redLogic.SetSliceOffset(-100)
+        slicer.util.resetSliceViews()
 
         # Creates and adds the custom Editor Widget to the module
-        self.localCardiacEditorWidget = CardiacEditorWidget(parent=self.parent, showVolumesFrame=False, settings=self.settings)
-        self.localCardiacEditorWidget.setup()
-        self.localCardiacEditorWidget.enter()
+        if self.localCardiacEditorWidget is None:
+            self.localCardiacEditorWidget = CardiacEditorWidget(parent=self.parent, showVolumesFrame=False, settings=self.settings)
+            self.localCardiacEditorWidget.setup()
+            self.localCardiacEditorWidget.enter()
 
         # Activate Save Button
         self.saveButton.enabled = True
@@ -634,7 +633,6 @@ class CACSLabelerModuleWidget:
 #
 # CACSLabelerModuleLogic
 #
-
 class CACSLabelerModuleLogic:
     """This class should implement all the actual
     computation done by your module.  The interface
@@ -651,11 +649,6 @@ class CACSLabelerModuleLogic:
         self.inputVolumeName = inputVolumeName
         self.calciumLabelNode = None
         self.CardiacAgatstonMeasuresLUTNode = None
-        
-    def test02(self,caller,event):
-        print('test01')
-        print('caller', caller)
-        print('event', event)
 
     def runThreshold(self):
 
@@ -666,18 +659,29 @@ class CACSLabelerModuleLogic:
             self.lowerThresholdValue = 130
             #calciumName = "{0}_120KEV_{1}HU_Calcium_Label".format(self.inputVolumeName, self.lowerThresholdValue)
             calciumName = "{0}-label-lesion".format(self.inputVolumeName)
-
-        print('----- Thresholding -----')
-        print('Threshold value:', self.lowerThresholdValue)
-        inputVolume = su.PullVolumeFromSlicer(self.inputVolumeName)
-        thresholdImage = sitk.BinaryThreshold(inputVolume, self.lowerThresholdValue, self.upperThresholdValue)
-        castedThresholdImage = sitk.Cast(thresholdImage, sitk.sitkInt16)
-        su.PushLabel(castedThresholdImage, calciumName)
+        
+        # Check if node already exists
+        node = slicer.util.getFirstNodeByName(calciumName)
+        if node is None:
+            print('----- Thresholding -----')
+            print('Threshold value:', self.lowerThresholdValue)
+            inputVolume = su.PullVolumeFromSlicer(self.inputVolumeName)
+            thresholdImage = sitk.BinaryThreshold(inputVolume, self.lowerThresholdValue, self.upperThresholdValue)
+            castedThresholdImage = sitk.Cast(thresholdImage, sitk.sitkInt16)
+            su.PushLabel(castedThresholdImage, calciumName)
         self.assignLabelLUT(calciumName)
         self.setLowerPaintThreshold()
         self.calciumName=calciumName
         self.calciumNode = su.PullVolumeFromSlicer(calciumName)
-        #self.addObserver(self.calciumNode, vtk.vtkCommand.ModifiedEvent, self.test02)
+            #self.addObserver(self.calciumNode, vtk.vtkCommand.ModifiedEvent, self.test02)
+
+    def setLowerPaintThreshold(self):
+        # sets parameters for paint specific to KEV threshold level
+        parameterNode = self.editUtil.getParameterNode()
+        parameterNode.SetParameter("LabelEffect,paintOver","1")
+        parameterNode.SetParameter("LabelEffect,paintThreshold","1")
+        parameterNode.SetParameter("LabelEffect,paintThresholdMin","{0}".format(self.lowerThresholdValue))
+        parameterNode.SetParameter("LabelEffect,paintThresholdMax","{0}".format(self.upperThresholdValue))
 
     def assignLabelLUT(self, calciumName):
         # Set the color lookup table (LUT) to the custom CardiacAgatstonMeasuresLUT
@@ -687,13 +691,13 @@ class CACSLabelerModuleLogic:
         calciumDisplayNode = self.calciumLabelNode.GetDisplayNode()
         calciumDisplayNode.SetAndObserveColorNodeID(CardiacAgatstonMeasuresLUTID)
 
-    def setLowerPaintThreshold(self):
-        # sets parameters for paint specific to KEV threshold level
-        parameterNode = self.editUtil.getParameterNode()
-        parameterNode.SetParameter("LabelEffect,paintOver","1")
-        parameterNode.SetParameter("LabelEffect,paintThreshold","1")
-        parameterNode.SetParameter("LabelEffect,paintThresholdMin","{0}".format(self.lowerThresholdValue))
-        parameterNode.SetParameter("LabelEffect,paintThresholdMax","{0}".format(self.upperThresholdValue))
+#    def setLowerPaintThreshold(self):
+#        # sets parameters for paint specific to KEV threshold level
+#        parameterNode = self.editUtil.getParameterNode()
+#        parameterNode.SetParameter("LabelEffect,paintOver","1")
+#        parameterNode.SetParameter("LabelEffect,paintThreshold","1")
+#        parameterNode.SetParameter("LabelEffect,paintThresholdMin","{0}".format(self.lowerThresholdValue))
+#        parameterNode.SetParameter("LabelEffect,paintThresholdMax","{0}".format(self.upperThresholdValue))
 
     def hasImageData(self,volumeNode):
         """This is a dummy logic method that
@@ -965,10 +969,10 @@ class CardiacEditBox(EditorLib.EditBox):
                 childrens = CACSTree.getChildrenByName(value)
                 if len(childrens) > 0:
                     items = ['UNDEFINED'] + [x.name for x in childrens]
+                    print('items', items)
                     self.comboList[comboIdx+1].clear()
                     self.comboList[comboIdx+1].addItems(items)
                     self.comboList[comboIdx+1].setVisible(True)
-
                 else:
                     self.comboList[comboIdx+1].setVisible(False)
                     
