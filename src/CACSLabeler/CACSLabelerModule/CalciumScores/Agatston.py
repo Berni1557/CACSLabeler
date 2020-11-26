@@ -2,10 +2,9 @@
 # Reference: V. Sandfort and D. A. Bluemke, “CT calcium scoring . History , current status and outlook,” Diagn. Interv. Imaging, vol. 98, no. 1, pp. 3–10, 2017.
 
 import numpy as np
-from collections import defaultdict
+from collections import defaultdict, OrderedDict
 from SimpleITK import ConnectedComponentImageFilter
 import SimpleITK as sitk
-
 
 # Agatston score
 class Agatston():
@@ -53,7 +52,7 @@ class Agatston():
             grading='zero'
         return grading
         
-    def compute(self, inputVolume, inputVolumeLabel):
+    def compute(self, inputVolume, inputVolumeLabel, arteries_dict=None):
         """ Compute agatston score from image and image label
 
         :param image: Image
@@ -64,6 +63,9 @@ class Agatston():
         :type pixelVolume: float
         """
         
+        if arteries_dict is not None:
+            self.arteries_dict = arteries_dict
+
         image = sitk.GetArrayFromImage(inputVolume)
         imageLabel = sitk.GetArrayFromImage(inputVolumeLabel)
         spacing = inputVolume.GetSpacing()
@@ -80,10 +82,10 @@ class Agatston():
         structure[1,1,0] = 1
 
         # Iterate over arteries
-        agatston = defaultdict(lambda: None, {'NAME': 'AGATSTON', 'LAD': 0, 'LCX': 0, 'RCA': 0, 'AgatstonScore': 0, 'Grading': None})
-        for k, key in enumerate(self.arteries):
+        agatston = OrderedDict([('NAME', 'AGATSTON'), ('AgatstonScore', 0), ('Grading', None)])
+        for key in self.arteries_dict.keys():
             # Extract binary mask of lesions from one artery
-            imageLabelA = imageLabel==(k+2)
+            imageLabelA = imageLabel==self.arteries_dict[key]
             image_sitk = sitk.GetImageFromArray(imageLabelA.astype(np.uint8))
             # Extract connected components
             compFilter = ConnectedComponentImageFilter()
@@ -121,11 +123,11 @@ class Agatston():
         return agatston
     
     def show(self):
-        if self.agatston is not None:
+        if self.arteries_dict is not None:
             # Print calcium scoring
             print('---------------------------')
             print('----- Agatston score per Artery-----')
-            for key in self.arteries:
+            for key in self.arteries_dict.keys():
                 print(key, self.agatston[key])
             print('----- Agatston score-----')
             print(self.agatston['AgatstonScore'])

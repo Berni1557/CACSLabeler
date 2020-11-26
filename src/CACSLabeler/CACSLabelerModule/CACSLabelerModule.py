@@ -24,6 +24,9 @@ from CalciumScores.VolumeScore import VolumeScore
 from CalciumScores.DensityScore import DensityScore
 from collections import defaultdict
 
+import imp
+imp.reload(sys.modules['CalciumScores'])
+
 ############## CACSLabelerModule ##############
 
 def splitFilePath(filepath):
@@ -58,7 +61,6 @@ class CACSTree():
         for key in parent.keys():
             key = key.encode("utf-8")
             if not key =='COLOR':
-                print('key', key)
                 lesion = Lesion(name=key, parent=parent_name, color = parent[key]['COLOR'])
                 self.lesionList.append(lesion)
                 self.addChildren(parent[key], key)
@@ -81,7 +83,13 @@ class CACSTree():
         for idx, lesion in enumerate(self.lesionList):
             if lesion.name == name:
                 return idx
-
+                
+    def getLesionNames(self):
+        namelist = []
+        for idx, lesion in enumerate(self.lesionList):
+            namelist.append(lesion.name)
+        return namelist
+                
     def getColorByName(self, name):
         for idx, lesion in enumerate(self.lesionList):
             if lesion.name == name:
@@ -345,13 +353,13 @@ class CACSLabelerModuleWidget:
                                           ('CALCIFIED_LUNG_NODULE', CALCIFIED_LUNG_NODULE), ('COLOR', (8,160,37, 255))])
         
         VERTEBRA = OrderedDict([('COLOR', (198,185,128, 255))])
-        BONE = OrderedDict([('VERTEBRA', VERTEBRA), ('COLOR', (100,100,100, 255))])
+        BONE = OrderedDict([('VERTEBRA', VERTEBRA), ('COLOR', (167,149,75, 255))])
         
         STERNUM = OrderedDict([('COLOR', (254,110,237, 255))])
         ECC = OrderedDict([('STERNUM', STERNUM), ('AORTA', AORTA), ('VALVES', VALVES),
                                          ('LUNG', LUNG), ('BONE', BONE), ('COLOR', (240, 2, 212, 255))])    
 
-        CACSTreeDict = OrderedDict([('OTHER', OTHER), ('ECC', ECC), ('CC', CC), ('COLOR', (0,0,0,0))])
+        CACSTreeDict = OrderedDict([('OTHER', OTHER), ('CC', CC), ('ECC', ECC), ('COLOR', (0,0,0,0))])
         return CACSTreeDict
         
     def writeSettings(self, filepath_settings):
@@ -366,7 +374,7 @@ class CACSLabelerModuleWidget:
         # Initialize settings
         settingsDefault = {'folderpath_images': 'H:/cloud/cloud_data/Projects/DL/Code/src/datasets/DISCHARGE/data_cacs/Images',
                            'folderpath_references': 'H:/cloud/cloud_data/Projects/DL/Code/src/datasets/DISCHARGE/data_cacs/References',
-                           'filepath_export': 'H:/cloud/cloud_data/Projects/CACSLabeler/code/data/export.csv',
+                           'filepath_export': 'H:/cloud/cloud_data/Projects/CACSLabeler/code/data/export.json',
                            'filter_input': '(*.mhd)',
                            'CalciumScores': ['agatston', 'VolumeScore', 'DensityScore'],
                            'filter_input_by_reference': False,
@@ -417,7 +425,6 @@ class CACSLabelerModuleWidget:
             print('Reading setting from ' + filepath_settings)
             with open(filepath_settings) as f:
                 settings = json.load(f, object_hook=_decode_dict, object_pairs_hook=OrderedDict)
-                print('settings',settings)
                 settings = OrderedDict(settings)
                 # CreateCACSTree
                 settings['CACSTree'] = CACSTree()
@@ -444,26 +451,35 @@ class CACSLabelerModuleWidget:
         for node in nodes:
             slicer.mrmlScene.RemoveNode(node)
 
+    def get_arteries_dict(self):
+        arteries = self.settings['CACSTree'].getLesionNames()
+        arteries_dict = OrderedDict()
+        for k, key in enumerate(arteries):
+            if k>1:
+                arteries_dict[key]=k
+        return arteries_dict
+        
+        
     def onScoreButtonClicked(self):
         # Get image and imageLabel
         inputVolumeName = self.inputImageNode.GetName()
         inputVolumeNameLabel = inputVolumeName + '-label-lesion'
         inputVolume = su.PullVolumeFromSlicer(inputVolumeName)
         inputVolumeLabel = su.PullVolumeFromSlicer(inputVolumeNameLabel)
-        #image = sitk.GetArrayFromImage(inputVolume)
-        #imageLabel = sitk.GetArrayFromImage(inputVolumeLabel)
-        
+
         # Compute calcium scores
+        arteries_dict = self.get_arteries_dict()
         self.calciumScoresResult=[]
         for score in self.calciumScores:
             for scorename in self.settings['CalciumScores']:
                 if score.name in scorename:
-                    s = score.compute(inputVolume, inputVolumeLabel)
+                    s = score.compute(inputVolume, inputVolumeLabel, arteries_dict=arteries_dict)
                     score.show()
                     self.calciumScoresResult.append(s)
         
     def onExportScoreButtonClicked(self):
         # Export labels
+        arteries_dict = self.get_arteries_dict()
         filepath_export = self.settings['filepath_export']
         volumeNodes = slicer.util.getNodesByClass('vtkMRMLScalarVolumeNode')
         self.calciumScoresResult=[]
@@ -479,7 +495,7 @@ class CACSLabelerModuleWidget:
                             inputVolumeName = inputVolumeNameLabel[0:-13]
                             inputVolumeLabel = su.PullVolumeFromSlicer(inputVolumeNameLabel)
                             inputVolume = su.PullVolumeFromSlicer(inputVolumeName)
-                            s = score.compute(inputVolume, inputVolumeLabel)
+                            s = score.compute(inputVolume, inputVolumeLabel, arteries_dict)
                             scoreResult.append(s)
                 self.calciumScoresResult.append({'ImageName':volume_name, 'Scores': scoreResult})
         
@@ -952,9 +968,6 @@ class CardiacEditBox(EditorLib.EditBox):
         self.toolsActiveToolName.setText( '' )
         self.toolsActiveToolName.setStyleSheet("background-color: rgb(232,230,235)")
         self.toolsActiveToolFrame.layout().addWidget(self.toolsActiveToolName)
-
-        
-
         vbox.addStretch(1)
 
         self.updateUndoRedoButtons()
@@ -965,24 +978,18 @@ class CardiacEditBox(EditorLib.EditBox):
         def selectionChange(idx):
             if idx>-1:
                 combo = self.comboList[comboIdx]
-                value = combo.itemText(idx)
+                value = combo.itemText(idx).encode('utf8')
                 childrens = CACSTree.getChildrenByName(value)
                 if len(childrens) > 0:
                     items = ['UNDEFINED'] + [x.name for x in childrens]
-                    print('items', items)
                     self.comboList[comboIdx+1].clear()
                     self.comboList[comboIdx+1].addItems(items)
                     self.comboList[comboIdx+1].setVisible(True)
                 else:
                     self.comboList[comboIdx+1].setVisible(False)
-                    
-                # ChangeIsland
+
+                # Adapt EditUtil and color
                 label = CACSTree.getIndexByName(value)
-                if label is not None:
-                    self.selectEffect("PaintEffect")
-                    EditUtil.setLabel(label)
-                    
-                # Adapt color
                 if label is not None:
                     # ChangeIsland
                     self.selectEffect("PaintEffect")
@@ -991,12 +998,19 @@ class CardiacEditBox(EditorLib.EditBox):
                     color = CACSTree.getColorByName(value)
                     color_str = 'background-color: rgb(' + str(color[0]) + ',' + str(color[1]) + ',' + str(color[2]) + ')'
                     combo.setStyleSheet(color_str)
+                    label = CACSTree.getIndexByName(value)
+                    self.selectEffect("PaintEffect")
+                    EditUtil.setLabel(label)
                 if value=='UNDEFINED':
                     comboUp = self.comboList[comboIdx-1]
                     valueUp = comboUp.currentText
                     color = CACSTree.getColorByName(valueUp)
                     color_str = 'background-color: rgb(' + str(color[0]) + ',' + str(color[1]) + ',' + str(color[2]) + ')'
                     combo.setStyleSheet(color_str)
+                    self.selectEffect("PaintEffect")
+                    label = CACSTree.getIndexByName(valueUp)
+                    EditUtil.setLabel(label)
+
         
         return selectionChange
 
