@@ -128,7 +128,13 @@ class Agatston():
         #agatstonScore=0.0
         #for key in self.arteries:
         #    agatstonScore = agatstonScore + agatston[key]
-        agatstonScore = agatston['CC']
+        
+        if 'CC' in list(agatston.keys()):
+            agatstonScore = agatston['CC']
+        else:
+            agatstonScore=0.0
+            for key in self.arteries:
+                agatstonScore = agatstonScore + agatston[key]
         
         agatston['AgatstonScore'] = agatstonScore
         agatston['Grading'] = self.CACSGrading(agatstonScore)

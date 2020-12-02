@@ -300,7 +300,9 @@ class CACSLabelerModuleWidget:
         dirname = os.path.dirname(os.path.abspath(__file__))
         filepath_colorTable = dirname + '/CardiacAgatstonMeasuresLUT.ctbl'
         # Create color table
-        self.createColorTable(filepath_colorTable, self.settings['CACSTree'])
+        #self.createColorTable(filepath_colorTable, self.settings['CACSTree'])
+        self.createColorTable_CACS(filepath_colorTable, self.settings['CACSTree'])
+        
         # Load color table
         slicer.util.loadColorTable(filepath_colorTable)
     
@@ -314,6 +316,18 @@ class CACSLabelerModuleWidget:
             f.write(str(idx) + ' ' + lesion.name + ' ' + color_str + '\n')
             f.close()
 
+    def createColorTable_CACS(self, filepath_colorTable, CACSTree):
+        CACS_dict = OrderedDict([('CACSTreeDict', 0), ('OTHER', 1), ('LAD', 2), ('LCX', 3), ('RCA', 4)])
+        f = open(filepath_colorTable, 'w')
+        f.write('# Color\n')
+        f.close()
+        for key in CACS_dict.keys():
+            lesion = CACSTree.getLesionByName(key)
+            color_str = str(lesion.color[0]) + ' ' + str(lesion.color[1]) + ' ' + str(lesion.color[2]) + ' ' + str(lesion.color[3])
+            f = open(filepath_colorTable, 'a')
+            color_str = str(lesion.color[0]) + ' ' + str(lesion.color[1]) + ' ' + str(lesion.color[2]) + ' ' + str(lesion.color[3])
+            f.write(str(CACS_dict[key]) + ' ' + lesion.name + ' ' + color_str + '\n')
+            f.close()
 
     def initCACSTreeDict(self):
         
@@ -497,9 +511,10 @@ class CACSLabelerModuleWidget:
         start = time.time()
 
         # Compute calcium scores
-        arteries_dict = self.get_arteries_dict()
-        arteries_sum = OrderedDict()
+        
         if self.settings['MODE']=='CACSTREE_CUMULATIVE':
+            arteries_dict = self.get_arteries_dict()
+            arteries_sum = OrderedDict()
             arteries_sum['RCA'] = self.settings['CACSTree'].getChildrenNamesByName('RCA')
             arteries_sum['LM'] = self.settings['CACSTree'].getChildrenNamesByName('LM')
             arteries_sum['LAD'] = self.settings['CACSTree'].getChildrenNamesByName('LAD')
@@ -510,6 +525,13 @@ class CACSLabelerModuleWidget:
             arteries_sum['LUNG'] = self.settings['CACSTree'].getChildrenNamesByName('LUNG')
             arteries_sum['CC'] = self.settings['CACSTree'].getChildrenNamesByName('CC')
             arteries_sum['NCC'] = self.settings['CACSTree'].getChildrenNamesByName('NCC')
+        elif self.settings['MODE']=='CACS':
+            arteries_dict = OrderedDict()
+            arteries_dict['LAD'] = 2
+            arteries_dict['LCX'] = 3
+            arteries_dict['RCA'] = 4
+            arteries_sum = OrderedDict()
+            arteries_sum['CC'] = ['LAD', 'LCX', 'RCA']
             
         self.calciumScoresResult=[]
         for score in self.calciumScores:
@@ -535,6 +557,14 @@ class CACSLabelerModuleWidget:
             arteries_sum['LUNG'] = self.settings['CACSTree'].getChildrenNamesByName('LUNG')
             arteries_sum['CC'] = self.settings['CACSTree'].getChildrenNamesByName('CC')
             arteries_sum['NCC'] = self.settings['CACSTree'].getChildrenNamesByName('NCC')
+        elif self.settings['MODE']=='CACS':
+            arteries_dict = OrderedDict()
+            arteries_dict['LAD'] = 2
+            arteries_dict['LCX'] = 3
+            arteries_dict['RCA'] = 4
+            arteries_sum = OrderedDict()
+            arteries_sum['CC'] = ['LAD', 'LCX', 'RCA']
+
         filepath_export = self.settings['filepath_export']
         volumeNodes = slicer.util.getNodesByClass('vtkMRMLScalarVolumeNode')
         self.calciumScoresResult=[]
@@ -992,39 +1022,48 @@ class CardiacEditBox(EditorLib.EditBox):
             vbox = qt.QVBoxLayout()
             self.mainFrame.setLayout(vbox)
             self.parent.layout().addWidget(self.mainFrame)
-
-            # The Default Label Selector
-            defaultChangeIslandButton = qt.QPushButton("Default")
-            defaultChangeIslandButton.toolTip = "Label - Default"
-            defaultChangeIslandButton.setStyleSheet("background-color: rgb(81,208,35)")
-            self.mainFrame.layout().addWidget(defaultChangeIslandButton)
-            defaultChangeIslandButton.connect('clicked(bool)', self.onDefaultChangeIslandButtonClicked)
+            CACSTreeDict = self.settings['CACSTreeDict']
+            
+            # The OTHER Label Selector
+            color = CACSTreeDict['OTHER']['COLOR']
+            color_str = 'background-color: rgb(' + str(color[0]) + ',' + str(color[1]) + ',' + str(color[2]) + ')'
+            OTHERChangeIslandButton = qt.QPushButton("OTHER")
+            OTHERChangeIslandButton.toolTip = "Label - OTHER"
+            OTHERChangeIslandButton.setStyleSheet(color_str)
+            self.mainFrame.layout().addWidget(OTHERChangeIslandButton)
+            OTHERChangeIslandButton.connect('clicked(bool)', self.onOTHERChangeIslandButtonClicked)
     
-            # The Input Left Arterial Descending (LAD) Label Selector
-            LADchangeIslandButton = qt.QPushButton("LADX")
+            # The Input Left Arterial Descending (LAD) Label 
+            color = CACSTreeDict['CC']['LAD']['COLOR']
+            color_str = 'background-color: rgb(' + str(color[0]) + ',' + str(color[1]) + ',' + str(color[2]) + ')'
+            LADchangeIslandButton = qt.QPushButton("LAD")
             LADchangeIslandButton.toolTip = "Label - Left Arterial Descending (LAD)"
-            LADchangeIslandButton.setStyleSheet("background-color: rgb(246,243,48)")
+            LADchangeIslandButton.setStyleSheet(color_str)
             self.mainFrame.layout().addWidget(LADchangeIslandButton)
             LADchangeIslandButton.connect('clicked(bool)', self.onLADchangeIslandButtonClicked)
     
             # The Input Left Circumflex (LCX) Label Selector
+            color = CACSTreeDict['CC']['LCX']['COLOR']
+            color_str = 'background-color: rgb(' + str(color[0]) + ',' + str(color[1]) + ',' + str(color[2]) + ')'
             LCXchangeIslandButton = qt.QPushButton("LCX")
             LCXchangeIslandButton.toolTip = "Label - Left Circumflex (LCX)"
-            LCXchangeIslandButton.setStyleSheet("background-color: rgb(94,170,200)")
+            LCXchangeIslandButton.setStyleSheet(color_str)
             self.mainFrame.layout().addWidget(LCXchangeIslandButton)
             LCXchangeIslandButton.connect('clicked(bool)', self.onLCXchangeIslandButtonClicked)
     
             # The Input Right Coronary Artery (RCA) Label Selector
+            color = CACSTreeDict['CC']['RCA']['COLOR']
+            color_str = 'background-color: rgb(' + str(color[0]) + ',' + str(color[1]) + ',' + str(color[2]) + ')'
             RCAchangeIslandButton = qt.QPushButton("RCA")
             RCAchangeIslandButton.toolTip = "Label - Right Coronary Artery (RCA)"
-            RCAchangeIslandButton.setStyleSheet("background-color: rgb(222,60,30)")
+            RCAchangeIslandButton.setStyleSheet(color_str)
             self.mainFrame.layout().addWidget(RCAchangeIslandButton)
             RCAchangeIslandButton.connect('clicked(bool)', self.onRCAchangeIslandButtonClicked)
             
             self.LADchangeIslandButton = LADchangeIslandButton
             self.LCXchangeIslandButton = LCXchangeIslandButton
             self.RCAchangeIslandButton = RCAchangeIslandButton
-            self.defaultChangeIslandButton = defaultChangeIslandButton
+            self.OTHERChangeIslandButton = OTHERChangeIslandButton
 
         # create all of the buttons
         # createButtonRow() ensures that only effects in self.effects are exposed,
@@ -1138,6 +1177,9 @@ class CardiacEditBox(EditorLib.EditBox):
     def onTestButtonClicked1(self):
         print('onTestButtonClicked1')
 
+    def onOTHERChangeIslandButtonClicked(self):
+        self.changeIslandButtonClicked(1)
+        
     def onLADchangeIslandButtonClicked(self):
         self.changeIslandButtonClicked(2)
 
@@ -1146,9 +1188,6 @@ class CardiacEditBox(EditorLib.EditBox):
 
     def onRCAchangeIslandButtonClicked(self):
         self.changeIslandButtonClicked(4)
-
-    def onDefaultChangeIslandButtonClicked(self):
-        self.changeIslandButtonClicked(1)
 
     def changeIslandButtonClicked(self, label):
         self.selectEffect("PaintEffect")

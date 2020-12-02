@@ -66,7 +66,13 @@ class DensityScore():
                 value += DensityScore[key_sum]
             DensityScore[key] = value
 
-        DensityScore['DensityScore'] = DensityScore['CC']
+        if 'CC' in list(DensityScore.keys()):
+           denseScore = DensityScore['CC']
+        else:
+            denseScore=0.0
+            for key in self.arteries:
+                denseScore = denseScore + DensityScore[key] 
+        DensityScore['DensityScore'] = denseScore
 
         self.DensityScore = DensityScore
         return DensityScore

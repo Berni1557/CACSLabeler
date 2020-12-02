@@ -81,8 +81,14 @@ class VolumeScore():
 #        for key in self.arteries:
 #            vScore = vScore + VolumeScore[key]
 #        VolumeScore['VolumeScore'] = vScore
-        
-        VolumeScore['VolumeScore'] = VolumeScore['CC']
+
+        if 'CC' in list(VolumeScore.keys()):
+            vScore = VolumeScore['CC']
+        else:
+            vScore=0.0
+            for key in self.arteries:
+                vScore = vScore + VolumeScore[key]
+        VolumeScore['VolumeScore'] = vScore
 
         self.VolumeScore = VolumeScore
         return VolumeScore
