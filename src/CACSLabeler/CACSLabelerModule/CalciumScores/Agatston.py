@@ -5,6 +5,7 @@ import numpy as np
 from collections import defaultdict, OrderedDict
 from SimpleITK import ConnectedComponentImageFilter
 import SimpleITK as sitk
+import time
 
 # Agatston score
 class Agatston():
@@ -52,7 +53,7 @@ class Agatston():
             grading='zero'
         return grading
         
-    def compute(self, inputVolume, inputVolumeLabel, arteries_dict=None):
+    def compute(self, inputVolume, inputVolumeLabel, arteries_dict={}, arteries_sum={}):
         """ Compute agatston score from image and image label
 
         :param image: Image
@@ -70,6 +71,7 @@ class Agatston():
         imageLabel = sitk.GetArrayFromImage(inputVolumeLabel)
         spacing = inputVolume.GetSpacing()
         pixelArea = spacing[0]*spacing[1]
+        arteries_sum_keys = list(arteries_sum.keys())
 
         # Neighborhood of connected components (6-connectivity)
         structure = np.zeros((3,3,3))
@@ -84,38 +86,49 @@ class Agatston():
         # Iterate over arteries
         agatston = OrderedDict([('NAME', 'AGATSTON'), ('AgatstonScore', 0), ('Grading', None)])
         for key in self.arteries_dict.keys():
-            # Extract binary mask of lesions from one artery
-            imageLabelA = imageLabel==self.arteries_dict[key]
-            image_sitk = sitk.GetImageFromArray(imageLabelA.astype(np.uint8))
-            # Extract connected components
-            compFilter = ConnectedComponentImageFilter()
-            labeled_sitk = compFilter.Execute(image_sitk)
-            labeled = sitk.GetArrayFromImage(labeled_sitk)
-            ncomponents = labeled.max()
-            agatstonArtery = 0
-            # Iterate over lesions from an artery
-            for c in range(1,ncomponents+1):
-                labeledc = labeled==c
-                image_mask = image * labeledc
-                #volume = labeledc.sum() * pixelVolume
-                # Iterate over slices
-                for s in range(0,labeled.shape[0]):
-                    image_mask_slice = image_mask[s,:,:]
-                    labeledc_slice = labeledc[s,:,:]
-                    # Extract maximum HU of a lesion
-                    attenuation = image_mask_slice.max()
-                    area = labeledc_slice.sum() * pixelArea
-                    # Calculate density weigt factor
-                    densfactor = self.densityFactor(attenuation)
-                    # Calculate agatston score for a lesion
-                    agatstonLesionSlice = area * densfactor
-                    agatstonArtery = agatstonArtery + agatstonLesionSlice
-            agatston[key] = agatstonArtery
+            if key not in arteries_sum_keys:
+                # Extract binary mask of lesions from one artery
+                imageLabelA = imageLabel==self.arteries_dict[key]
+                if imageLabelA.sum()>0:
+                    image_sitk = sitk.GetImageFromArray(imageLabelA.astype(np.uint8))
+                    # Extract connected components
+                    compFilter = ConnectedComponentImageFilter()
+                    labeled_sitk = compFilter.Execute(image_sitk)
+                    labeled = sitk.GetArrayFromImage(labeled_sitk)
+                    ncomponents = labeled.max()
+                    agatstonArtery = 0
+                    # Iterate over lesions from an artery
+                    for c in range(1,ncomponents+1):
+                        labeledc = labeled==c
+                        image_mask = image * labeledc
+                        # Iterate over slices
+                        for s in range(0,labeled.shape[0]):
+                            image_mask_slice = image_mask[s,:,:]
+                            labeledc_slice = labeledc[s,:,:]
+                            # Extract maximum HU of a lesion
+                            attenuation = image_mask_slice.max()
+                            area = labeledc_slice.sum() * pixelArea
+                            # Calculate density weigt factor
+                            densfactor = self.densityFactor(attenuation)
+                            # Calculate agatston score for a lesion
+                            agatstonLesionSlice = area * densfactor
+                            agatstonArtery = agatstonArtery + agatstonLesionSlice
+                    agatston[key] = agatstonArtery
+                else:
+                    agatston[key] = 0.0
 
+        # Sum agatston score over arteries_sum
+        for key in arteries_sum_keys:
+            value = 0
+            for key_sum in arteries_sum[key]:
+                value += agatston[key_sum]
+            agatston[key] = value
+        
         # Sum agatston score over arteries
-        agatstonScore=0.0
-        for key in self.arteries:
-            agatstonScore = agatstonScore + agatston[key]
+        #agatstonScore=0.0
+        #for key in self.arteries:
+        #    agatstonScore = agatstonScore + agatston[key]
+        agatstonScore = agatston['CC']
         
         agatston['AgatstonScore'] = agatstonScore
         agatston['Grading'] = self.CACSGrading(agatstonScore)

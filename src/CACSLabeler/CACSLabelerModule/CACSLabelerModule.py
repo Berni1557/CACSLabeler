@@ -22,7 +22,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from CalciumScores.Agatston import Agatston
 from CalciumScores.VolumeScore import VolumeScore
 from CalciumScores.DensityScore import DensityScore
-from collections import defaultdict
+from collections import defaultdict, OrderedDict
 
 import imp
 imp.reload(sys.modules['CalciumScores'])
@@ -76,6 +76,19 @@ class CACSTree():
             for lesion in self.lesionList:
                 if lesion.parent == parent:
                     childrens.append(lesion)
+        return childrens
+        
+    def getChildrenNamesByName(self, name):
+        childrens = []
+        parent = ''
+        for lesion in self.lesionList:
+            if lesion.name == name:
+                parent = lesion.name
+                break
+        if not parent == '':
+            for lesion in self.lesionList:
+                if lesion.parent == parent:
+                    childrens.append(lesion.name)
         return childrens
         
     def getIndexByName(self, name):
@@ -313,7 +326,12 @@ class CACSLabelerModuleWidget:
         RCA = OrderedDict([('RCA_PROXIMAL', RCA_PROXIMAL), ('RCA_MID', RCA_MID), 
                                 ('RCA_DISTAL', RCA_DISTAL), ('RCA_SIDE_BRANCH', RCA_SIDE_BRANCH), ('COLOR', (238,0,0, 255))])
         
-        LM = OrderedDict([('COLOR', (26,203,238, 255))])
+        LM_BIF_LAD_LCX = OrderedDict([('COLOR', (26,50,238, 255))])
+        LM_BIF_LAD = OrderedDict([('COLOR', (26,100,238, 255))])
+        LM_BIF_LCX = OrderedDict([('COLOR', (26,150,238, 255))])
+        LM_BRANCH = OrderedDict([('COLOR', (26,203,238, 255))])
+        LM = OrderedDict([('LM_BIF_LAD_LCX', LM_BIF_LAD_LCX), ('LM_BIF_LAD', LM_BIF_LAD), 
+                           ('LM_BIF_LCX', LM_BIF_LCX), ('LM_BRANCH', LM_BRANCH), ('COLOR', (238,0,0, 255))])
         
         LAD_PROXIMAL = OrderedDict([('COLOR', (12,252,155, 255))])
         LAD_MID = OrderedDict([('COLOR', (136,248,227, 255))])
@@ -331,35 +349,44 @@ class CACSLabelerModuleWidget:
         
         AORTA_ASC = OrderedDict([('COLOR', (242,253,103, 255))])
         AORTA_DSC = OrderedDict([('COLOR', (151,162,2, 255))])
-        AORTA = OrderedDict([('AORTA_ASC', AORTA_ASC), ('AORTA_DSC', AORTA_DSC), ('COLOR', (234,252,4, 255))])
+        AORTA_ARC = OrderedDict([('COLOR', (151,102,2, 255))])
+        AORTA = OrderedDict([('AORTA_ASC', AORTA_ASC), ('AORTA_DSC', AORTA_DSC), ('AORTA_ARC', AORTA_ARC), ('COLOR', (234,252,4, 255))])
 
-        NCC = OrderedDict([('COLOR', (1,58,61, 255))])
-        LCC = OrderedDict([('COLOR', (2,101,106, 255))])
-        RCC = OrderedDict([('COLOR', (0,25,26, 255))])
+        #NCC = OrderedDict([('COLOR', (1,58,61, 255))])
+        #LCC = OrderedDict([('COLOR', (2,101,106, 255))])
+        #RCC = OrderedDict([('COLOR', (0,25,26, 255))])
+        VALVE_AORTIC = OrderedDict([('COLOR', (3,103,139, 255))])
         VALVE_PULMONIC = OrderedDict([('COLOR', (3,133,139, 255))])
-        VALVE_MITRAL = OrderedDict([('COLOR', (198,251,254, 255))])
         VALVE_TRICUSPID = OrderedDict([('COLOR', (138,246,252, 255))])
-        VALVES = OrderedDict([('NCC', NCC), ('LCC', LCC), ('RCC', RCC),
-                                            ('VALVE_PULMONIC', VALVE_PULMONIC), ('VALVE_MITRAL', VALVE_MITRAL),
-                                            ('VALVE_TRICUSPID', VALVE_TRICUSPID), ('COLOR', (5,226,237, 255))])
+        VALVE_MITRAL = OrderedDict([('COLOR', (198,251,254, 255))])
         
-        LUNG_PARENCHYMA = OrderedDict([('COLOR', (5,91,21, 255))])
-        LUNG_ARTERY = OrderedDict([('COLOR', (10,198,46, 255))])
-        LUNG_VESSEL = OrderedDict([('COLOR', (4,68,16, 255))])
-        BRONCHUS = OrderedDict([('COLOR', (99,247,127, 255))])
-        CALCIFIED_LUNG_NODULE = OrderedDict([('COLOR', (6,112,100, 26))])
-        LUNG = OrderedDict([('LUNG_PARENCHYMA', LUNG_PARENCHYMA), ('LUNG_ARTERY', LUNG_ARTERY),
-                                          ('LUNG_VESSEL', LUNG_VESSEL), ('BRONCHUS', BRONCHUS),
-                                          ('CALCIFIED_LUNG_NODULE', CALCIFIED_LUNG_NODULE), ('COLOR', (8,160,37, 255))])
+        VALVES = OrderedDict([('VALVE_AORTIC', VALVE_AORTIC), ('VALVE_PULMONIC', VALVE_PULMONIC),
+                              ('VALVE_TRICUSPID', VALVE_TRICUSPID), ('VALVE_MITRAL', VALVE_MITRAL), ('COLOR', (5,226,237, 255))])
         
-        VERTEBRA = OrderedDict([('COLOR', (198,185,128, 255))])
-        BONE = OrderedDict([('VERTEBRA', VERTEBRA), ('COLOR', (167,149,75, 255))])
-        
-        STERNUM = OrderedDict([('COLOR', (254,110,237, 255))])
-        ECC = OrderedDict([('STERNUM', STERNUM), ('AORTA', AORTA), ('VALVES', VALVES),
-                                         ('LUNG', LUNG), ('BONE', BONE), ('COLOR', (240, 2, 212, 255))])    
+#        VALVES = OrderedDict([('NCC', NCC), ('LCC', LCC), ('RCC', RCC),
+#                                            ('VALVE_PULMONIC', VALVE_PULMONIC), ('VALVE_MITRAL', VALVE_MITRAL),
+#                                            ('VALVE_TRICUSPID', VALVE_TRICUSPID), ('COLOR', (5,226,237, 255))])
 
-        CACSTreeDict = OrderedDict([('OTHER', OTHER), ('CC', CC), ('ECC', ECC), ('COLOR', (0,0,0,0))])
+        STERNUM = OrderedDict([('COLOR', (254,110,237, 255))])
+        VERTEBRA = OrderedDict([('COLOR', (198,185,128, 255))])
+        COSTA = OrderedDict([('COLOR', (1,58,61, 255))])
+        BONE = OrderedDict([('STERNUM', STERNUM), ('VERTEBRA', VERTEBRA), ('COSTA', COSTA), ('COLOR', (167,149,75, 255))])
+        
+        TRACHEA = OrderedDict([('COLOR', (5,41,21, 255))])
+        BRONCHUS = OrderedDict([('COLOR', (99,247,127, 255))])
+        NODULE_CALCIFIED  = OrderedDict([('COLOR', (5,121,21, 255))])
+        LUNG_ARTERY = OrderedDict([('COLOR', (10,198,46, 255))])
+        LUNG_VESSEL_NFS = OrderedDict([('COLOR', (4,68,16, 255))])
+        LUNG_PARENCHYMA = OrderedDict([('COLOR', (5,91,21, 255))])
+
+        LUNG = OrderedDict([('TRACHEA', TRACHEA), ('BRONCHUS', BRONCHUS),
+                            ('NODULE_CALCIFIED', NODULE_CALCIFIED), ('LUNG_ARTERY', LUNG_ARTERY),
+                            ('LUNG_VESSEL_NFS', LUNG_VESSEL_NFS),  ('LUNG_PARENCHYMA', LUNG_PARENCHYMA), ('COLOR', (8,160,37, 255))])
+        
+        
+        NCC = OrderedDict([('AORTA', AORTA), ('VALVES', VALVES), ('BONE', BONE), ('LUNG', LUNG), ('COLOR', (240, 2, 212, 255))])    
+
+        CACSTreeDict = OrderedDict([('OTHER', OTHER), ('CC', CC), ('NCC', NCC), ('COLOR', (0,0,0,0))])
         return CACSTreeDict
         
     def writeSettings(self, filepath_settings):
@@ -381,7 +408,7 @@ class CACSLabelerModuleWidget:
                            'filter_reference_with': ['-label.'],
                            'filter_reference_without': ['label-lesion.'],
                            'CACSTreeDict': CACSTreeDict,
-                           'MODE': 'CACSTREE'}
+                           'MODE': 'CACSTREE_CUMULATIVE'} # MODE can be 'CACS','CACSTREE' or 'CACSTREE_CUMULATIVE'
                            
         print('Writing setting to ' + filepath_settings)
         with open(filepath_settings, 'a') as file:
@@ -466,20 +493,48 @@ class CACSLabelerModuleWidget:
         inputVolumeNameLabel = inputVolumeName + '-label-lesion'
         inputVolume = su.PullVolumeFromSlicer(inputVolumeName)
         inputVolumeLabel = su.PullVolumeFromSlicer(inputVolumeNameLabel)
+        
+        start = time.time()
 
         # Compute calcium scores
         arteries_dict = self.get_arteries_dict()
+        arteries_sum = OrderedDict()
+        if self.settings['MODE']=='CACSTREE_CUMULATIVE':
+            arteries_sum['RCA'] = self.settings['CACSTree'].getChildrenNamesByName('RCA')
+            arteries_sum['LM'] = self.settings['CACSTree'].getChildrenNamesByName('LM')
+            arteries_sum['LAD'] = self.settings['CACSTree'].getChildrenNamesByName('LAD')
+            arteries_sum['LCX'] = self.settings['CACSTree'].getChildrenNamesByName('LCX')
+            arteries_sum['AORTA'] = self.settings['CACSTree'].getChildrenNamesByName('AORTA')
+            arteries_sum['VALVES'] = self.settings['CACSTree'].getChildrenNamesByName('VALVES')
+            arteries_sum['BONE'] = self.settings['CACSTree'].getChildrenNamesByName('BONE')
+            arteries_sum['LUNG'] = self.settings['CACSTree'].getChildrenNamesByName('LUNG')
+            arteries_sum['CC'] = self.settings['CACSTree'].getChildrenNamesByName('CC')
+            arteries_sum['NCC'] = self.settings['CACSTree'].getChildrenNamesByName('NCC')
+            
         self.calciumScoresResult=[]
         for score in self.calciumScores:
             for scorename in self.settings['CalciumScores']:
                 if score.name in scorename:
-                    s = score.compute(inputVolume, inputVolumeLabel, arteries_dict=arteries_dict)
+                    s = score.compute(inputVolume, inputVolumeLabel, arteries_dict=arteries_dict, arteries_sum=arteries_sum)
                     score.show()
                     self.calciumScoresResult.append(s)
+        print('Computation time', time.time() - start)
         
     def onExportScoreButtonClicked(self):
         # Export labels
         arteries_dict = self.get_arteries_dict()
+        arteries_sum = OrderedDict()
+        if self.settings['MODE']=='CACSTREE_CUMULATIVE':
+            arteries_sum['RCA'] = self.settings['CACSTree'].getChildrenNamesByName('RCA')
+            arteries_sum['LM'] = self.settings['CACSTree'].getChildrenNamesByName('LM')
+            arteries_sum['LAD'] = self.settings['CACSTree'].getChildrenNamesByName('LAD')
+            arteries_sum['LCX'] = self.settings['CACSTree'].getChildrenNamesByName('LCX')
+            arteries_sum['AORTA'] = self.settings['CACSTree'].getChildrenNamesByName('AORTA')
+            arteries_sum['VALVES'] = self.settings['CACSTree'].getChildrenNamesByName('VALVES')
+            arteries_sum['BONE'] = self.settings['CACSTree'].getChildrenNamesByName('BONE')
+            arteries_sum['LUNG'] = self.settings['CACSTree'].getChildrenNamesByName('LUNG')
+            arteries_sum['CC'] = self.settings['CACSTree'].getChildrenNamesByName('CC')
+            arteries_sum['NCC'] = self.settings['CACSTree'].getChildrenNamesByName('NCC')
         filepath_export = self.settings['filepath_export']
         volumeNodes = slicer.util.getNodesByClass('vtkMRMLScalarVolumeNode')
         self.calciumScoresResult=[]
@@ -495,7 +550,7 @@ class CACSLabelerModuleWidget:
                             inputVolumeName = inputVolumeNameLabel[0:-13]
                             inputVolumeLabel = su.PullVolumeFromSlicer(inputVolumeNameLabel)
                             inputVolume = su.PullVolumeFromSlicer(inputVolumeName)
-                            s = score.compute(inputVolume, inputVolumeLabel, arteries_dict)
+                            s = score.compute(inputVolume, inputVolumeLabel, arteries_dict, arteries_sum)
                             scoreResult.append(s)
                 self.calciumScoresResult.append({'ImageName':volume_name, 'Scores': scoreResult})
         
@@ -698,6 +753,9 @@ class CACSLabelerModuleLogic:
         parameterNode.SetParameter("LabelEffect,paintThreshold","1")
         parameterNode.SetParameter("LabelEffect,paintThresholdMin","{0}".format(self.lowerThresholdValue))
         parameterNode.SetParameter("LabelEffect,paintThresholdMax","{0}".format(self.upperThresholdValue))
+        
+        #parameterNode.GetParameter()
+        #print
 
     def assignLabelLUT(self, calciumName):
         # Set the color lookup table (LUT) to the custom CardiacAgatstonMeasuresLUT
@@ -820,32 +878,58 @@ class CardiacEditorWidget(Editor.EditorWidget):
         self.editBoxFrame.setLayout(qt.QVBoxLayout())
         self.effectsToolsFrame.layout().addWidget(self.editBoxFrame)
         self.toolsBox = CardiacEditBox(self.settings, self.editBoxFrame, optionsFrame=self.effectOptionsFrame)
-
-    def installShortcutKeys(self):
-        """Turn on editor-wide shortcuts.  These are active independent
-        of the currently selected effect."""
-        Key_Escape = 0x01000000 # not in PythonQt
-        Key_Space = 0x20 # not in PythonQt
-        self.shortcuts = []
-        keysAndCallbacks = (
-            ('z', self.toolsBox.undoRedo.undo),
-            ('y', self.toolsBox.undoRedo.redo),
-            ('h', self.editUtil.toggleCrosshair),
-            ('o', self.editUtil.toggleLabelOutline),
-            ('t', self.editUtil.toggleForegroundBackground),
-            (Key_Escape, self.toolsBox.defaultEffect),
-            ('p', lambda : self.toolsBox.selectEffect('PaintEffect')),
-            ('1', self.toolsBox.onDefaultChangeIslandButtonClicked),
-            #('2', self.toolsBox.onLMchangeIslandButtonClicked),
-            ('3', self.toolsBox.onLADchangeIslandButtonClicked),
-            ('4', self.toolsBox.onLCXchangeIslandButtonClicked),
-            ('5', self.toolsBox.onRCAchangeIslandButtonClicked),
-            )
-        for key,callback in keysAndCallbacks:
-            shortcut = qt.QShortcut(slicer.util.mainWindow())
-            shortcut.setKey( qt.QKeySequence(key) )
-            shortcut.connect( 'activated()', callback )
-            self.shortcuts.append(shortcut)
+        
+        #parameterNode = self.editUtil.getParameterNode()
+        #print('parameterNode', parameterNode.GetParameterNames())
+        #propagationMode = parameterNode.GetParameter("propagationMode")
+        #print('propagationMode', propagationMode)
+        #effect = parameterNode.GetParameter("effect")
+        #print('effect', effect)
+        #name = parameterNode.GetParameterName(0, 0)
+        #print('name', name)
+        
+        #print('toolsBox', self.toolsBox)
+        #print('effectOptionsFrame', self.effectOptionsFrame)
+        #self.effectOptionsFrame.setEnabled(False)
+        
+        #child = self.effectOptionsFrame.findChildren(qt.QCheckBox)
+        #print('child', child)
+        
+        #print('self.effectsToolsFrame123', self.effectsToolsFrame)
+        
+        
+#        n=parameterNode
+#        for groupIndex in range(n.GetNumberOfParameterGroups()):
+#            for parameterIndex in range(n.GetNumberOfParametersInGroup(groupIndex)):
+#                print('Parameter ({0}/{1}): {2} ({3})'.format(groupIndex, parameterIndex, n.GetParameterName(groupIndex, parameterIndex), n.GetParameterLabel(groupIndex, parameterIndex)))
+#
+#                
+#                
+#    def installShortcutKeys(self):
+#        """Turn on editor-wide shortcuts.  These are active independent
+#        of the currently selected effect."""
+#        Key_Escape = 0x01000000 # not in PythonQt
+#        Key_Space = 0x20 # not in PythonQt
+#        self.shortcuts = []
+#        keysAndCallbacks = (
+#            ('z', self.toolsBox.undoRedo.undo),
+#            ('y', self.toolsBox.undoRedo.redo),
+#            ('h', self.editUtil.toggleCrosshair),
+#            ('o', self.editUtil.toggleLabelOutline),
+#            ('t', self.editUtil.toggleForegroundBackground),
+#            (Key_Escape, self.toolsBox.defaultEffect),
+#            ('p', lambda : self.toolsBox.selectEffect('PaintEffect')),
+#            ('1', self.toolsBox.onDefaultChangeIslandButtonClicked),
+#            #('2', self.toolsBox.onLMchangeIslandButtonClicked),
+#            ('3', self.toolsBox.onLADchangeIslandButtonClicked),
+#            ('4', self.toolsBox.onLCXchangeIslandButtonClicked),
+#            ('5', self.toolsBox.onRCAchangeIslandButtonClicked),
+#            )
+#        for key,callback in keysAndCallbacks:
+#            shortcut = qt.QShortcut(slicer.util.mainWindow())
+#            shortcut.setKey( qt.QKeySequence(key) )
+#            shortcut.connect( 'activated()', callback )
+#            self.shortcuts.append(shortcut)
 
 class CardiacEditBox(EditorLib.EditBox):
     def __init__(self, settings, *args, **kwargs):
@@ -863,7 +947,7 @@ class CardiacEditBox(EditorLib.EditBox):
         self.icons = {}
         self.callbacks = {}
 
-        if self.settings['MODE']=='CACSTREE':
+        if self.settings['MODE']=='CACSTREE_CUMULATIVE' or self.settings['MODE']=='CACSTREE':
             self.mainFrame = qt.QFrame(self.parent)
             self.mainFrame.objectName = 'TreeFrame'
             vbox = qt.QVBoxLayout()
@@ -895,8 +979,6 @@ class CardiacEditBox(EditorLib.EditBox):
                     combo.currentIndexChanged.connect(self.selectionChangeFunc(i))
                     self.mainFrame.layout().addWidget(combo)
                     self.comboList.append(combo)
-                    
-                    
 
             # Create combo boxes
             CACSTreeDict = self.settings['CACSTreeDict']
@@ -952,8 +1034,13 @@ class CardiacEditBox(EditorLib.EditBox):
 
         extensions = []
         for k in slicer.modules.editorExtensions:
+            #print('extension', k)
             extensions.append(k)
         self.createButtonRow( extensions )
+        
+        #print('effectButtons', self.editorBuiltins["PaintEffect"])
+        #print('currentTools', self.currentTools)
+        
         #
         # the labels
         #
@@ -965,7 +1052,7 @@ class CardiacEditBox(EditorLib.EditBox):
         self.toolsActiveTool.setStyleSheet("background-color: rgb(232,230,235)")
         self.toolsActiveToolFrame.layout().addWidget(self.toolsActiveTool)
         self.toolsActiveToolName = qt.QLabel(self.toolsActiveToolFrame)
-        self.toolsActiveToolName.setText( '' )
+        self.toolsActiveToolName.setText( 'ToolsActiveToolName' )
         self.toolsActiveToolName.setStyleSheet("background-color: rgb(232,230,235)")
         self.toolsActiveToolFrame.layout().addWidget(self.toolsActiveToolName)
         vbox.addStretch(1)
@@ -974,22 +1061,56 @@ class CardiacEditBox(EditorLib.EditBox):
         self._onParameterNodeModified(EditUtil.getParameterNode())
 
     def selectionChangeFunc(self, comboIdx):
+        #print('currentTools123', self.currentTools)
         CACSTree = self.settings['CACSTree']
+        comboIdx = comboIdx
         def selectionChange(idx):
+
             if idx>-1:
                 combo = self.comboList[comboIdx]
                 value = combo.itemText(idx).encode('utf8')
+                
                 childrens = CACSTree.getChildrenByName(value)
                 if len(childrens) > 0:
-                    items = ['UNDEFINED'] + [x.name for x in childrens]
-                    self.comboList[comboIdx+1].clear()
-                    self.comboList[comboIdx+1].addItems(items)
-                    self.comboList[comboIdx+1].setVisible(True)
+                    k=0
+                    while len(childrens) > 0:
+                        k=k+1
+                        if self.settings['MODE']=='CACSTREE_CUMULATIVE':
+                            items = [x.name for x in childrens]
+                        else:
+                            items = ['UNDEFINED'] + [x.name for x in childrens]
+                        self.comboList[comboIdx+k].clear()
+                        self.comboList[comboIdx+k].addItems(items)
+                        self.comboList[comboIdx+k].setVisible(True)
+                        value = items[0]
+                        childrens = CACSTree.getChildrenByName(value)
                 else:
-                    self.comboList[comboIdx+1].setVisible(False)
+                    for i in range(comboIdx+1, len(self.comboList)):
+                        self.comboList[i].setVisible(False)
+                        
+#                childrens = CACSTree.getChildrenByName(value)
+#                if len(childrens) > 0:
+#                    if self.settings['MODE']=='CACSTREE_CUMULATIVE':
+#                        items = [x.name for x in childrens]
+#                    else:
+#                        items = ['UNDEFINED'] + [x.name for x in childrens]
+#                    self.comboList[comboIdx+1].clear()
+#                    self.comboList[comboIdx+1].addItems(items)
+#                    self.comboList[comboIdx+1].setVisible(True)
+#                else:
+#                    for i in range(comboIdx+1, len(self.comboList)):
+#                        self.comboList[i].setVisible(False)
 
-                # Adapt EditUtil and color
-                label = CACSTree.getIndexByName(value)
+                # Update label
+                if self.settings['MODE']=='CACSTREE_CUMULATIVE':
+                    if len(childrens) > 0:
+                        value = childrens[0].name
+                        label = CACSTree.getIndexByName(value)
+                    else:
+                        label = CACSTree.getIndexByName(value)
+                else:
+                    label = CACSTree.getIndexByName(value)
+
                 if label is not None:
                     # ChangeIsland
                     self.selectEffect("PaintEffect")
@@ -1011,8 +1132,8 @@ class CardiacEditBox(EditorLib.EditBox):
                     label = CACSTree.getIndexByName(valueUp)
                     EditUtil.setLabel(label)
 
-        
         return selectionChange
+        
 
     def onTestButtonClicked1(self):
         print('onTestButtonClicked1')

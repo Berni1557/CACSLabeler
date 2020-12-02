@@ -269,6 +269,7 @@ class EditorWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
   # creates the frame for the effect options
   # assumes self.effectsToolsFrame and its layout has already been created
   def createEffectOptionsFrame(self):
+    print('createEffectOptionsFrame1234', createEffectOptionsFrame)
     if not self.effectsToolsFrame:
       return
     self.effectOptionsFrame = qt.QFrame(self.editLabelMapsFrame)

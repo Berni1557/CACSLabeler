@@ -20,7 +20,7 @@ class DensityScore():
         self.arteries = ['LAD', 'LCX', 'RCA']
 
         
-    def compute(self, inputVolume, inputVolumeLabel,  arteries_dict=None):
+    def compute(self, inputVolume, inputVolumeLabel,  arteries_dict={}, arteries_sum={}):
         """ Compute agatston score from image and image label
 
         :param image: Image
@@ -39,6 +39,7 @@ class DensityScore():
         score_volumeScore = volumeScore.compute(inputVolume, inputVolumeLabel, arteries_dict)
         spacing = inputVolume.GetSpacing()
         sliceThickness = spacing[2]
+        arteries_sum_keys = list(arteries_sum.keys())
         
         #DensityScore = defaultdict(lambda: None, {'NAME': 'DensityScore', 'LAD': 0, 'LCX': 0, 'RCA': 0, 'DensityScore': 0})
         DensityScore = OrderedDict([('NAME', 'DensityScore'), ('DensityScore', 0)])
@@ -46,16 +47,26 @@ class DensityScore():
         # Iterate over arteries
         #for k, key in enumerate(self.arteries):
         for key in self.arteries_dict.keys():
-            if score_volumeScore[key]>0:
-                DensityScore[key] = score_agatston[key] / (score_volumeScore[key] * (1 / sliceThickness))
-            else:
-                DensityScore[key] = 0.0
+            if key not in arteries_sum_keys:
+                if score_volumeScore[key]>0:
+                    DensityScore[key] = score_agatston[key] / (score_volumeScore[key] * (1 / sliceThickness))
+                else:
+                    DensityScore[key] = 0.0
                     
         # Sum DensityScore score over arteries
-        denseScore=0.0
-        for key in self.arteries:
-            denseScore = denseScore + DensityScore[key] 
-        DensityScore['DensityScore'] = denseScore
+#        denseScore=0.0
+#        for key in self.arteries:
+#            denseScore = denseScore + DensityScore[key] 
+#        DensityScore['DensityScore'] = denseScore
+
+        # Sum agatston score over arteries_sum
+        for key in arteries_sum_keys:
+            value = 0
+            for key_sum in arteries_sum[key]:
+                value += DensityScore[key_sum]
+            DensityScore[key] = value
+
+        DensityScore['DensityScore'] = DensityScore['CC']
 
         self.DensityScore = DensityScore
         return DensityScore

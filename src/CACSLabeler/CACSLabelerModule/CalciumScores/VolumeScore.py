@@ -15,7 +15,7 @@ class VolumeScore():
         self.VolumeScore = None
         self.arteries = ['LAD', 'LCX', 'RCA']
        
-    def compute(self, inputVolume, inputVolumeLabel, arteries_dict=None):
+    def compute(self, inputVolume, inputVolumeLabel, arteries_dict=None, arteries_sum={}):
         """ Compute agatston score from image and image label
 
         :param image: Image
@@ -31,6 +31,7 @@ class VolumeScore():
         imageLabel = sitk.GetArrayFromImage(inputVolumeLabel)
         spacing = inputVolume.GetSpacing()
         pixelVolume = spacing[0]*spacing[1]*spacing[2]
+        arteries_sum_keys = list(arteries_sum.keys())
 
         # Neighborhood of connected components (6-connectivity)
         structure = np.zeros((3,3,3))
@@ -47,28 +48,41 @@ class VolumeScore():
         VolumeScore = OrderedDict([('NAME', 'VolumeScore'), ('VolumeScore', 0)])
         #for k, key in enumerate(self.arteries):
         for key in self.arteries_dict.keys():
-            # Extract binary mask of lesions from one artery
-            imageLabelA = imageLabel==self.arteries_dict[key]
-            image_sitk = sitk.GetImageFromArray(imageLabelA.astype(np.uint8))
-            # Extract connected components
-            compFilter = ConnectedComponentImageFilter()
-            labeled_sitk = compFilter.Execute(image_sitk)
-            labeled = sitk.GetArrayFromImage(labeled_sitk)
-            ncomponents = labeled.max()
-            VolumeScoreArtery = 0
-            # Iterate over lesions from an artery
-            for c in range(1,ncomponents+1):
-                labeledc = labeled==c
-                volume = labeledc.sum() * pixelVolume
-                # Calculate agatston score for a lesion
-                VolumeScoreArtery = VolumeScoreArtery + volume
-            VolumeScore[key] = VolumeScoreArtery
+            if key not in arteries_sum_keys:
+                # Extract binary mask of lesions from one artery
+                imageLabelA = imageLabel==self.arteries_dict[key]
+                if imageLabelA.sum()>0:
+                    image_sitk = sitk.GetImageFromArray(imageLabelA.astype(np.uint8))
+                    # Extract connected components
+                    compFilter = ConnectedComponentImageFilter()
+                    labeled_sitk = compFilter.Execute(image_sitk)
+                    labeled = sitk.GetArrayFromImage(labeled_sitk)
+                    ncomponents = labeled.max()
+                    VolumeScoreArtery = 0
+                    # Iterate over lesions from an artery
+                    for c in range(1,ncomponents+1):
+                        labeledc = labeled==c
+                        volume = labeledc.sum() * pixelVolume
+                        # Calculate agatston score for a lesion
+                        VolumeScoreArtery = VolumeScoreArtery + volume
+                    VolumeScore[key] = VolumeScoreArtery
+                else:
+                    VolumeScore[key] = 0.0
+
+        # Sum agatston score over arteries_sum
+        for key in arteries_sum_keys:
+            value = 0
+            for key_sum in arteries_sum[key]:
+                value += VolumeScore[key_sum]
+            VolumeScore[key] = value
 
         # Sum agatston score over arteries
-        vScore=0.0
-        for key in self.arteries:
-            vScore = vScore + VolumeScore[key]
-        VolumeScore['VolumeScore'] = vScore
+#        vScore=0.0
+#        for key in self.arteries:
+#            vScore = vScore + VolumeScore[key]
+#        VolumeScore['VolumeScore'] = vScore
+        
+        VolumeScore['VolumeScore'] = VolumeScore['CC']
 
         self.VolumeScore = VolumeScore
         return VolumeScore
