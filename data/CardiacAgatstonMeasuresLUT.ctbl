@@ -1,8 +1,0 @@
-# Color table file cardiacLUT.ctbl
-# 6 values
-0 background 0 0 0 0
-1 default 95 212 45 255
-2 Left_Arterial_Descending_(LADX) 248 242 60 255
-3 Left_Circumflex_(LCX) 111 184 210 255
-4 Right_Coronary_Artery_(RCA) 216 23 49 255
-5 Total 14 24 255 255

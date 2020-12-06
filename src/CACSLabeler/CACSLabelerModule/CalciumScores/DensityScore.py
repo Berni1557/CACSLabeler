@@ -1,18 +1,18 @@
 # -*- coding: utf-8 -*-
 # Reference: V. Sandfort and D. A. Bluemke, “CT calcium scoring . History , current status and outlook,” Diagn. Interv. Imaging, vol. 98, no. 1, pp. 3–10, 2017.
-
+import sys, os
 import numpy as np
 from collections import defaultdict, OrderedDict
 from SimpleITK import ConnectedComponentImageFilter
 import SimpleITK as sitk
 from Agatston import Agatston
 from VolumeScore import VolumeScore
-
+import csv
 
 # DensityScore
 class DensityScore():
     
-    name = 'DensityScore'
+    name = 'DENSITY_SCORE'
     
     def __init__(self):
         #CalciumScoreBase.__init__(self) 
@@ -42,7 +42,7 @@ class DensityScore():
         arteries_sum_keys = list(arteries_sum.keys())
         
         #DensityScore = defaultdict(lambda: None, {'NAME': 'DensityScore', 'LAD': 0, 'LCX': 0, 'RCA': 0, 'DensityScore': 0})
-        DensityScore = OrderedDict([('NAME', 'DensityScore'), ('DensityScore', 0)])
+        DensityScore = OrderedDict([('NAME', self.name), ('DensityScore', 0)])
          
         # Iterate over arteries
         #for k, key in enumerate(self.arteries):
@@ -89,3 +89,34 @@ class DensityScore():
             print('---------------------------')
         else:
             print('Density score not defined')
+            
+            
+    def export_csv(self, settings, calciumScoresResult):
+        # Write calcium scores into csv
+
+        columns=['PatientID', 'SeriesInstanceUID', 'CC', 
+                         'RCA', 'RCA_PROXIMAL', 'RCA_MID', 'RCA_DISTAL',
+                         'LM', 'LM_BIF_LAD_LCX', 'LM_BIF_LAD', 'LM_BIF_LCX', 'LM_BRANCH',
+                         'LAD', 'LAD_PROXIMAL', 'LAD_MID', 'LAD_DISTAL', 'LAD_SIDE_BRANCH',
+                         'LCX', 'LCX_PROXIMAL', 'LCX_MID', 'LCX_DISTAL', 'LCX_SIDE_BRANCH']
+        folderpath_export_csv = settings['folderpath_export_csv']
+        filepath_csv = os.path.join(folderpath_export_csv, self.name + '.csv')
+        with open(filepath_csv, 'w') as file:
+            writer = csv.writer(file, delimiter=';', lineterminator="\n")
+            writer.writerow(columns)
+            for s,sample in enumerate(calciumScoresResult):
+                scores = sample['Scores']
+                for score in scores:
+                    if score['NAME'] == self.name:
+                        # Create row
+                        name_list = sample['ImageName'].split('_')
+                        if len(name_list)==2:
+                            PatientID = sample['ImageName'].split('_')[0]
+                            SeriesInstanceUID = sample['ImageName'].split('_')[1]
+                        else:
+                            PatientID = ''
+                            SeriesInstanceUID = ''
+                        row = [PatientID, SeriesInstanceUID]
+                        for c in columns[2:]:
+                            row = row + [str(score[c]).replace('.', ',')]
+                        writer.writerow(row)

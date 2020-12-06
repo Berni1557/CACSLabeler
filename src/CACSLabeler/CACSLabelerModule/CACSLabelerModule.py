@@ -22,10 +22,13 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from CalciumScores.Agatston import Agatston
 from CalciumScores.VolumeScore import VolumeScore
 from CalciumScores.DensityScore import DensityScore
+from CalciumScores.NumLesions import NumLesions
+from CalciumScores.LesionVolume import LesionVolume
 from collections import defaultdict, OrderedDict
-
 import imp
 imp.reload(sys.modules['CalciumScores'])
+import csv 
+from CACSTree import CACSTree, Lesion
 
 ############## CACSLabelerModule ##############
 
@@ -42,79 +45,7 @@ def splitFilePath(filepath):
     return folderpath, filename, file_extension
 
    
-class Lesion():
-    def __init__(self, name, parent, color):
-        self.name = name
-        self.parent = parent
-        self.color = color
 
-class CACSTree():
-    def __init__(self):
-        self.lesionList=[]
-        
-    def createTree(self, CACSTreeDict):
-        self.root = Lesion(name='CACSTreeDict', parent=None, color=CACSTreeDict['COLOR'])
-        self.lesionList.append(self.root)
-        self.addChildren(CACSTreeDict, 'CACSTreeDict')
-        
-    def addChildren(self, parent, parent_name):
-        for key in parent.keys():
-            key = key.encode("utf-8")
-            if not key =='COLOR':
-                lesion = Lesion(name=key, parent=parent_name, color = parent[key]['COLOR'])
-                self.lesionList.append(lesion)
-                self.addChildren(parent[key], key)
-                    
-    def getChildrenByName(self, name):
-        childrens = []
-        parent = ''
-        for lesion in self.lesionList:
-            if lesion.name == name:
-                parent = lesion.name
-                break
-        if not parent == '':
-            for lesion in self.lesionList:
-                if lesion.parent == parent:
-                    childrens.append(lesion)
-        return childrens
-        
-    def getChildrenNamesByName(self, name):
-        childrens = []
-        parent = ''
-        for lesion in self.lesionList:
-            if lesion.name == name:
-                parent = lesion.name
-                break
-        if not parent == '':
-            for lesion in self.lesionList:
-                if lesion.parent == parent:
-                    childrens.append(lesion.name)
-        return childrens
-        
-    def getIndexByName(self, name):
-        idx=0
-        for idx, lesion in enumerate(self.lesionList):
-            if lesion.name == name:
-                return idx
-                
-    def getLesionNames(self):
-        namelist = []
-        for idx, lesion in enumerate(self.lesionList):
-            namelist.append(lesion.name)
-        return namelist
-                
-    def getColorByName(self, name):
-        for idx, lesion in enumerate(self.lesionList):
-            if lesion.name == name:
-                return lesion.color
-        return None
-
-    def getLesionByName(self, name):
-        for idx, lesion in enumerate(self.lesionList):
-            if lesion.name == name:
-                return lesion
-        return None                
-                
 class CACSLabelerModule(ScriptedLoadableModule):
   """Uses ScriptedLoadableModule base class, available at:
   https://github.com/Slicer/Slicer/blob/master/Base/Python/slicer/ScriptedLoadableModule.py
@@ -207,6 +138,16 @@ class CACSLabelerModuleWidget:
         self.loadInputButton = loadInputButton
         self.measuresFormLayout.addRow(self.loadInputButton)
 
+        # Export calcium scores all refereences
+        exportButtonRef = qt.QPushButton("Export Calcium Scores from references folder")
+        exportButtonRef.toolTip = "Export Calcium Scores from references folder"
+        exportButtonRef.setStyleSheet("background-color: rgb(230,241,255)")
+        exportButtonRef.enabled = True
+        exportButtonRef.connect('clicked(bool)', self.onExportScoreButtonRefClicked)
+        self.exportButtonRef = exportButtonRef
+        #self.parent.layout().addWidget(self.exportButtonRef)
+        self.measuresFormLayout.addRow(self.exportButtonRef)
+        
         # The Input Volume Selector
         self.inputFrame = qt.QFrame(self.measuresCollapsibleButton)
         self.inputFrame.setLayout(qt.QHBoxLayout())
@@ -277,7 +218,7 @@ class CACSLabelerModuleWidget:
         self.parent.layout().addWidget(self.scoreButton)
         
         # Add scores
-        self.calciumScores = [Agatston(), VolumeScore(), DensityScore()]
+        self.calciumScores = [Agatston(), VolumeScore(), DensityScore(), NumLesions(), LesionVolume()]
 
         # Export calcium scores
         exportButton = qt.QPushButton("Export Calcium Scores")
@@ -299,9 +240,12 @@ class CACSLabelerModuleWidget:
         
         dirname = os.path.dirname(os.path.abspath(__file__))
         filepath_colorTable = dirname + '/CardiacAgatstonMeasuresLUT.ctbl'
+        
         # Create color table
-        #self.createColorTable(filepath_colorTable, self.settings['CACSTree'])
-        self.createColorTable_CACS(filepath_colorTable, self.settings['CACSTree'])
+        if self.settings['MODE']=='CACSTREE_CUMULATIVE':
+            self.createColorTable(filepath_colorTable, self.settings['CACSTree'])
+        else:
+            self.createColorTable_CACS(filepath_colorTable, self.settings['CACSTree'])
         
         # Load color table
         slicer.util.loadColorTable(filepath_colorTable)
@@ -317,6 +261,7 @@ class CACSLabelerModuleWidget:
             f.close()
 
     def createColorTable_CACS(self, filepath_colorTable, CACSTree):
+        print('filepath_colorTable', filepath_colorTable)
         CACS_dict = OrderedDict([('CACSTreeDict', 0), ('OTHER', 1), ('LAD', 2), ('LCX', 3), ('RCA', 4)])
         f = open(filepath_colorTable, 'w')
         f.write('# Color\n')
@@ -331,76 +276,72 @@ class CACSLabelerModuleWidget:
 
     def initCACSTreeDict(self):
         
-        OTHER = OrderedDict([('COLOR', (100, 100, 100, 255))])
+        OTHER = OrderedDict([('COLOR', (0, 255, 0, 255))])
         
-        RCA_PROXIMAL = OrderedDict([('COLOR', (255, 155, 155, 255))])
-        RCA_MID = OrderedDict([('COLOR', (255,67,67, 255))])
-        RCA_DISTAL = OrderedDict([('COLOR', (108,0,0, 255))])
-        RCA_SIDE_BRANCH = OrderedDict([('COLOR', (168,0,0, 255))])
+        RCA_PROXIMAL = OrderedDict([('COLOR', (204, 0, 0, 255))])
+        RCA_MID = OrderedDict([('COLOR', (255,0,0, 255))])
+        RCA_DISTAL = OrderedDict([('COLOR', (255,80,80, 255))])
+        RCA_SIDE_BRANCH = OrderedDict([('COLOR', (255,124,128, 255))])
         RCA = OrderedDict([('RCA_PROXIMAL', RCA_PROXIMAL), ('RCA_MID', RCA_MID), 
-                                ('RCA_DISTAL', RCA_DISTAL), ('RCA_SIDE_BRANCH', RCA_SIDE_BRANCH), ('COLOR', (238,0,0, 255))])
+                                ('RCA_DISTAL', RCA_DISTAL), ('RCA_SIDE_BRANCH', RCA_SIDE_BRANCH), ('COLOR', (165,0,33, 255))])
         
-        LM_BIF_LAD_LCX = OrderedDict([('COLOR', (26,50,238, 255))])
-        LM_BIF_LAD = OrderedDict([('COLOR', (26,100,238, 255))])
-        LM_BIF_LCX = OrderedDict([('COLOR', (26,150,238, 255))])
-        LM_BRANCH = OrderedDict([('COLOR', (26,203,238, 255))])
+        LM_BIF_LAD_LCX = OrderedDict([('COLOR', (11,253,224, 255))])
+        LM_BIF_LAD = OrderedDict([('COLOR', (26,203,238, 255))])
+        LM_BIF_LCX = OrderedDict([('COLOR', (32,132,130, 255))])
+        LM_BRANCH = OrderedDict([('COLOR', (255,204,102, 255))])
         LM = OrderedDict([('LM_BIF_LAD_LCX', LM_BIF_LAD_LCX), ('LM_BIF_LAD', LM_BIF_LAD), 
-                           ('LM_BIF_LCX', LM_BIF_LCX), ('LM_BRANCH', LM_BRANCH), ('COLOR', (238,0,0, 255))])
+                           ('LM_BIF_LCX', LM_BIF_LCX), ('LM_BRANCH', LM_BRANCH), ('COLOR', (12,176,198, 255))])
         
-        LAD_PROXIMAL = OrderedDict([('COLOR', (12,252,155, 255))])
-        LAD_MID = OrderedDict([('COLOR', (136,248,227, 255))])
-        LAD_DISTAL = OrderedDict([('COLOR', (12,176,198, 255))])
+        LAD_PROXIMAL = OrderedDict([('COLOR', (255,153,155, 255))])
+        LAD_MID = OrderedDict([('COLOR', (255,255,0, 255))])
+        LAD_DISTAL = OrderedDict([('COLOR', (204,255,51, 255))])
         LAD_SIDE_BRANCH = OrderedDict([('COLOR', (11,253,244, 255))])
-        LAD = OrderedDict([('LAD_PROXIMAL', LAD_PROXIMAL), ('LAD_MID', LAD_MID), ('LAD_DISTAL', LAD_DISTAL), ('LAD_SIDE_BRANCH', LAD_SIDE_BRANCH), ('COLOR', (12,252,52, 255))])
+        LAD = OrderedDict([('LAD_PROXIMAL', LAD_PROXIMAL), ('LAD_MID', LAD_MID), ('LAD_DISTAL', LAD_DISTAL), ('LAD_SIDE_BRANCH', LAD_SIDE_BRANCH), ('COLOR', (255,204,0, 255))])
         
-        LCX_PROXIMAL = OrderedDict([('COLOR', (139,133,255, 255))])
-        LCX_MID = OrderedDict([('COLOR', (72,63,255, 255))])
-        LCX_DISTAL = OrderedDict([('COLOR', (4,0,84, 255))])
-        LCX_SIDE_BRANCH = OrderedDict([('COLOR', (9,0,118, 255))])
-        LCX = OrderedDict([('LCX_PROXIMAL', LCX_PROXIMAL), ('LCX_MID', LCX_MID), ('LCX_DISTAL', LCX_DISTAL), ('LCX_SIDE_BRANCH', LCX_SIDE_BRANCH), ('COLOR', (12,0,246, 255))])
+        LCX_PROXIMAL = OrderedDict([('COLOR', (255,0,255, 255))])
+        LCX_MID = OrderedDict([('COLOR', (255,102,255, 255))])
+        LCX_DISTAL = OrderedDict([('COLOR', (255,153,255, 255))])
+        LCX_SIDE_BRANCH = OrderedDict([('COLOR', (255,204,255, 255))])
+        LCX = OrderedDict([('LCX_PROXIMAL', LCX_PROXIMAL), ('LCX_MID', LCX_MID), ('LCX_DISTAL', LCX_DISTAL), ('LCX_SIDE_BRANCH', LCX_SIDE_BRANCH), ('COLOR', (204,0,204, 255))])
 
-        CC = OrderedDict([('RCA', RCA), ('LM', LM), ('LAD', LAD), ('LCX', LCX), ('COLOR', (179, 59, 70, 255))])
+        CC = OrderedDict([('RCA', RCA), ('LM', LM), ('LAD', LAD), ('LCX', LCX), ('COLOR', (165, 0, 33, 255))])
         
-        AORTA_ASC = OrderedDict([('COLOR', (242,253,103, 255))])
-        AORTA_DSC = OrderedDict([('COLOR', (151,162,2, 255))])
-        AORTA_ARC = OrderedDict([('COLOR', (151,102,2, 255))])
-        AORTA = OrderedDict([('AORTA_ASC', AORTA_ASC), ('AORTA_DSC', AORTA_DSC), ('AORTA_ARC', AORTA_ARC), ('COLOR', (234,252,4, 255))])
+        AORTA_ASC = OrderedDict([('COLOR', (72,63,255, 255))])
+        AORTA_DSC = OrderedDict([('COLOR', (12,0,246, 255))])
+        AORTA_ARC = OrderedDict([('COLOR', (139,133,255, 255))])
+        AORTA = OrderedDict([('AORTA_ASC', AORTA_ASC), ('AORTA_DSC', AORTA_DSC), ('AORTA_ARC', AORTA_ARC), ('COLOR', (9,0,188, 255))])
 
-        #NCC = OrderedDict([('COLOR', (1,58,61, 255))])
-        #LCC = OrderedDict([('COLOR', (2,101,106, 255))])
-        #RCC = OrderedDict([('COLOR', (0,25,26, 255))])
-        VALVE_AORTIC = OrderedDict([('COLOR', (3,103,139, 255))])
-        VALVE_PULMONIC = OrderedDict([('COLOR', (3,133,139, 255))])
-        VALVE_TRICUSPID = OrderedDict([('COLOR', (138,246,252, 255))])
-        VALVE_MITRAL = OrderedDict([('COLOR', (198,251,254, 255))])
+
+        VALVE_AORTIC = OrderedDict([('COLOR', (0,102,0, 255))])
+        VALVE_PULMONIC = OrderedDict([('COLOR', (51,153,102, 255))])
+        VALVE_TRICUSPID = OrderedDict([('COLOR', (0,153,0, 255))])
+        VALVE_MITRAL = OrderedDict([('COLOR', (0,204,0, 255))])
         
         VALVES = OrderedDict([('VALVE_AORTIC', VALVE_AORTIC), ('VALVE_PULMONIC', VALVE_PULMONIC),
-                              ('VALVE_TRICUSPID', VALVE_TRICUSPID), ('VALVE_MITRAL', VALVE_MITRAL), ('COLOR', (5,226,237, 255))])
+                              ('VALVE_TRICUSPID', VALVE_TRICUSPID), ('VALVE_MITRAL', VALVE_MITRAL), ('COLOR', (4,68,16, 255))])
         
-#        VALVES = OrderedDict([('NCC', NCC), ('LCC', LCC), ('RCC', RCC),
-#                                            ('VALVE_PULMONIC', VALVE_PULMONIC), ('VALVE_MITRAL', VALVE_MITRAL),
-#                                            ('VALVE_TRICUSPID', VALVE_TRICUSPID), ('COLOR', (5,226,237, 255))])
-
-        STERNUM = OrderedDict([('COLOR', (254,110,237, 255))])
+        STERNUM = OrderedDict([('COLOR', (167,149,75, 255))])
         VERTEBRA = OrderedDict([('COLOR', (198,185,128, 255))])
         COSTA = OrderedDict([('COLOR', (1,58,61, 255))])
-        BONE = OrderedDict([('STERNUM', STERNUM), ('VERTEBRA', VERTEBRA), ('COSTA', COSTA), ('COLOR', (167,149,75, 255))])
+        BONE = OrderedDict([('STERNUM', STERNUM), ('VERTEBRA', VERTEBRA), ('COSTA', COSTA), ('COLOR', (102,51,0, 255))])
         
-        TRACHEA = OrderedDict([('COLOR', (5,41,21, 255))])
-        BRONCHUS = OrderedDict([('COLOR', (99,247,127, 255))])
-        NODULE_CALCIFIED  = OrderedDict([('COLOR', (5,121,21, 255))])
-        LUNG_ARTERY = OrderedDict([('COLOR', (10,198,46, 255))])
-        LUNG_VESSEL_NFS = OrderedDict([('COLOR', (4,68,16, 255))])
-        LUNG_PARENCHYMA = OrderedDict([('COLOR', (5,91,21, 255))])
+        TRACHEA = OrderedDict([('COLOR', (204,236,255, 255))])
+        BRONCHUS = OrderedDict([('COLOR', (255,255,204, 255))])
+        NODULE_CALCIFIED  = OrderedDict([('COLOR', (204,255,204, 255))])
+        LUNG_ARTERY = OrderedDict([('COLOR', (255,204,204, 255))])
+        LUNG_VESSEL_NFS = OrderedDict([('COLOR', (153,204,255, 255))])
+        LUNG_PARENCHYMA = OrderedDict([('COLOR', (153,255,204, 255))])
 
         LUNG = OrderedDict([('TRACHEA', TRACHEA), ('BRONCHUS', BRONCHUS),
                             ('NODULE_CALCIFIED', NODULE_CALCIFIED), ('LUNG_ARTERY', LUNG_ARTERY),
-                            ('LUNG_VESSEL_NFS', LUNG_VESSEL_NFS),  ('LUNG_PARENCHYMA', LUNG_PARENCHYMA), ('COLOR', (8,160,37, 255))])
+                            ('LUNG_VESSEL_NFS', LUNG_VESSEL_NFS),  ('LUNG_PARENCHYMA', LUNG_PARENCHYMA), ('COLOR', (204,255,255, 255))])
         
         
-        NCC = OrderedDict([('AORTA', AORTA), ('VALVES', VALVES), ('BONE', BONE), ('LUNG', LUNG), ('COLOR', (240, 2, 212, 255))])    
+        NCC = OrderedDict([('AORTA', AORTA), ('VALVES', VALVES), ('BONE', BONE), ('LUNG', LUNG), ('COLOR', (102, 0, 102, 255))])    
 
         CACSTreeDict = OrderedDict([('OTHER', OTHER), ('CC', CC), ('NCC', NCC), ('COLOR', (0,0,0,0))])
+        
+        
         return CACSTreeDict
         
     def writeSettings(self, filepath_settings):
@@ -416,8 +357,9 @@ class CACSLabelerModuleWidget:
         settingsDefault = {'folderpath_images': 'H:/cloud/cloud_data/Projects/DL/Code/src/datasets/DISCHARGE/data_cacs/Images',
                            'folderpath_references': 'H:/cloud/cloud_data/Projects/DL/Code/src/datasets/DISCHARGE/data_cacs/References',
                            'filepath_export': 'H:/cloud/cloud_data/Projects/CACSLabeler/code/data/export.json',
+                           'folderpath_export_csv': 'H:/cloud/cloud_data/Projects/CACSLabeler/code/data/export_csv',
                            'filter_input': '(*.mhd)',
-                           'CalciumScores': ['agatston', 'VolumeScore', 'DensityScore'],
+                           'CalciumScores': ['AGATSTON_SCORE', 'VOLUME_SCORE', 'DENSITY_SCORE', 'NUMLESION_SCORE', 'LESIONVOLUME_SCORE'],
                            'filter_input_by_reference': False,
                            'filter_reference_with': ['-label.'],
                            'filter_reference_without': ['label-lesion.'],
@@ -541,6 +483,11 @@ class CACSLabelerModuleWidget:
                     score.show()
                     self.calciumScoresResult.append(s)
         print('Computation time', time.time() - start)
+    
+    def export_csv(self):
+        for score in self.calciumScores:
+            score.export_csv(self.settings, self.calciumScoresResult)
+
         
     def onExportScoreButtonClicked(self):
         # Export labels
@@ -575,7 +522,7 @@ class CACSLabelerModuleWidget:
                 scoreResult=[]
                 for score in self.calciumScores:
                     for scorename in self.settings['CalciumScores']:
-                        if score.name in scorename:
+                        if score.name == scorename:
                             inputVolumeNameLabel = volume_name
                             inputVolumeName = inputVolumeNameLabel[0:-13]
                             inputVolumeLabel = su.PullVolumeFromSlicer(inputVolumeNameLabel)
@@ -588,11 +535,45 @@ class CACSLabelerModuleWidget:
         print('Exporting:')
         for res in self.calciumScoresResult:
             print(res['ImageName'])
+        
+        # Load json if exist
+        if os.path.exists(filepath_export):
+            with open(filepath_export) as f:
+                calciumScoresResult = json.load(f)
+            self.calciumScoresResult = calciumScoresResult + self.calciumScoresResult
             
         # Save json
-        with open(filepath_export, 'a') as file:
+        with open(filepath_export, 'w') as file:
             file.write(json.dumps(self.calciumScoresResult, indent=4)) # use `json.loads` to do the reverse
+            
+        # Save csv
+        self.export_csv()
+        
+    def onExportScoreButtonRefClicked(self):
+        
+        references = glob(self.settings['folderpath_references'] + '/*-label-lesion.nrrd')
+        images = glob(self.settings['folderpath_images'] + '/*.mhd')
+        for ref in references[0:2]:
+            _,refname,_ = splitFilePath(ref)
+            name = refname[0:-13]
+            for im in images:
+                if name in im:
+                    break
 
+            # Read image
+            properties={'Name': name}
+            node = slicer.util.loadVolume(im, returnNode=True, properties=properties)[1]
+            node.SetName(name)
+            # Read reference
+            properties={'Name': refname}
+            node = slicer.util.loadVolume(ref, returnNode=True, properties=properties)[1]
+            node.SetName(refname)
+            # Export score
+            self.onExportScoreButtonClicked()
+            # Delete node
+            self.onDeleteButtonClicked()
+            
+ 
     def onSaveOutputButtonClicked(self):
         # Save
         folderpath_output = self.settings['folderpath_references']
