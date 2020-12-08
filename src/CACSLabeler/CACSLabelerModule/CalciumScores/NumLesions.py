@@ -103,11 +103,13 @@ class NumLesions():
     def export_csv(self, settings, calciumScoresResult):
         # Write calcium scores into csv
 
-        columns=['PatientID', 'SeriesInstanceUID', 'CC', 
-                         'RCA', 'RCA_PROXIMAL', 'RCA_MID', 'RCA_DISTAL',
-                         'LM', 'LM_BIF_LAD_LCX', 'LM_BIF_LAD', 'LM_BIF_LCX', 'LM_BRANCH',
-                         'LAD', 'LAD_PROXIMAL', 'LAD_MID', 'LAD_DISTAL', 'LAD_SIDE_BRANCH',
-                         'LCX', 'LCX_PROXIMAL', 'LCX_MID', 'LCX_DISTAL', 'LCX_SIDE_BRANCH']
+        if settings['MODE'] == 'CACS':
+            columns = settings['columns_CACS']
+        elif settings['MODE'] == 'CACSTREE_CUMULATIVE':
+            columns = settings['columns_CACSTREE_CUMULATIVE']
+        else:
+            raise ValueError('Mode ' + settings['MODE'] + ' does not exist.')
+            
         folderpath_export_csv = settings['folderpath_export_csv']
         filepath_csv = os.path.join(folderpath_export_csv, self.name + '.csv')
         with open(filepath_csv, 'w') as file:

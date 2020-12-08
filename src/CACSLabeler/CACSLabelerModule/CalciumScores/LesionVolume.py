@@ -114,7 +114,13 @@ class LesionVolume():
 
     def export_csv(self, settings, calciumScoresResult):
         # Write calcium scores into csv
-        columns=['PatientID', 'SeriesInstanceUID', 'LesionID', 'LesionVolume']
+        if settings['MODE'] == 'CACS':
+            columns = settings['columns_CACS']
+        elif settings['MODE'] == 'CACSTREE_CUMULATIVE':
+            columns = settings['columns_CACSTREE_CUMULATIVE']
+        else:
+            raise ValueError('Mode ' + settings['MODE'] + ' does not exist.')
+            
         folderpath_export_csv = settings['folderpath_export_csv']
         filepath_csv = os.path.join(folderpath_export_csv, self.name + '.csv')
         with open(filepath_csv, 'w') as file:

@@ -261,7 +261,6 @@ class CACSLabelerModuleWidget:
             f.close()
 
     def createColorTable_CACS(self, filepath_colorTable, CACSTree):
-        print('filepath_colorTable', filepath_colorTable)
         CACS_dict = OrderedDict([('CACSTreeDict', 0), ('OTHER', 1), ('LAD', 2), ('LCX', 3), ('RCA', 4)])
         f = open(filepath_colorTable, 'w')
         f.write('# Color\n')
@@ -283,7 +282,7 @@ class CACSLabelerModuleWidget:
         RCA_DISTAL = OrderedDict([('COLOR', (255,80,80, 255))])
         RCA_SIDE_BRANCH = OrderedDict([('COLOR', (255,124,128, 255))])
         RCA = OrderedDict([('RCA_PROXIMAL', RCA_PROXIMAL), ('RCA_MID', RCA_MID), 
-                                ('RCA_DISTAL', RCA_DISTAL), ('RCA_SIDE_BRANCH', RCA_SIDE_BRANCH), ('COLOR', (165,0,33, 255))])
+                           ('RCA_DISTAL', RCA_DISTAL), ('RCA_SIDE_BRANCH', RCA_SIDE_BRANCH), ('COLOR', (165,0,33, 255))])
         
         LM_BIF_LAD_LCX = OrderedDict([('COLOR', (11,253,224, 255))])
         LM_BIF_LAD = OrderedDict([('COLOR', (26,203,238, 255))])
@@ -298,13 +297,15 @@ class CACSLabelerModuleWidget:
         LAD_SIDE_BRANCH = OrderedDict([('COLOR', (11,253,244, 255))])
         LAD = OrderedDict([('LAD_PROXIMAL', LAD_PROXIMAL), ('LAD_MID', LAD_MID), ('LAD_DISTAL', LAD_DISTAL), ('LAD_SIDE_BRANCH', LAD_SIDE_BRANCH), ('COLOR', (255,204,0, 255))])
         
+        RIM = OrderedDict([('COLOR', (255,51,153, 255))])
+        
         LCX_PROXIMAL = OrderedDict([('COLOR', (255,0,255, 255))])
         LCX_MID = OrderedDict([('COLOR', (255,102,255, 255))])
         LCX_DISTAL = OrderedDict([('COLOR', (255,153,255, 255))])
         LCX_SIDE_BRANCH = OrderedDict([('COLOR', (255,204,255, 255))])
         LCX = OrderedDict([('LCX_PROXIMAL', LCX_PROXIMAL), ('LCX_MID', LCX_MID), ('LCX_DISTAL', LCX_DISTAL), ('LCX_SIDE_BRANCH', LCX_SIDE_BRANCH), ('COLOR', (204,0,204, 255))])
 
-        CC = OrderedDict([('RCA', RCA), ('LM', LM), ('LAD', LAD), ('LCX', LCX), ('COLOR', (165, 0, 33, 255))])
+        CC = OrderedDict([('RCA', RCA), ('LM', LM), ('LAD', LAD), ('LCX', LCX), ('RIM', RIM), ('COLOR', (165, 0, 33, 255))])
         
         AORTA_ASC = OrderedDict([('COLOR', (72,63,255, 255))])
         AORTA_DSC = OrderedDict([('COLOR', (12,0,246, 255))])
@@ -322,7 +323,7 @@ class CACSLabelerModuleWidget:
         
         STERNUM = OrderedDict([('COLOR', (167,149,75, 255))])
         VERTEBRA = OrderedDict([('COLOR', (198,185,128, 255))])
-        COSTA = OrderedDict([('COLOR', (1,58,61, 255))])
+        COSTA = OrderedDict([('COLOR', (216,207,168, 255))])
         BONE = OrderedDict([('STERNUM', STERNUM), ('VERTEBRA', VERTEBRA), ('COSTA', COSTA), ('COLOR', (102,51,0, 255))])
         
         TRACHEA = OrderedDict([('COLOR', (204,236,255, 255))])
@@ -341,7 +342,6 @@ class CACSLabelerModuleWidget:
 
         CACSTreeDict = OrderedDict([('OTHER', OTHER), ('CC', CC), ('NCC', NCC), ('COLOR', (0,0,0,0))])
         
-        
         return CACSTreeDict
         
     def writeSettings(self, filepath_settings):
@@ -353,6 +353,15 @@ class CACSLabelerModuleWidget:
         
         CACSTreeDict = self.initCACSTreeDict()
         
+        columns_CACSTREE_CUMULATIVE = ['PatientID', 'SeriesInstanceUID', 'CC', 
+                             'RCA', 'RCA_PROXIMAL', 'RCA_MID', 'RCA_DISTAL',
+                             'LM', 'LM_BIF_LAD_LCX', 'LM_BIF_LAD', 'LM_BIF_LCX', 'LM_BRANCH',
+                             'LAD', 'LAD_PROXIMAL', 'LAD_MID', 'LAD_DISTAL', 'LAD_SIDE_BRANCH',
+                             'LCX', 'LCX_PROXIMAL', 'LCX_MID', 'LCX_DISTAL', 'LCX_SIDE_BRANCH',
+                             'RIM']
+
+        columns_CACS = ['PatientID', 'SeriesInstanceUID', 'CC', 'RCA', 'LAD', 'LCX']
+
         # Initialize settings
         settingsDefault = {'folderpath_images': 'H:/cloud/cloud_data/Projects/DL/Code/src/datasets/DISCHARGE/data_cacs/Images',
                            'folderpath_references': 'H:/cloud/cloud_data/Projects/DL/Code/src/datasets/DISCHARGE/data_cacs/References',
@@ -364,12 +373,23 @@ class CACSLabelerModuleWidget:
                            'filter_reference_with': ['-label.'],
                            'filter_reference_without': ['label-lesion.'],
                            'CACSTreeDict': CACSTreeDict,
+                           'columns_CACSTREE_CUMULATIVE': columns_CACSTREE_CUMULATIVE,
+                           'columns_CACS': columns_CACS,
                            'MODE': 'CACSTREE_CUMULATIVE'} # MODE can be 'CACS','CACSTREE' or 'CACSTREE_CUMULATIVE'
                            
         print('Writing setting to ' + filepath_settings)
         with open(filepath_settings, 'a') as file:
             file.write(json.dumps(settingsDefault, indent=4, encoding='utf-8'))
         self.settings = settingsDefault
+        
+    def checkSettings(self, settings):
+        for key in settings.keys():
+            value = settings[key]
+            if isinstance(value, str):
+                if "\\" in value:
+                    raise ValueError("Backslash not allowed in settings file")
+                
+            
 
     def readSettings(self, filepath_settings):
         """ Read settings from setting file
@@ -408,6 +428,7 @@ class CACSLabelerModuleWidget:
             print('Reading setting from ' + filepath_settings)
             with open(filepath_settings) as f:
                 settings = json.load(f, object_hook=_decode_dict, object_pairs_hook=OrderedDict)
+                self.checkSettings(settings)
                 settings = OrderedDict(settings)
                 # CreateCACSTree
                 settings['CACSTree'] = CACSTree()
@@ -421,9 +442,6 @@ class CACSLabelerModuleWidget:
             raise ValueError("Folderpath of image " + self.settings['folderpath_images'] + ' does not exist')
         if not os.path.isdir(self.settings['folderpath_references']):
             raise ValueError("Folderpath of references " + self.settings['folderpath_references'] + ' does not exist')
-            
-            
-            
 
     def onDeleteButtonClicked(self):
         """ Delete all images in slicer
