@@ -1,0 +1,6 @@
+{
+    "filter_input": "(*.mhd)", 
+    "folderpath_images": "H:/cloud/cloud_data/Projects/ALLabeler/code/data/Images", 
+    "filter_input_by_reference": true, 
+    "folderpath_references": "H:/cloud/cloud_data/Projects/ALLabeler/code/data/References"
+}
