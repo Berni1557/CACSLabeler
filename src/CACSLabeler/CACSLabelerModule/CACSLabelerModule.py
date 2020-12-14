@@ -3,7 +3,7 @@ import warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
 from slicer.ScriptedLoadableModule import ScriptedLoadableModule
 import unittest
-import os
+import os, sys
 import SimpleITK as sitk
 import sitkUtils as su
 import EditorLib
@@ -28,7 +28,11 @@ from collections import defaultdict, OrderedDict
 import imp
 imp.reload(sys.modules['CalciumScores'])
 import csv 
-from CACSTree import CACSTree, Lesion
+dirname = os.path.dirname(os.path.abspath(__file__))
+dir_src = os.path.dirname(os.path.dirname(dirname))
+sys.path.append(dir_src)
+from CACSTree.CACSTree import CACSTree, Lesion
+from settings.settings import Settings
 
 ############## CACSLabelerModule ##############
 
@@ -76,7 +80,7 @@ class CACSLabelerModuleWidget:
         self.inputImageNode = None
         self.localCardiacEditorWidget = None
         self.filepath_settings = None
-        self.settings=None
+        self.settings=Settings()
 
         if not parent:
             self.parent = slicer.qMRMLWidget()
@@ -158,7 +162,11 @@ class CACSLabelerModuleWidget:
         self.inputSelector.nodeTypes = ( ("vtkMRMLScalarVolumeNode"), "" )
         self.inputSelector.addEnabled = False
         self.inputSelector.removeEnabled = False
+        #self.inputSelector.currentNodeChanged.connect(self.onCurrentNodeChanged)
         self.inputSelector.setMRMLScene( slicer.mrmlScene )
+        
+        	
+         
         self.inputFrame.layout().addWidget(self.inputSelector)
 
         self.RadioButtonsFrame = qt.QFrame(self.measuresCollapsibleButton)
@@ -243,205 +251,121 @@ class CACSLabelerModuleWidget:
         
         # Create color table
         if self.settings['MODE']=='CACSTREE_CUMULATIVE':
-            self.createColorTable(filepath_colorTable, self.settings['CACSTree'])
+            self.settings['CACSTree'].createColorTable(filepath_colorTable)
         else:
-            self.createColorTable_CACS(filepath_colorTable, self.settings['CACSTree'])
+            self.settings['CACSTree'].createColorTable_CACS(filepath_colorTable)
         
         # Load color table
         slicer.util.loadColorTable(filepath_colorTable)
     
-    def createColorTable(self, filepath_colorTable, CACSTree):
-        f = open(filepath_colorTable, 'w')
-        f.write('# Color\n')
-        f.close()
-        for idx, lesion in enumerate(CACSTree.lesionList):
-            f = open(filepath_colorTable, 'a')
-            color_str = str(lesion.color[0]) + ' ' + str(lesion.color[1]) + ' ' + str(lesion.color[2]) + ' ' + str(lesion.color[3])
-            f.write(str(idx) + ' ' + lesion.name + ' ' + color_str + '\n')
-            f.close()
-
-    def createColorTable_CACS(self, filepath_colorTable, CACSTree):
-        CACS_dict = OrderedDict([('CACSTreeDict', 0), ('OTHER', 1), ('LAD', 2), ('LCX', 3), ('RCA', 4)])
-        f = open(filepath_colorTable, 'w')
-        f.write('# Color\n')
-        f.close()
-        for key in CACS_dict.keys():
-            lesion = CACSTree.getLesionByName(key)
-            color_str = str(lesion.color[0]) + ' ' + str(lesion.color[1]) + ' ' + str(lesion.color[2]) + ' ' + str(lesion.color[3])
-            f = open(filepath_colorTable, 'a')
-            color_str = str(lesion.color[0]) + ' ' + str(lesion.color[1]) + ' ' + str(lesion.color[2]) + ' ' + str(lesion.color[3])
-            f.write(str(CACS_dict[key]) + ' ' + lesion.name + ' ' + color_str + '\n')
-            f.close()
-
-    def initCACSTreeDict(self):
+#    def onCurrentNodeChanged(self):
+#        print('onCurrentNodeChanged')
         
-        OTHER = OrderedDict([('COLOR', (0, 255, 0, 255))])
-        
-        RCA_PROXIMAL = OrderedDict([('COLOR', (204, 0, 0, 255))])
-        RCA_MID = OrderedDict([('COLOR', (255,0,0, 255))])
-        RCA_DISTAL = OrderedDict([('COLOR', (255,80,80, 255))])
-        RCA_SIDE_BRANCH = OrderedDict([('COLOR', (255,124,128, 255))])
-        RCA = OrderedDict([('RCA_PROXIMAL', RCA_PROXIMAL), ('RCA_MID', RCA_MID), 
-                           ('RCA_DISTAL', RCA_DISTAL), ('RCA_SIDE_BRANCH', RCA_SIDE_BRANCH), ('COLOR', (165,0,33, 255))])
-        
-        LM_BIF_LAD_LCX = OrderedDict([('COLOR', (11,253,224, 255))])
-        LM_BIF_LAD = OrderedDict([('COLOR', (26,203,238, 255))])
-        LM_BIF_LCX = OrderedDict([('COLOR', (32,132,130, 255))])
-        LM_BRANCH = OrderedDict([('COLOR', (255,204,102, 255))])
-        LM = OrderedDict([('LM_BIF_LAD_LCX', LM_BIF_LAD_LCX), ('LM_BIF_LAD', LM_BIF_LAD), 
-                           ('LM_BIF_LCX', LM_BIF_LCX), ('LM_BRANCH', LM_BRANCH), ('COLOR', (12,176,198, 255))])
-        
-        LAD_PROXIMAL = OrderedDict([('COLOR', (255,153,155, 255))])
-        LAD_MID = OrderedDict([('COLOR', (255,255,0, 255))])
-        LAD_DISTAL = OrderedDict([('COLOR', (204,255,51, 255))])
-        LAD_SIDE_BRANCH = OrderedDict([('COLOR', (11,253,244, 255))])
-        LAD = OrderedDict([('LAD_PROXIMAL', LAD_PROXIMAL), ('LAD_MID', LAD_MID), ('LAD_DISTAL', LAD_DISTAL), ('LAD_SIDE_BRANCH', LAD_SIDE_BRANCH), ('COLOR', (255,204,0, 255))])
-        
-        RIM = OrderedDict([('COLOR', (255,51,153, 255))])
-        
-        LCX_PROXIMAL = OrderedDict([('COLOR', (255,0,255, 255))])
-        LCX_MID = OrderedDict([('COLOR', (255,102,255, 255))])
-        LCX_DISTAL = OrderedDict([('COLOR', (255,153,255, 255))])
-        LCX_SIDE_BRANCH = OrderedDict([('COLOR', (255,204,255, 255))])
-        LCX = OrderedDict([('LCX_PROXIMAL', LCX_PROXIMAL), ('LCX_MID', LCX_MID), ('LCX_DISTAL', LCX_DISTAL), ('LCX_SIDE_BRANCH', LCX_SIDE_BRANCH), ('COLOR', (204,0,204, 255))])
-
-        CC = OrderedDict([('RCA', RCA), ('LM', LM), ('LAD', LAD), ('LCX', LCX), ('RIM', RIM), ('COLOR', (165, 0, 33, 255))])
-        
-        AORTA_ASC = OrderedDict([('COLOR', (72,63,255, 255))])
-        AORTA_DSC = OrderedDict([('COLOR', (12,0,246, 255))])
-        AORTA_ARC = OrderedDict([('COLOR', (139,133,255, 255))])
-        AORTA = OrderedDict([('AORTA_ASC', AORTA_ASC), ('AORTA_DSC', AORTA_DSC), ('AORTA_ARC', AORTA_ARC), ('COLOR', (9,0,188, 255))])
-
-
-        VALVE_AORTIC = OrderedDict([('COLOR', (0,102,0, 255))])
-        VALVE_PULMONIC = OrderedDict([('COLOR', (51,153,102, 255))])
-        VALVE_TRICUSPID = OrderedDict([('COLOR', (0,153,0, 255))])
-        VALVE_MITRAL = OrderedDict([('COLOR', (0,204,0, 255))])
-        
-        VALVES = OrderedDict([('VALVE_AORTIC', VALVE_AORTIC), ('VALVE_PULMONIC', VALVE_PULMONIC),
-                              ('VALVE_TRICUSPID', VALVE_TRICUSPID), ('VALVE_MITRAL', VALVE_MITRAL), ('COLOR', (4,68,16, 255))])
-        
-        STERNUM = OrderedDict([('COLOR', (167,149,75, 255))])
-        VERTEBRA = OrderedDict([('COLOR', (198,185,128, 255))])
-        COSTA = OrderedDict([('COLOR', (216,207,168, 255))])
-        BONE = OrderedDict([('STERNUM', STERNUM), ('VERTEBRA', VERTEBRA), ('COSTA', COSTA), ('COLOR', (102,51,0, 255))])
-        
-        TRACHEA = OrderedDict([('COLOR', (204,236,255, 255))])
-        BRONCHUS = OrderedDict([('COLOR', (255,255,204, 255))])
-        NODULE_CALCIFIED  = OrderedDict([('COLOR', (204,255,204, 255))])
-        LUNG_ARTERY = OrderedDict([('COLOR', (255,204,204, 255))])
-        LUNG_VESSEL_NFS = OrderedDict([('COLOR', (153,204,255, 255))])
-        LUNG_PARENCHYMA = OrderedDict([('COLOR', (153,255,204, 255))])
-
-        LUNG = OrderedDict([('TRACHEA', TRACHEA), ('BRONCHUS', BRONCHUS),
-                            ('NODULE_CALCIFIED', NODULE_CALCIFIED), ('LUNG_ARTERY', LUNG_ARTERY),
-                            ('LUNG_VESSEL_NFS', LUNG_VESSEL_NFS),  ('LUNG_PARENCHYMA', LUNG_PARENCHYMA), ('COLOR', (204,255,255, 255))])
-        
-        
-        NCC = OrderedDict([('AORTA', AORTA), ('VALVES', VALVES), ('BONE', BONE), ('LUNG', LUNG), ('COLOR', (102, 0, 102, 255))])    
-
-        CACSTreeDict = OrderedDict([('OTHER', OTHER), ('CC', CC), ('NCC', NCC), ('COLOR', (0,0,0,0))])
-        
-        return CACSTreeDict
         
     def writeSettings(self, filepath_settings):
-        """ Write settings into setting file
-
-        :param filepath_settings: Filepath to settings file
-        :type filepath_settings: str
-        """
+        self.settings.writeSettings(filepath_settings)
         
-        CACSTreeDict = self.initCACSTreeDict()
-        
-        columns_CACSTREE_CUMULATIVE = ['PatientID', 'SeriesInstanceUID', 'CC', 
-                             'RCA', 'RCA_PROXIMAL', 'RCA_MID', 'RCA_DISTAL',
-                             'LM', 'LM_BIF_LAD_LCX', 'LM_BIF_LAD', 'LM_BIF_LCX', 'LM_BRANCH',
-                             'LAD', 'LAD_PROXIMAL', 'LAD_MID', 'LAD_DISTAL', 'LAD_SIDE_BRANCH',
-                             'LCX', 'LCX_PROXIMAL', 'LCX_MID', 'LCX_DISTAL', 'LCX_SIDE_BRANCH',
-                             'RIM']
-
-        columns_CACS = ['PatientID', 'SeriesInstanceUID', 'CC', 'RCA', 'LAD', 'LCX']
-
-        # Initialize settings
-        settingsDefault = {'folderpath_images': 'H:/cloud/cloud_data/Projects/DL/Code/src/datasets/DISCHARGE/data_cacs/Images',
-                           'folderpath_references': 'H:/cloud/cloud_data/Projects/DL/Code/src/datasets/DISCHARGE/data_cacs/References',
-                           'filepath_export': 'H:/cloud/cloud_data/Projects/CACSLabeler/code/data/export.json',
-                           'folderpath_export_csv': 'H:/cloud/cloud_data/Projects/CACSLabeler/code/data/export_csv',
-                           'filter_input': '(*.mhd)',
-                           'CalciumScores': ['AGATSTON_SCORE', 'VOLUME_SCORE', 'DENSITY_SCORE', 'NUMLESION_SCORE', 'LESIONVOLUME_SCORE'],
-                           'filter_input_by_reference': False,
-                           'filter_reference_with': ['-label.'],
-                           'filter_reference_without': ['label-lesion.'],
-                           'CACSTreeDict': CACSTreeDict,
-                           'columns_CACSTREE_CUMULATIVE': columns_CACSTREE_CUMULATIVE,
-                           'columns_CACS': columns_CACS,
-                           'MODE': 'CACSTREE_CUMULATIVE'} # MODE can be 'CACS','CACSTREE' or 'CACSTREE_CUMULATIVE'
-                           
-        print('Writing setting to ' + filepath_settings)
-        with open(filepath_settings, 'a') as file:
-            file.write(json.dumps(settingsDefault, indent=4, encoding='utf-8'))
-        self.settings = settingsDefault
-        
-    def checkSettings(self, settings):
-        for key in settings.keys():
-            value = settings[key]
-            if isinstance(value, str):
-                if "\\" in value:
-                    raise ValueError("Backslash not allowed in settings file")
+#    def writeSettings(self, filepath_settings):
+#        """ Write settings into setting file
+#
+#        :param filepath_settings: Filepath to settings file
+#        :type filepath_settings: str
+#        """
+#        
+#        CACSTreeDict = self.initCACSTreeDict()
+#        
+#        columns_CACSTREE_CUMULATIVE = ['PatientID', 'SeriesInstanceUID', 'CC', 
+#                             'RCA', 'RCA_PROXIMAL', 'RCA_MID', 'RCA_DISTAL',
+#                             'LM', 'LM_BIF_LAD_LCX', 'LM_BIF_LAD', 'LM_BIF_LCX', 'LM_BRANCH',
+#                             'LAD', 'LAD_PROXIMAL', 'LAD_MID', 'LAD_DISTAL', 'LAD_SIDE_BRANCH',
+#                             'LCX', 'LCX_PROXIMAL', 'LCX_MID', 'LCX_DISTAL', 'LCX_SIDE_BRANCH',
+#                             'RIM']
+#
+#        columns_CACS = ['PatientID', 'SeriesInstanceUID', 'CC', 'RCA', 'LAD', 'LCX']
+#
+#        # Initialize settings
+#        settingsDefault = {'folderpath_images': 'H:/cloud/cloud_data/Projects/DL/Code/src/datasets/DISCHARGE/data_cacs/Images',
+#                           'folderpath_references': 'H:/cloud/cloud_data/Projects/DL/Code/src/datasets/DISCHARGE/data_cacs/References',
+#                           'filepath_export': 'H:/cloud/cloud_data/Projects/CACSLabeler/code/data/export.json',
+#                           'folderpath_export_csv': 'H:/cloud/cloud_data/Projects/CACSLabeler/code/data/export_csv',
+#                           'filter_input': '(*.mhd)',
+#                           'CalciumScores': ['AGATSTON_SCORE', 'VOLUME_SCORE', 'DENSITY_SCORE', 'NUMLESION_SCORE', 'LESIONVOLUME_SCORE'],
+#                           'filter_input_by_reference': False,
+#                           'filter_reference_with': ['-label.'],
+#                           'filter_reference_without': ['label-lesion.'],
+#                           'CACSTreeDict': CACSTreeDict,
+#                           'columns_CACSTREE_CUMULATIVE': columns_CACSTREE_CUMULATIVE,
+#                           'columns_CACS': columns_CACS,
+#                           'MODE': 'CACSTREE_CUMULATIVE'} # MODE can be 'CACS','CACSTREE' or 'CACSTREE_CUMULATIVE'
+#                           
+#        print('Writing setting to ' + filepath_settings)
+#        with open(filepath_settings, 'a') as file:
+#            file.write(json.dumps(settingsDefault, indent=4, encoding='utf-8'))
+#        self.settings = settingsDefault
+#        
+#    def checkSettings(self, settings):
+#        for key in settings.keys():
+#            value = settings[key]
+#            if isinstance(value, str):
+#                if "\\" in value:
+#                    raise ValueError("Backslash not allowed in settings file")
                 
-            
 
-    def readSettings(self, filepath_settings):
-        """ Read settings from setting file
-
-        :param filepath_settings: Filepath to settings file
-        :type filepath_settings: str
-        """
+    def readSettings(self, filepath_settings):      
+        self.settings.readSettings(filepath_settings)
         
-        def _decode_list(data):
-            rv = []
-            for item in data:
-                if isinstance(item, unicode):
-                    item = item.encode('utf-8')
-                elif isinstance(item, list):
-                    item = _decode_list(item)
-                elif isinstance(item, dict):
-                    item = _decode_dict(item)
-                rv.append(item)
-            return rv
-            
-        def _decode_dict(data):
-            rv = {}
-            for key, value in data.iteritems():
-                if isinstance(key, unicode):
-                    key = key.encode('utf-8')
-                if isinstance(value, unicode):
-                    value = value.encode('utf-8')
-                elif isinstance(value, list):
-                    value = _decode_list(value)
-                elif isinstance(value, dict):
-                    value = _decode_dict(value)
-                rv[key] = value
-            return rv
-    
-        if os.path.isfile(filepath_settings):
-            print('Reading setting from ' + filepath_settings)
-            with open(filepath_settings) as f:
-                settings = json.load(f, object_hook=_decode_dict, object_pairs_hook=OrderedDict)
-                self.checkSettings(settings)
-                settings = OrderedDict(settings)
-                # CreateCACSTree
-                settings['CACSTree'] = CACSTree()
-                settings['CACSTree'].createTree(settings['CACSTreeDict'])
-                self.settings = settings
-        else:
-            print('Settings file:' + filepath_settings + 'does not exist')
-            
-        # Check if folders exist
-        if not os.path.isdir(self.settings['folderpath_images']):
-            raise ValueError("Folderpath of image " + self.settings['folderpath_images'] + ' does not exist')
-        if not os.path.isdir(self.settings['folderpath_references']):
-            raise ValueError("Folderpath of references " + self.settings['folderpath_references'] + ' does not exist')
+
+#    def readSettings(self, filepath_settings):
+#        """ Read settings from setting file
+#
+#        :param filepath_settings: Filepath to settings file
+#        :type filepath_settings: str
+#        """
+#        
+#        def _decode_list(data):
+#            rv = []
+#            for item in data:
+#                if isinstance(item, unicode):
+#                    item = item.encode('utf-8')
+#                elif isinstance(item, list):
+#                    item = _decode_list(item)
+#                elif isinstance(item, dict):
+#                    item = _decode_dict(item)
+#                rv.append(item)
+#            return rv
+#            
+#        def _decode_dict(data):
+#            rv = {}
+#            for key, value in data.iteritems():
+#                if isinstance(key, unicode):
+#                    key = key.encode('utf-8')
+#                if isinstance(value, unicode):
+#                    value = value.encode('utf-8')
+#                elif isinstance(value, list):
+#                    value = _decode_list(value)
+#                elif isinstance(value, dict):
+#                    value = _decode_dict(value)
+#                rv[key] = value
+#            return rv
+#    
+#        if os.path.isfile(filepath_settings):
+#            print('Reading setting from ' + filepath_settings)
+#            with open(filepath_settings) as f:
+#                settings = json.load(f, object_hook=_decode_dict, object_pairs_hook=OrderedDict)
+#                self.checkSettings(settings)
+#                settings = OrderedDict(settings)
+#                # CreateCACSTree
+#                settings['CACSTree'] = CACSTree()
+#                settings['CACSTree'].createTree(settings['CACSTreeDict'])
+#                self.settings = settings
+#        else:
+#            print('Settings file:' + filepath_settings + 'does not exist')
+#            
+#        # Check if folders exist
+#        if not os.path.isdir(self.settings['folderpath_images']):
+#            raise ValueError("Folderpath of image " + self.settings['folderpath_images'] + ' does not exist')
+#        if not os.path.isdir(self.settings['folderpath_references']):
+#            raise ValueError("Folderpath of references " + self.settings['folderpath_references'] + ' does not exist')
 
     def onDeleteButtonClicked(self):
         """ Delete all images in slicer
@@ -793,14 +717,6 @@ class CACSLabelerModuleLogic:
         CardiacAgatstonMeasuresLUTID = self.CardiacAgatstonMeasuresLUTNode.GetID()
         calciumDisplayNode = self.calciumLabelNode.GetDisplayNode()
         calciumDisplayNode.SetAndObserveColorNodeID(CardiacAgatstonMeasuresLUTID)
-
-#    def setLowerPaintThreshold(self):
-#        # sets parameters for paint specific to KEV threshold level
-#        parameterNode = self.editUtil.getParameterNode()
-#        parameterNode.SetParameter("LabelEffect,paintOver","1")
-#        parameterNode.SetParameter("LabelEffect,paintThreshold","1")
-#        parameterNode.SetParameter("LabelEffect,paintThresholdMin","{0}".format(self.lowerThresholdValue))
-#        parameterNode.SetParameter("LabelEffect,paintThresholdMax","{0}".format(self.upperThresholdValue))
 
     def hasImageData(self,volumeNode):
         """This is a dummy logic method that
