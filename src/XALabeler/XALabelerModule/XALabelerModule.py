@@ -1,5 +1,7 @@
 from __main__ import vtk, qt, ctk, slicer
 from slicer.ScriptedLoadableModule import *
+from socket import socket, AF_INET, SOCK_DGRAM
+import socket
 import unittest
 import os
 import SimpleITK as sitk
@@ -12,13 +14,14 @@ from glob import glob
 import random
 import sys
 import os
+import json
 from SegmentEditor import SegmentEditorWidget
 import numpy as np
 dirname = os.path.dirname(os.path.abspath(__file__))
 dir_src = os.path.dirname(os.path.dirname(dirname))
 sys.path.append(dir_src)
 from settings.settings import Settings
-
+import time
 # Import cv2
 dir_cv = dir_src + '/ALLabeler/ALLabeler-site-packages/cv2'
 sys.path.append(dir_cv)
@@ -36,14 +39,14 @@ def splitFilePath(filepath):
     filename = os.path.basename(head)
     return folderpath, filename, file_extension
     
-class ALLabelerModule(ScriptedLoadableModule):
+class XALabelerModule(ScriptedLoadableModule):
   """Uses ScriptedLoadableModule base class, available at:
   https://github.com/Slicer/Slicer/blob/master/Base/Python/slicer/ScriptedLoadableModule.py
   """
 
   def __init__(self, parent):
     ScriptedLoadableModule.__init__(self, parent)
-    self.parent.title = "ALLabelerModule" # TODO make this more human readable by adding spaces
+    self.parent.title = "XALabelerModule" # TODO make this more human readable by adding spaces
     self.parent.categories = ["Examples"]
     self.parent.dependencies = []
     self.parent.contributors = ["John Doe (AnyWare Corp.)"] # replace with "Firstname Lastname (Organization)"
@@ -58,9 +61,9 @@ and Steve Pieper, Isomics, Inc. and was partially funded by NIH grant 3P41RR0132
 """ # replace with organization, grant and thanks.
 
 #
-# ALLabelerModuleWidget
+# XALabelerModuleWidget
 #
-class ALLabelerModuleWidget:
+class XALabelerModuleWidget:
     def __init__(self, parent = None):
         self.currentRegistrationInterface = None
         self.changeIslandTool = None
@@ -69,7 +72,7 @@ class ALLabelerModuleWidget:
         self.localCardiacEditorWidget = None
         self.settings=Settings()
         self.images=[]
-        self.localALEditorWidget = None
+        self.localXALEditorWidget = None
 
         if not parent:
             self.parent = slicer.qMRMLWidget()
@@ -101,7 +104,7 @@ class ALLabelerModuleWidget:
             #  your module to users)
             self.reloadButton = qt.QPushButton("Reload")
             self.reloadButton.toolTip = "Reload this module."
-            self.reloadButton.name = "ALLabelerModule Reload"
+            self.reloadButton.name = "XALabelerModule Reload"
             reloadFormLayout.addWidget(self.reloadButton)
             self.reloadButton.connect('clicked()', self.onReload)
 
@@ -126,65 +129,83 @@ class ALLabelerModuleWidget:
         # Layout within the sample collapsible button
         self.measuresFormLayout = qt.QFormLayout(self.measuresCollapsibleButton)
 
-        # Load input button
-        loadInputButton = qt.QPushButton("Load input data")
-        loadInputButton.toolTip = "Load data to label"
-        loadInputButton.setStyleSheet("background-color: rgb(230,241,255)")
-        self.measuresFormLayout.addRow(loadInputButton)
-        loadInputButton.connect('clicked(bool)', self.onLoadInputButtonClicked)
-        self.loadInputButton = loadInputButton
+        # Start client
+        startButton = qt.QPushButton("START REFINEMENT")
+        startButton.toolTip = "Start refinement"
+        startButton.setStyleSheet("background-color: rgb(230,241,255)")
+        self.measuresFormLayout.addRow(startButton)
+        startButton.connect('clicked(bool)', self.onStartButtonClicked)
+        self.startButton = startButton
         
-        # The Input Volume Selector
-        self.inputFrame = qt.QFrame(self.measuresCollapsibleButton)
-        self.inputFrame.setLayout(qt.QHBoxLayout())
-        self.measuresFormLayout.addRow(self.inputFrame)
+        # Next button
+        nextButton = qt.QPushButton("NEXT QUERY")
+        nextButton.toolTip = "Get next query"
+        nextButton.setStyleSheet("background-color: rgb(230,241,255)")
+        self.measuresFormLayout.addRow(nextButton)
+        nextButton.connect('clicked(bool)', self.onNextButtonClicked)
+        self.nextButton = nextButton
         
-        inputSelector = qt.QLabel("Input Volume: ", self.inputFrame)
-        self.inputFrame.layout().addWidget(inputSelector)
-        inputSelector = slicer.qMRMLNodeComboBox(self.inputFrame)
-        inputSelector.nodeTypes = ( ("vtkMRMLScalarVolumeNode"), "" )
-        inputSelector.addEnabled = False
-        inputSelector.removeEnabled = False
-        inputSelector.setMRMLScene( slicer.mrmlScene )
-        self.inputSelector = inputSelector
-        self.inputSelector.currentNodeChanged.connect(self.onCurrentNodeChanged)
-        self.measuresFormLayout.addRow(self.inputSelector)
-        #self.inputFrame.layout().addWidget(self.inputSelector)
+        # Set albel
+        label = qt.QLabel("Please solve action")
+#        nextButton.toolTip = "Get next query"
+#        nextButton.setStyleSheet("background-color: rgb(230,241,255)")
+#        self.measuresFormLayout.addRow(nextButton)
+#        nextButton.connect('clicked(bool)', self.onNextButtonClicked)
 
-        # Collapsible button for Output Parameters
-        self.measuresCollapsibleButtonOutput = ctk.ctkCollapsibleButton()
-        self.measuresCollapsibleButtonOutput.text = "Output Parameters"
-        self.layout.addWidget(self.measuresCollapsibleButtonOutput)
+        self.measuresFormLayout.addRow(label)
+        self.label = label
         
-        # Layout within the sample collapsible button
-        self.measuresFormLayoutOutput = qt.QFormLayout(self.measuresCollapsibleButtonOutput)
-
-        # Apply background growing 
-        bgGrowingButton = qt.QPushButton("Apply background growing")
-        bgGrowingButton.toolTip = "Apply background growi"
-        bgGrowingButton.setStyleSheet("background-color: rgb(230,241,255)")
-        bgGrowingButton.enabled = False
-        self.measuresFormLayoutOutput.addRow(bgGrowingButton)
-        bgGrowingButton.connect('clicked(bool)', self.onBgGrowingButtonButtonClicked)
-        self.bgGrowingButton = bgGrowingButton
-        
-        # Save output button
-        saveOutputButton = qt.QPushButton("Save output data")
-        saveOutputButton.toolTip = "Save data"
-        saveOutputButton.setStyleSheet("background-color: rgb(230,241,255)")
-        saveOutputButton.enabled = False
-        self.measuresFormLayoutOutput.addRow(saveOutputButton)
-        saveOutputButton.connect('clicked(bool)', self.onSaveOutputButtonClicked)
-        self.saveOutputButton = saveOutputButton
-        
-        # Delete scans button
-        deleteButton = qt.QPushButton("Delete data")
-        deleteButton.toolTip = "Delete data"
-        deleteButton.setStyleSheet("background-color: rgb(230,241,255)")
-        deleteButton.enabled = False
-        self.measuresFormLayoutOutput.addRow(deleteButton)
-        deleteButton.connect('clicked(bool)', self.onDeleteButtonClicked)
-        self.deleteButton = deleteButton
+#        # The Input Volume Selector
+#        self.inputFrame = qt.QFrame(self.measuresCollapsibleButton)
+#        self.inputFrame.setLayout(qt.QHBoxLayout())
+#        self.measuresFormLayout.addRow(self.inputFrame)
+#        
+#        inputSelector = qt.QLabel("Input Volume: ", self.inputFrame)
+#        self.inputFrame.layout().addWidget(inputSelector)
+#        inputSelector = slicer.qMRMLNodeComboBox(self.inputFrame)
+#        inputSelector.nodeTypes = ( ("vtkMRMLScalarVolumeNode"), "" )
+#        inputSelector.addEnabled = False
+#        inputSelector.removeEnabled = False
+#        inputSelector.setMRMLScene( slicer.mrmlScene )
+#        self.inputSelector = inputSelector
+#        self.inputSelector.currentNodeChanged.connect(self.onCurrentNodeChanged)
+#        self.measuresFormLayout.addRow(self.inputSelector)
+#        #self.inputFrame.layout().addWidget(self.inputSelector)
+#
+#        # Collapsible button for Output Parameters
+#        self.measuresCollapsibleButtonOutput = ctk.ctkCollapsibleButton()
+#        self.measuresCollapsibleButtonOutput.text = "Output Parameters"
+#        self.layout.addWidget(self.measuresCollapsibleButtonOutput)
+#        
+#        # Layout within the sample collapsible button
+#        self.measuresFormLayoutOutput = qt.QFormLayout(self.measuresCollapsibleButtonOutput)
+#
+#        # Apply background growing 
+#        bgGrowingButton = qt.QPushButton("Apply background growing")
+#        bgGrowingButton.toolTip = "Apply background growi"
+#        bgGrowingButton.setStyleSheet("background-color: rgb(230,241,255)")
+#        bgGrowingButton.enabled = False
+#        self.measuresFormLayoutOutput.addRow(bgGrowingButton)
+#        bgGrowingButton.connect('clicked(bool)', self.onBgGrowingButtonButtonClicked)
+#        self.bgGrowingButton = bgGrowingButton
+#        
+#        # Save output button
+#        saveOutputButton = qt.QPushButton("Save output data")
+#        saveOutputButton.toolTip = "Save data"
+#        saveOutputButton.setStyleSheet("background-color: rgb(230,241,255)")
+#        saveOutputButton.enabled = False
+#        self.measuresFormLayoutOutput.addRow(saveOutputButton)
+#        saveOutputButton.connect('clicked(bool)', self.onSaveOutputButtonClicked)
+#        self.saveOutputButton = saveOutputButton
+#        
+#        # Delete scans button
+#        deleteButton = qt.QPushButton("Delete data")
+#        deleteButton.toolTip = "Delete data"
+#        deleteButton.setStyleSheet("background-color: rgb(230,241,255)")
+#        deleteButton.enabled = False
+#        self.measuresFormLayoutOutput.addRow(deleteButton)
+#        deleteButton.connect('clicked(bool)', self.onDeleteButtonClicked)
+#        self.deleteButton = deleteButton
         
         # Add vertical spacer
         self.layout.addStretch(1)
@@ -192,6 +213,7 @@ class ALLabelerModuleWidget:
         # sets the layout to Red Slice Only
         layoutManager = slicer.app.layoutManager()
         layoutManager.setLayout(slicer.vtkMRMLLayoutNode.SlicerLayoutOneUpRedSliceView)
+        self.layoutManager = layoutManager
         
         # Load color table
         dirname = os.path.dirname(os.path.abspath(__file__))
@@ -210,13 +232,18 @@ class ALLabelerModuleWidget:
         filepath_colorTable = dirname + '/CardiacAgatstonMeasuresLUT.ctbl'
         
         # Set MODE to 'CACS'
-        self.settings['MODE'] = 'CACS'
+        #self.settings['MODE'] = 'CACS'
+        self.settings['MODE'] = 'CACS_REF'
         
         # Create color table
         if self.settings['MODE']=='CACSTREE_CUMULATIVE':
             self.settings['CACSTree'].createColorTable(filepath_colorTable)
-        else:
+        elif self.settings['MODE']=='CACS':
             self.settings['CACSTree'].createColorTable_CACS(filepath_colorTable)
+        elif self.settings['MODE']=='CACS_REF':
+            self.settings['CACSTree'].createColorTable_CACS_REF(filepath_colorTable)
+        else:
+            raise ValueError('MODE' + self.settings['MODE'] + 'does not exist!')
         
         # Load color table
         slicer.util.loadColorTable(filepath_colorTable)
@@ -249,69 +276,118 @@ class ALLabelerModuleWidget:
         CardiacAgatstonMeasuresLUTID = self.CardiacAgatstonMeasuresLUTNode.GetID()
         calciumDisplayNode = self.calciumLabelNode.GetDisplayNode()
         calciumDisplayNode.SetAndObserveColorNodeID(CardiacAgatstonMeasuresLUTID)
+    
+    def startClient(self):
+        print("Starting client")
+        self.dest = ("127.0.0.1", 20001)
+        self.bufferSize = 1024
+
+    def onStartButtonClicked(self):
+        # Start client
+        self.startClient()
         
-    def onLoadInputButtonClicked(self):
+    def onNextButtonClicked(self):
+        # Start client
+        msg = ("NEXT").encode('utf-8')
+        UDPClientSocket = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
+        UDPClientSocket.sendto(msg, self.dest)
+        try:
+            msgFromServer = UDPClientSocket.recvfrom(self.bufferSize)
+            msg = msgFromServer[0]
+            refAction = json.loads(msg)
+            print('refAction:', refAction)
+        except:
+            print('Could not get next coommand. Please check the server!')
         
-        # Deleta all old nodes
-        if self.settings['filter_input_by_reference']:
-            filenames_ref = glob(self.settings['folderpath_references'] + '/*label.nrrd')
-            filter_input = self.settings['filter_input'].decode('utf-8')[1:-1]
-            filenames = glob(self.settings['folderpath_images'] + '/' + filter_input)
-            filter_input_ref = ''
-            for f in filenames:
-                _,fname,_ = splitFilePath(f)
-                ref_found = False
-                for ref in filenames_ref:
-                    ref_found = ref_found or (fname in ref)
-                if not ref_found:
-                    filter_input_ref = filter_input_ref + fname + '.mhd '
-                    
-            filter_input_ref = '(' + filter_input_ref + ')'
-            filenames = qt.QFileDialog.getOpenFileNames(self.parent, 
-                                                   'Open files', 
-                                                   self.settings['folderpath_images'],
-                                                   filter_input_ref)
-            
-        else:
-            filenames = qt.QFileDialog.getOpenFileNames(self.parent, 
-                                                   'Open files', 
-                                                   self.settings['folderpath_images'],
-                                                   self.settings['filter_input'])
+        # Save all existing nodes
+        filepath = refAction['fp_image'].encode("utf-8")
+        _, name,_ = splitFilePath(filepath)
         
-        # Read images
-        imagenames = []
-        for filepath in filenames:
-            _, name,_ = splitFilePath(filepath)
-            properties={'Name': name}
+        # Check if image already exists
+        nodes=slicer.util.getNodesByClass('vtkMRMLScalarVolumeNode')
+        nodeFound = False
+        for node in nodes:
+            name_node = node.GetName()
+            if name_node==name:
+                nodeFound = True
+        print('nodeFound', nodeFound)
+
+        # Load image
+        if not nodeFound:
+            # Save old nodes
+            self.saveOutput(overwrite=False)
+            # Delete old node
+            self.onDeleteButtonClicked()
+            print('name123', name)
+            properties={'name': name}
             node = slicer.util.loadVolume(filepath, returnNode=True, properties=properties)[1]
             node.SetName(name)
-            imagenames.append(name)
+        else:
+            # Save old nodes
+            self.saveOutput(overwrite=False)
 
-        if len(filenames)>0:
-            self.bgGrowingButton.enabled = True
-            self.saveOutputButton.enabled = True
-            self.deleteButton.enabled = True
-            
-            # Create label
-            inputImageNode = self.inputSelector.currentNode()
-            inputVolumeName = inputImageNode.GetName()
+        # Load label
+        filepath_label = refAction['fp_label_lesion'].encode("utf-8")
+        print('filepath123', filepath_label)
+        label_im = sitk.ReadImage(filepath_label)
+        label = sitk.GetArrayFromImage(label_im)
+        
+        # Create binary mask
+        mask = np.zeros(label.shape)
+        IDX = refAction['IDX']
+        for p in IDX:
+            mask[p[2], p[1], p[0]] = 1
+        sliceNumber = IDX[0][2]
 
-            #if 'label' not in inputVolumeName:
-            calciumName = inputVolumeName + '-label'
-            node_label = slicer.util.getFirstNodeByName(calciumName)
-            if node_label is None and 'label' not in inputVolumeName:
-                inputVolume = su.PullVolumeFromSlicer(inputVolumeName)
-                labelImage = sitk.Image(inputVolume.GetSize(), sitk.sitkInt16)
-                labelImage.CopyInformation(inputVolume)
-                calciumName = inputVolumeName + '-label'
-                su.PushLabel(labelImage, calciumName)
-                self.assignLabelLUT(calciumName)
+        # Set label
+        _, name_label,_ = splitFilePath(filepath_label)
+        if not nodeFound:
+            label = label * mask
+            label = sitk.GetImageFromArray(label)
+            label.CopyInformation(label_im)
+            node = su.PushVolumeToSlicer(label, name=name_label, className='vtkMRMLLabelMapVolumeNode')
+            node.SetName(name_label)
+            slicer.util.setSliceViewerLayers(label = node)
+            self.assignLabelLUT(name_label)
+        else:
+            node = slicer.mrmlScene.GetFirstNodeByName(name_label)
+            label_node = slicer.util.arrayFromVolume(node)
+            label = label_node * (1-mask) + label * mask
+            slicer.util.updateVolumeFromArray(node, label)
+            self.assignLabelLUT(name_label)
 
-            # Creates and adds the custom Editor Widget to the module
-            if self.localALEditorWidget is None:
-                self.localALEditorWidget = ALEditorWidget(parent=self.parent, showVolumesFrame=False, settings=self.settings)
-                self.localALEditorWidget.setup()
-                self.localALEditorWidget.enter()
+        # Show action
+        self.label.setText('ACTION: ' + refAction['action'])
+        
+        # Change view
+        red = self.layoutManager.sliceWidget('Red')
+        redLogic = red.sliceLogic()
+        offset = redLogic.GetSliceOffset()
+        origen = label_im.GetOrigin()
+        offset = origen[2] + sliceNumber * 3.0
+        redLogic.SetSliceOffset(offset)
+        
+        # Creates and adds the custom Editor Widget to the module
+        if self.localXALEditorWidget is None:
+            self.localXALEditorWidget = XALEditorWidget(parent=self.parent, showVolumesFrame=False, settings=self.settings)
+            self.localXALEditorWidget.setup()
+            self.localXALEditorWidget.enter()
+    
+        # Set LowerPaintThreshold
+        self.lowerThresholdValue = 130
+        self.upperThresholdValue = 1000
+        self.setLowerPaintThreshold()
+        
+        
+
+    
+    def setLowerPaintThreshold(self):
+        # sets parameters for paint specific to KEV threshold level
+        parameterNode = self.editUtil.getParameterNode()
+        parameterNode.SetParameter("LabelEffect,paintOver","1")
+        parameterNode.SetParameter("LabelEffect,paintThreshold","1")
+        parameterNode.SetParameter("LabelEffect,paintThresholdMin","{0}".format(self.lowerThresholdValue))
+        parameterNode.SetParameter("LabelEffect,paintThresholdMax","{0}".format(self.upperThresholdValue))
 
     def onDeleteButtonClicked(self):
         print ('onDeleteButtonClicked')
@@ -319,6 +395,7 @@ class ALLabelerModuleWidget:
         nodes=slicer.util.getNodesByClass('vtkMRMLScalarVolumeNode')
         for node in nodes:
             slicer.mrmlScene.RemoveNode(node)
+        #time.sleep(3)
             
             
     def filterBG(self, image):
@@ -348,6 +425,10 @@ class ALLabelerModuleWidget:
                 _ = su.PushVolumeToSlicer(sitkImageOutput,node)
 
     def onSaveOutputButtonClicked(self):
+        self.saveOutput(overwrite=True)
+        
+    def saveOutput(self, overwrite=True):
+        print('saveOutput')
         # Save references
         folderpath_output = self.settings['folderpath_references']
         volumeNodes = slicer.util.getNodesByClass('vtkMRMLScalarVolumeNode')
@@ -356,10 +437,19 @@ class ALLabelerModuleWidget:
             if 'label' in volume_name:
                 filename_output = volume_name
                 filepath = folderpath_output + '/' + filename_output + '.nrrd'
+                if not overwrite:
+                    exist = os.path.isfile(filepath)
+                    num = 0
+                    while exist:
+                        num_str = "{:02n}".format(num)
+                        filepath = folderpath_output + '/' + filename_output + '_' + num_str +'.nrrd'
+                        exist = os.path.isfile(filepath)
+                        num = num + 1
+                        
                 slicer.util.saveNode(node, filepath)
                 print('Saveing reference to: ' + filepath)
 
-    def onReload(self,moduleName="ALLabelerModule"):
+    def onReload(self,moduleName="XALabelerModule"):
         """Generic reload method for any scripted module.
             ModuleWizard will subsitute correct default moduleName.
             Note: customized for use in CardiacAgatstonModule
@@ -376,7 +466,7 @@ class ALLabelerModuleWidget:
 
         globals()[moduleName] = slicer.util.reloadScriptedModule(moduleName)
 
-    def onReloadAndTest(self,moduleName="ALLabelerModule"):
+    def onReloadAndTest(self,moduleName="XALabelerModule"):
         try:
             self.onReload()
             evalString = 'globals()["%s"].%sTest()' % (moduleName, moduleName)
@@ -393,12 +483,12 @@ class ALLabelerModuleWidget:
         pass
 
 #
-# ALLabelerModuleLogic
+# XALabelerModuleLogic
 #
-class ALEditorWidget(Editor.EditorWidget):
+class XALEditorWidget(Editor.EditorWidget):
     def __init__(self, parent=None, showVolumesFrame=None, settings=None):
         self.settings = settings
-        super(ALEditorWidget, self).__init__(parent=parent, showVolumesFrame=showVolumesFrame)
+        super(XALEditorWidget, self).__init__(parent=parent, showVolumesFrame=showVolumesFrame)
         
     def createEditBox(self):
         self.editLabelMapsFrame.collapsed = False
@@ -406,7 +496,7 @@ class ALEditorWidget(Editor.EditorWidget):
         self.editBoxFrame.objectName = 'EditBoxFrame'
         self.editBoxFrame.setLayout(qt.QVBoxLayout())
         self.effectsToolsFrame.layout().addWidget(self.editBoxFrame)
-        self.toolsBox = ALEditBox(self.settings, self.editBoxFrame, optionsFrame=self.effectOptionsFrame)
+        self.toolsBox = XALEditBox(self.settings, self.editBoxFrame, optionsFrame=self.effectOptionsFrame)
 
     def installShortcutKeys(self):
         """Turn on editor-wide shortcuts.  These are active independent
@@ -434,10 +524,10 @@ class ALEditorWidget(Editor.EditorWidget):
             shortcut.connect( 'activated()', callback )
             self.shortcuts.append(shortcut)
             
-class ALEditBox(EditorLib.EditBox):
+class XALEditBox(EditorLib.EditBox):
     def __init__(self, settings, *args, **kwargs):
         self.settings = settings
-        super(ALEditBox, self).__init__(*args, **kwargs)
+        super(XALEditBox, self).__init__(*args, **kwargs)
         
     # create the edit box
     def create(self):
