@@ -113,7 +113,7 @@ class CACSTree():
             
         # Add REF color
         f = open(filepath_colorTable, 'a')
-        color_str = str(200) + ' ' + str(120) + ' ' + str(140) + ' ' + str(255)
+        color_str = str(10) + ' ' + str(10) + ' ' + str(250) + ' ' + str(255)
         f.write(str(5) + ' ' + 'REF' + ' ' + color_str + '\n')
         f.close()
             
