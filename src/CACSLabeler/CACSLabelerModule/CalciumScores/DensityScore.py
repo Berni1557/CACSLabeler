@@ -101,8 +101,10 @@ class DensityScore():
         else:
             raise ValueError('Mode ' + settings['MODE'] + ' does not exist.')
             
-        folderpath_export_csv = settings['folderpath_export_csv']
+        folderpath_export_csv = settings['folderpath_export']
         filepath_csv = os.path.join(folderpath_export_csv, self.name + '.csv')
+        if not os.path.isdir(folderpath_export_csv):
+            os.mkdir(folderpath_export_csv)
         with open(filepath_csv, 'w') as file:
             writer = csv.writer(file, delimiter=';', lineterminator="\n")
             writer.writerow(columns)

@@ -18,11 +18,11 @@ dirname = os.path.dirname(os.path.abspath(__file__))
 dir_src = os.path.dirname(os.path.dirname(dirname))
 sys.path.append(dir_src)
 from settings.settings import Settings
-
+from SimpleITK import ConnectedComponentImageFilter
 # Import cv2
-dir_cv = dir_src + '/ALLabeler/ALLabeler-site-packages/cv2'
-sys.path.append(dir_cv)
-import cv2
+#dir_cv = dir_src + '/ALLabeler/ALLabeler-site-packages/cv2'
+#sys.path.append(dir_cv)
+#import cv2
 
 def splitFilePath(filepath):
     """ Split filepath into folderpath, filename and file extension
@@ -237,7 +237,7 @@ class ALLabelerModuleWidget:
         
         
     def writeSettings(self, filepath_settings):
-        self.setting.writeSettings(filepath_settings)
+        self.settings.writeSettings(filepath_settings)
     
     def readSettings(self, filepath_settings):
         self.settings.readSettings(filepath_settings)
@@ -322,12 +322,25 @@ class ALLabelerModuleWidget:
             
             
     def filterBG(self, image):
-        image = image.astype(np.uint8)
-        _,imageThr = cv2.threshold(image,0.5,1,cv2.THRESH_BINARY)
-        contours, _ = cv2.findContours(imageThr, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
-        mask = np.zeros(image.shape, dtype=np.uint8)
-        mask = cv2.drawContours(mask, contours, -1, (1), -1)
-        mask = 1-mask
+        # Filter labeled background
+        arr = sitk.GetImageFromArray(image)
+        compFilter = ConnectedComponentImageFilter()
+        labeled_sitk = compFilter.Execute(arr==0)
+        labeled = sitk.GetArrayFromImage(labeled_sitk)
+        ncomponents = labeled.max()
+        # Extract backgound index
+        idx_max=-1
+        pix_sum=-1
+        for c in range(1,ncomponents+1):
+            labeledc = labeled==c
+            if labeledc.sum()>pix_sum:
+                pix_sum = labeledc.sum()
+                idx_max = c
+        mask_bg = (labeled==idx_max)*1
+        # Combine FG mask and BG mask
+        mask_fg = image
+        mask_fg[mask_fg==1]=0
+        mask = mask_bg + mask_fg
         return mask
         
     def onBgGrowingButtonButtonClicked(self):
@@ -341,7 +354,8 @@ class ALLabelerModuleWidget:
                     image = arr[i,:,:]
                     if image.sum()>0: 
                         mask = self.filterBG(image)
-                        image = image + mask
+                        #image = image + mask
+                        image = mask
                     arr[i,:,:] = image
                 sitkImageOutput = sitk.GetImageFromArray(arr)
                 sitkImageOutput.CopyInformation(image_sitk)

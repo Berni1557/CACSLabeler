@@ -22,10 +22,8 @@ dir_src = os.path.dirname(os.path.dirname(dirname))
 sys.path.append(dir_src)
 from settings.settings import Settings
 import time
-# Import cv2
-dir_cv = dir_src + '/ALLabeler/ALLabeler-site-packages/cv2'
-sys.path.append(dir_cv)
-import cv2
+from sys import platform
+from SimpleITK import ConnectedComponentImageFilter
 
 refAction = dict({'fp_image': '', 
                   'fp_label_lesion': '',
@@ -79,6 +77,7 @@ class XALabelerModuleWidget:
         #self.inputImageNode = None
         self.localCardiacEditorWidget = None
         self.settings=Settings()
+        print('Settings', self.settings)
         self.images=[]
         self.localXALEditorWidget = None
 
@@ -327,7 +326,7 @@ class XALabelerModuleWidget:
         
         
     def writeSettings(self, filepath_settings):
-        self.setting.writeSettings(filepath_settings)
+        self.settings.writeSettings(filepath_settings)
     
     def readSettings(self, filepath_settings):
         self.settings.readSettings(filepath_settings)
@@ -433,6 +432,9 @@ class XALabelerModuleWidget:
             self.onDeleteButtonClicked()
             properties={'name': name}
             node = slicer.util.loadVolume(filepath, returnNode=True, properties=properties)[1]
+            if node is None:
+                raise ValueError('Could not load image: ', filepath)
+                
             node.SetName(name)
         else:
             # Save old nodes
@@ -745,15 +747,36 @@ class XALabelerModuleWidget:
         for node in nodes:
             slicer.mrmlScene.RemoveNode(node)
             
-            
     def filterBG(self, image):
-        image = image.astype(np.uint8)
-        _,imageThr = cv2.threshold(image,0.5,1,cv2.THRESH_BINARY)
-        contours, _ = cv2.findContours(imageThr, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
-        mask = np.zeros(image.shape, dtype=np.uint8)
-        mask = cv2.drawContours(mask, contours, -1, (1), -1)
-        mask = 1-mask
+        # Filter labeled background
+        arr = sitk.GetImageFromArray(image)
+        compFilter = ConnectedComponentImageFilter()
+        labeled_sitk = compFilter.Execute(arr==0)
+        labeled = sitk.GetArrayFromImage(labeled_sitk)
+        ncomponents = labeled.max()
+        # Extract backgound index
+        idx_max=-1
+        pix_sum=-1
+        for c in range(1,ncomponents+1):
+            labeledc = labeled==c
+            if labeledc.sum()>pix_sum:
+                pix_sum = labeledc.sum()
+                idx_max = c
+        mask_bg = (labeled==idx_max)*1
+        # Combine FG mask and BG mask
+        mask_fg = image
+        mask_fg[mask_fg==1]=0
+        mask = mask_bg + mask_fg
         return mask
+            
+#    def filterBG(self, image):
+#        image = image.astype(np.uint8)
+#        _,imageThr = cv2.threshold(image,0.5,1,cv2.THRESH_BINARY)
+#        contours, _ = cv2.findContours(imageThr, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+#        mask = np.zeros(image.shape, dtype=np.uint8)
+#        mask = cv2.drawContours(mask, contours, -1, (1), -1)
+#        mask = 1-mask
+#        return mask
         
     def onBgGrowingButtonButtonClicked(self):
         volumeNodes = slicer.util.getNodesByClass('vtkMRMLScalarVolumeNode')
@@ -766,7 +789,8 @@ class XALabelerModuleWidget:
                     image = arr[i,:,:]
                     if image.sum()>0: 
                         mask = self.filterBG(image)
-                        image = image + mask
+                        #image = image + mask
+                        image = mask
                     arr[i,:,:] = image
                 sitkImageOutput = sitk.GetImageFromArray(arr)
                 sitkImageOutput.CopyInformation(image_sitk)

@@ -257,115 +257,12 @@ class CACSLabelerModuleWidget:
         
         # Load color table
         slicer.util.loadColorTable(filepath_colorTable)
-    
-#    def onCurrentNodeChanged(self):
-#        print('onCurrentNodeChanged')
-        
         
     def writeSettings(self, filepath_settings):
         self.settings.writeSettings(filepath_settings)
-        
-#    def writeSettings(self, filepath_settings):
-#        """ Write settings into setting file
-#
-#        :param filepath_settings: Filepath to settings file
-#        :type filepath_settings: str
-#        """
-#        
-#        CACSTreeDict = self.initCACSTreeDict()
-#        
-#        columns_CACSTREE_CUMULATIVE = ['PatientID', 'SeriesInstanceUID', 'CC', 
-#                             'RCA', 'RCA_PROXIMAL', 'RCA_MID', 'RCA_DISTAL',
-#                             'LM', 'LM_BIF_LAD_LCX', 'LM_BIF_LAD', 'LM_BIF_LCX', 'LM_BRANCH',
-#                             'LAD', 'LAD_PROXIMAL', 'LAD_MID', 'LAD_DISTAL', 'LAD_SIDE_BRANCH',
-#                             'LCX', 'LCX_PROXIMAL', 'LCX_MID', 'LCX_DISTAL', 'LCX_SIDE_BRANCH',
-#                             'RIM']
-#
-#        columns_CACS = ['PatientID', 'SeriesInstanceUID', 'CC', 'RCA', 'LAD', 'LCX']
-#
-#        # Initialize settings
-#        settingsDefault = {'folderpath_images': 'H:/cloud/cloud_data/Projects/DL/Code/src/datasets/DISCHARGE/data_cacs/Images',
-#                           'folderpath_references': 'H:/cloud/cloud_data/Projects/DL/Code/src/datasets/DISCHARGE/data_cacs/References',
-#                           'filepath_export': 'H:/cloud/cloud_data/Projects/CACSLabeler/code/data/export.json',
-#                           'folderpath_export_csv': 'H:/cloud/cloud_data/Projects/CACSLabeler/code/data/export_csv',
-#                           'filter_input': '(*.mhd)',
-#                           'CalciumScores': ['AGATSTON_SCORE', 'VOLUME_SCORE', 'DENSITY_SCORE', 'NUMLESION_SCORE', 'LESIONVOLUME_SCORE'],
-#                           'filter_input_by_reference': False,
-#                           'filter_reference_with': ['-label.'],
-#                           'filter_reference_without': ['label-lesion.'],
-#                           'CACSTreeDict': CACSTreeDict,
-#                           'columns_CACSTREE_CUMULATIVE': columns_CACSTREE_CUMULATIVE,
-#                           'columns_CACS': columns_CACS,
-#                           'MODE': 'CACSTREE_CUMULATIVE'} # MODE can be 'CACS','CACSTREE' or 'CACSTREE_CUMULATIVE'
-#                           
-#        print('Writing setting to ' + filepath_settings)
-#        with open(filepath_settings, 'a') as file:
-#            file.write(json.dumps(settingsDefault, indent=4, encoding='utf-8'))
-#        self.settings = settingsDefault
-#        
-#    def checkSettings(self, settings):
-#        for key in settings.keys():
-#            value = settings[key]
-#            if isinstance(value, str):
-#                if "\\" in value:
-#                    raise ValueError("Backslash not allowed in settings file")
-                
 
     def readSettings(self, filepath_settings):      
         self.settings.readSettings(filepath_settings)
-        
-
-#    def readSettings(self, filepath_settings):
-#        """ Read settings from setting file
-#
-#        :param filepath_settings: Filepath to settings file
-#        :type filepath_settings: str
-#        """
-#        
-#        def _decode_list(data):
-#            rv = []
-#            for item in data:
-#                if isinstance(item, unicode):
-#                    item = item.encode('utf-8')
-#                elif isinstance(item, list):
-#                    item = _decode_list(item)
-#                elif isinstance(item, dict):
-#                    item = _decode_dict(item)
-#                rv.append(item)
-#            return rv
-#            
-#        def _decode_dict(data):
-#            rv = {}
-#            for key, value in data.iteritems():
-#                if isinstance(key, unicode):
-#                    key = key.encode('utf-8')
-#                if isinstance(value, unicode):
-#                    value = value.encode('utf-8')
-#                elif isinstance(value, list):
-#                    value = _decode_list(value)
-#                elif isinstance(value, dict):
-#                    value = _decode_dict(value)
-#                rv[key] = value
-#            return rv
-#    
-#        if os.path.isfile(filepath_settings):
-#            print('Reading setting from ' + filepath_settings)
-#            with open(filepath_settings) as f:
-#                settings = json.load(f, object_hook=_decode_dict, object_pairs_hook=OrderedDict)
-#                self.checkSettings(settings)
-#                settings = OrderedDict(settings)
-#                # CreateCACSTree
-#                settings['CACSTree'] = CACSTree()
-#                settings['CACSTree'].createTree(settings['CACSTreeDict'])
-#                self.settings = settings
-#        else:
-#            print('Settings file:' + filepath_settings + 'does not exist')
-#            
-#        # Check if folders exist
-#        if not os.path.isdir(self.settings['folderpath_images']):
-#            raise ValueError("Folderpath of image " + self.settings['folderpath_images'] + ' does not exist')
-#        if not os.path.isdir(self.settings['folderpath_references']):
-#            raise ValueError("Folderpath of references " + self.settings['folderpath_references'] + ' does not exist')
 
     def onDeleteButtonClicked(self):
         """ Delete all images in slicer
@@ -395,7 +292,6 @@ class CACSLabelerModuleWidget:
         start = time.time()
 
         # Compute calcium scores
-        
         if self.settings['MODE']=='CACSTREE_CUMULATIVE':
             arteries_dict = self.get_arteries_dict()
             arteries_sum = OrderedDict()
@@ -422,6 +318,8 @@ class CACSLabelerModuleWidget:
             for scorename in self.settings['CalciumScores']:
                 if score.name in scorename:
                     s = score.compute(inputVolume, inputVolumeLabel, arteries_dict=arteries_dict, arteries_sum=arteries_sum)
+                    #s['ImageName'] = 'PatientX_' + inputVolumeName
+                    #print('ImageName', s['ImageName'])
                     score.show()
                     self.calciumScoresResult.append(s)
         print('Computation time', time.time() - start)
@@ -454,7 +352,7 @@ class CACSLabelerModuleWidget:
             arteries_sum = OrderedDict()
             arteries_sum['CC'] = ['LAD', 'LCX', 'RCA']
 
-        filepath_export = self.settings['filepath_export']
+        filepath_export = os.path.join(self.settings['folderpath_export'], 'export.json')
         volumeNodes = slicer.util.getNodesByClass('vtkMRMLScalarVolumeNode')
         self.calciumScoresResult=[]
         for node in volumeNodes:
@@ -466,12 +364,17 @@ class CACSLabelerModuleWidget:
                     for scorename in self.settings['CalciumScores']:
                         if score.name == scorename:
                             inputVolumeNameLabel = volume_name
-                            inputVolumeName = inputVolumeNameLabel[0:-13]
+                            #inputVolumeName = inputVolumeNameLabel[0:-13]
+                            inputVolumeName = inputVolumeNameLabel.split('-')[0]
+                            print('inputVolumeName', inputVolumeName)
                             inputVolumeLabel = su.PullVolumeFromSlicer(inputVolumeNameLabel)
                             inputVolume = su.PullVolumeFromSlicer(inputVolumeName)
                             s = score.compute(inputVolume, inputVolumeLabel, arteries_dict, arteries_sum)
                             scoreResult.append(s)
-                self.calciumScoresResult.append({'ImageName':volume_name, 'Scores': scoreResult})
+
+                ImageName = 'PatientX_' + inputVolumeName
+                self.calciumScoresResult.append({'ImageName':ImageName, 'Scores': scoreResult})
+
         
         # Export information
         print('Exporting:')
@@ -483,6 +386,10 @@ class CACSLabelerModuleWidget:
             with open(filepath_export) as f:
                 calciumScoresResult = json.load(f)
             self.calciumScoresResult = calciumScoresResult + self.calciumScoresResult
+        
+        folderpath_export = self.settings['folderpath_export']
+        if not os.path.isdir(folderpath_export):
+            os.mkdir(folderpath_export)
             
         # Save json
         with open(filepath_export, 'w') as file:
@@ -493,28 +400,43 @@ class CACSLabelerModuleWidget:
         
     def onExportScoreButtonRefClicked(self):
         
-        references = glob(self.settings['folderpath_references'] + '/*-label-lesion.nrrd')
+        folderpath_references = self.settings['folderpath_references'].encode("utf-8")
+        print('Reading references from ' + folderpath_references)
+        references_lesion = glob(folderpath_references + '/*-label-lesion.nrrd')
+        references_lesion_pred = glob(folderpath_references + '/*-label-lesion_pred.nrrd')
+        references = references_lesion + references_lesion_pred
+        print('references_lesion_pred12', references_lesion_pred)
+        print('folderpath_references12', folderpath_references)
+        print('X', folderpath_references + '/*-label-lesion_pred.nrrd')
         images = glob(self.settings['folderpath_images'] + '/*.mhd')
-        for ref in references[0:2]:
+        for i,ref in enumerate(references):
             _,refname,_ = splitFilePath(ref)
-            name = refname[0:-13]
+            #name = refname[0:-13]
+            name = refname.split('-')[0]
             for im in images:
                 if name in im:
                     break
+            name = name.encode("utf-8")
+            refname = refname.encode("utf-8")
 
             # Read image
             properties={'Name': name}
             node = slicer.util.loadVolume(im, returnNode=True, properties=properties)[1]
             node.SetName(name)
+
             # Read reference
             properties={'Name': refname}
             node = slicer.util.loadVolume(ref, returnNode=True, properties=properties)[1]
             node.SetName(refname)
+            
             # Export score
             self.onExportScoreButtonClicked()
+            
             # Delete node
             self.onDeleteButtonClicked()
             
+        print('Finished')
+        
  
     def onSaveOutputButtonClicked(self):
         # Save

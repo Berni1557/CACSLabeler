@@ -86,10 +86,23 @@ class Settings:
         columns_CACS = ['PatientID', 'SeriesInstanceUID', 'CC', 'RCA', 'LAD', 'LCX']
 
         # Initialize settings
-        settingsDefault = {'folderpath_images': 'H:/cloud/cloud_data/Projects/DL/Code/src/datasets/DISCHARGE/data_cacs/Images',
-                           'folderpath_references': 'H:/cloud/cloud_data/Projects/DL/Code/src/datasets/DISCHARGE/data_cacs/References',
-                           'filepath_export': 'H:/cloud/cloud_data/Projects/CACSLabeler/code/data/export.json',
-                           'folderpath_export_csv': 'H:/cloud/cloud_data/Projects/CACSLabeler/code/data/export_csv',
+#        settingsDefault = {'folderpath_images': 'H:/cloud/cloud_data/Projects/DL/Code/src/datasets/DISCHARGE/data_cacs/Images',
+#                           'folderpath_references': 'H:/cloud/cloud_data/Projects/DL/Code/src/datasets/DISCHARGE/data_cacs/References',
+#                           'filepath_export': 'H:/cloud/cloud_data/Projects/CACSLabeler/code/data/export.json',
+#                           'folderpath_export_csv': 'H:/cloud/cloud_data/Projects/CACSLabeler/code/data/export_csv',
+#                           'filter_input': '(*.mhd)',
+#                           'CalciumScores': ['AGATSTON_SCORE', 'VOLUME_SCORE', 'DENSITY_SCORE', 'NUMLESION_SCORE', 'LESIONVOLUME_SCORE'],
+#                           'filter_input_by_reference': False,
+#                           'filter_reference_with': ['-label.'],
+#                           'filter_reference_without': ['label-lesion.'],
+#                           'CACSTreeDict': CACSTreeDict,
+#                           'columns_CACSTREE_CUMULATIVE': columns_CACSTREE_CUMULATIVE,
+#                           'columns_CACS': columns_CACS,
+#                           'MODE': 'CACSTREE_CUMULATIVE'} # MODE can be 'CACS','CACSTREE' or 'CACSTREE_CUMULATIVE'
+
+        settingsDefault = {'folderpath_images': '/mnt/SSD2/cloud_data/Projects/DL/Code/src/datasets/DISCHARGE/data_cacs/Images',
+                           'folderpath_references': '/mnt/SSD2/cloud_data/Projects/DL/Code/src/datasets/DISCHARGE/data_cacs/References',
+                           'folderpath_export': '/mnt/SSD2/cloud_data/Projects/CACSLabeler/code/data/export',
                            'filter_input': '(*.mhd)',
                            'CalciumScores': ['AGATSTON_SCORE', 'VOLUME_SCORE', 'DENSITY_SCORE', 'NUMLESION_SCORE', 'LESIONVOLUME_SCORE'],
                            'filter_input_by_reference': False,
@@ -98,7 +111,7 @@ class Settings:
                            'CACSTreeDict': CACSTreeDict,
                            'columns_CACSTREE_CUMULATIVE': columns_CACSTREE_CUMULATIVE,
                            'columns_CACS': columns_CACS,
-                           'MODE': 'CACSTREE_CUMULATIVE'} # MODE can be 'CACS','CACSTREE' or 'CACSTREE_CUMULATIVE'
+                           'MODE': 'CACS'} # MODE can be 'CACS','CACSTREE' or 'CACSTREE_CUMULATIVE'
                            
         print('Writing setting to ' + filepath_settings)
         with open(filepath_settings, 'a') as file:
