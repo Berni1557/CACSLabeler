@@ -105,7 +105,9 @@ class Agatston():
                     # Iterate over lesions from an artery
                     for c in range(1,ncomponents+1):
                         labeledc = labeled==c
+                        #print('labeledc123', labeledc.sum())
                         image_mask = image * labeledc
+                        #print('image_mask', image_mask.sum())
                         # Iterate over slices
                         for s in range(0,labeled.shape[0]):
                             image_mask_slice = image_mask[s,:,:]
@@ -117,9 +119,12 @@ class Agatston():
                             densfactor = self.densityFactor(attenuation)
                             # Calculate agatston score for a lesion
                             agatstonLesionSlice = area * densfactor
+#                            print('attenuation123', attenuation)
+#                            print('densfactor123', densfactor)
+#                            print('pixelArea123', pixelArea)
+#                            print('agatstonLesionSlice123', agatstonLesionSlice)
                             agatstonArtery = agatstonArtery + agatstonLesionSlice
                             
-                    #print('time1:', time.time() - start)
                     agatston[key] = agatstonArtery
                 else:
                     agatston[key] = 0.0
@@ -185,13 +190,19 @@ class Agatston():
                 for score in scores:
                     if score['NAME'] == self.name:
                         # Create row
-                        name_list = sample['ImageName'].split('_')
-                        if len(name_list)==2:
-                            PatientID = sample['ImageName'].split('_')[0]
-                            SeriesInstanceUID = sample['ImageName'].split('_')[1]
+                        if settings['DATASET']=='DISCHARGE':
+                            name_list = sample['ImageName'].split('_')
+                            if len(name_list)==2:
+                                PatientID = sample['ImageName'].split('_')[0]
+                                SeriesInstanceUID = sample['ImageName'].split('_')[1]
+                            else:
+                                PatientID = ''
+                                SeriesInstanceUID = ''
                         else:
-                            PatientID = ''
-                            SeriesInstanceUID = ''
+                            name_list = sample['ImageName']
+                            PatientID = 'PatientX'
+                            SeriesInstanceUID = name_list
+
                         row = [PatientID, SeriesInstanceUID]
                         for c in columns[2:]:
                             row = row + [str(score[c]).replace('.', ',')]

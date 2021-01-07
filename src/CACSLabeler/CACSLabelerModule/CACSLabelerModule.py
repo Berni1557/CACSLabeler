@@ -345,19 +345,27 @@ class CACSLabelerModuleWidget:
             arteries_sum['CC'] = self.settings['CACSTree'].getChildrenNamesByName('CC')
             arteries_sum['NCC'] = self.settings['CACSTree'].getChildrenNamesByName('NCC')
         elif self.settings['MODE']=='CACS':
-            arteries_dict = OrderedDict()
-            arteries_dict['LAD'] = 2
-            arteries_dict['LCX'] = 3
-            arteries_dict['RCA'] = 4
-            arteries_sum = OrderedDict()
-            arteries_sum['CC'] = ['LAD', 'LCX', 'RCA']
+            if self.settings['DATASET']=='DISCHARGE':
+                arteries_dict = OrderedDict()
+                arteries_dict['LAD'] = 2
+                arteries_dict['LCX'] = 3
+                arteries_dict['RCA'] = 4
+                arteries_sum = OrderedDict()
+                arteries_sum['CC'] = ['LAD', 'LCX', 'RCA']
+            else:
+                arteries_dict = OrderedDict()
+                arteries_dict['LAD'] = 1
+                arteries_dict['LCX'] = 2
+                arteries_dict['RCA'] = 3
+                arteries_sum = OrderedDict()
+                arteries_sum['CC'] = ['LAD', 'LCX', 'RCA']
 
         filepath_export = os.path.join(self.settings['folderpath_export'], 'export.json')
         volumeNodes = slicer.util.getNodesByClass('vtkMRMLScalarVolumeNode')
         self.calciumScoresResult=[]
         for node in volumeNodes:
             volume_name = node.GetName()
-            if 'label' in volume_name:
+            if ('label' in volume_name and self.settings['DATASET']=='DISCHARGE') or (volume_name[-1:] == 'R' and self.settings['DATASET']=='ORCASCORE'):
                 # Compute calcium scores
                 scoreResult=[]
                 for score in self.calciumScores:
@@ -365,8 +373,10 @@ class CACSLabelerModuleWidget:
                         if score.name == scorename:
                             inputVolumeNameLabel = volume_name
                             #inputVolumeName = inputVolumeNameLabel[0:-13]
-                            inputVolumeName = inputVolumeNameLabel.split('-')[0]
-                            print('inputVolumeName', inputVolumeName)
+                            if self.settings['DATASET']=='DISCHARGE':
+                                inputVolumeName = inputVolumeNameLabel.split('-')[0]
+                            else:
+                                inputVolumeName = inputVolumeNameLabel[0:-1]
                             inputVolumeLabel = su.PullVolumeFromSlicer(inputVolumeNameLabel)
                             inputVolume = su.PullVolumeFromSlicer(inputVolumeName)
                             s = score.compute(inputVolume, inputVolumeLabel, arteries_dict, arteries_sum)
@@ -401,23 +411,31 @@ class CACSLabelerModuleWidget:
     def onExportScoreButtonRefClicked(self):
         
         folderpath_references = self.settings['folderpath_references'].encode("utf-8")
-        print('Reading references from ' + folderpath_references)
-        references_lesion = glob(folderpath_references + '/*-label-lesion.nrrd')
-        references_lesion_pred = glob(folderpath_references + '/*-label-lesion_pred.nrrd')
-        references = references_lesion + references_lesion_pred
-        print('references_lesion_pred12', references_lesion_pred)
-        print('folderpath_references12', folderpath_references)
-        print('X', folderpath_references + '/*-label-lesion_pred.nrrd')
-        images = glob(self.settings['folderpath_images'] + '/*.mhd')
+        if self.settings['DATASET']=='DISCHARGE':
+            references_lesion = glob(folderpath_references + '/*-label-lesion.nrrd')
+            references_lesion_pred = glob(folderpath_references + '/*-label-lesion_pred.nrrd')
+            references = references_lesion + references_lesion_pred
+            images = glob(self.settings['folderpath_images'] + '/*.mhd')
+        else:
+            references = glob(folderpath_references + '/*R.mhd')
+            images = glob(self.settings['folderpath_images'] + '/*CTI.mhd')
+
         for i,ref in enumerate(references):
             _,refname,_ = splitFilePath(ref)
-            #name = refname[0:-13]
-            name = refname.split('-')[0]
-            for im in images:
-                if name in im:
-                    break
-            name = name.encode("utf-8")
-            refname = refname.encode("utf-8")
+            if self.settings['DATASET']=='DISCHARGE':
+                name = refname.split('-')[0]
+                for im in images:
+                    if name in im:
+                        break
+                name = name.encode("utf-8")
+                refname = refname.encode("utf-8")
+            else:
+                name = refname[0:-1]
+                for im in images:
+                    if name in im:
+                        break
+                name = name.encode("utf-8")
+                refname = refname.encode("utf-8")
 
             # Read image
             properties={'Name': name}

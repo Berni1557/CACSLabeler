@@ -111,7 +111,8 @@ class Settings:
                            'CACSTreeDict': CACSTreeDict,
                            'columns_CACSTREE_CUMULATIVE': columns_CACSTREE_CUMULATIVE,
                            'columns_CACS': columns_CACS,
-                           'MODE': 'CACS'} # MODE can be 'CACS','CACSTREE' or 'CACSTREE_CUMULATIVE'
+                           'MODE': 'CACS', # MODE can be 'CACS','CACSTREE' or 'CACSTREE_CUMULATIVE'
+                           'DATASET': 'ORCASCORE'}  # DATaSEt can be "DISCHARGE" or "ORCASCORE"
                            
         print('Writing setting to ' + filepath_settings)
         with open(filepath_settings, 'a') as file:
