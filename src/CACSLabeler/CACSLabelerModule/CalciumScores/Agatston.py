@@ -74,6 +74,7 @@ class Agatston():
         spacing = inputVolume.GetSpacing()
         pixelArea = spacing[0]*spacing[1]
         arteries_sum_keys = list(arteries_sum.keys())
+        #print('arteries_sum_keys123', arteries_sum_keys)
 
         # Neighborhood of connected components (6-connectivity)
         structure = np.zeros((3,3,3))
@@ -122,7 +123,7 @@ class Agatston():
 #                            print('attenuation123', attenuation)
 #                            print('densfactor123', densfactor)
 #                            print('pixelArea123', pixelArea)
-#                            print('agatstonLesionSlice123', agatstonLesionSlice)
+                            #print('agatstonLesionSlice123', agatstonLesionSlice)
                             agatstonArtery = agatstonArtery + agatstonLesionSlice
                             
                     agatston[key] = agatstonArtery
@@ -130,11 +131,16 @@ class Agatston():
                     agatston[key] = 0.0
 
         # Sum agatston score over arteries_sum
+        #print('arteries_sum_keys123', arteries_sum_keys)
+        #print('arteries_sum1', arteries_sum)
+        #print('arteries_sum_keys1', arteries_sum_keys)
         for key in arteries_sum_keys:
             value = 0
             for key_sum in arteries_sum[key]:
+                #print('key_sum0', key_sum)
                 value += agatston[key_sum]
             agatston[key] = value
+        #print('agatston0', agatston)
         
         # Sum agatston score over arteries
         #agatstonScore=0.0
@@ -150,7 +156,10 @@ class Agatston():
         
         agatston['AgatstonScore'] = agatstonScore
         agatston['Grading'] = self.CACSGrading(agatstonScore)
+        
+        #print('agatston1', agatston)
         self.agatston = agatston
+        
         return agatston
     
     def show(self):
@@ -190,19 +199,25 @@ class Agatston():
                 for score in scores:
                     if score['NAME'] == self.name:
                         # Create row
-                        if settings['DATASET']=='DISCHARGE':
-                            name_list = sample['ImageName'].split('_')
-                            if len(name_list)==2:
-                                PatientID = sample['ImageName'].split('_')[0]
-                                SeriesInstanceUID = sample['ImageName'].split('_')[1]
-                            else:
-                                PatientID = ''
-                                SeriesInstanceUID = ''
-                        else:
-                            name_list = sample['ImageName']
-                            PatientID = 'PatientX'
-                            SeriesInstanceUID = name_list
+#                        if settings['DATASET']=='DISCHARGE':
+#                            name_list = sample['ImageName'].split('_')
+#                            if len(name_list)==2:
+#                                PatientID = sample['ImageName'].split('_')[0]
+#                                SeriesInstanceUID = sample['ImageName'].split('_')[1]
+#                            else:
+#                                PatientID = ''
+#                                SeriesInstanceUID = ''
+#                        else:
+#                            name_list = sample['ImageName']
+#                            PatientID = 'PatientX'
+#                            SeriesInstanceUID = name_list
 
+                        PatientID = sample['ImageName'].split('_')[0]
+                        SeriesInstanceUID = sample['ImageName'].split('_')[1]
+                        
+                        #print('PatientID', PatientID)
+                        #print('SeriesInstanceUID', SeriesInstanceUID)
+                        #print('score0', score)
                         row = [PatientID, SeriesInstanceUID]
                         for c in columns[2:]:
                             row = row + [str(score[c]).replace('.', ',')]

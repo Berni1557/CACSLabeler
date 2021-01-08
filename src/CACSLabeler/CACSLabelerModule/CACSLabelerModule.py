@@ -227,6 +227,7 @@ class CACSLabelerModuleWidget:
         
         # Add scores
         self.calciumScores = [Agatston(), VolumeScore(), DensityScore(), NumLesions(), LesionVolume()]
+        #self.calciumScores = [Agatston()]
 
         # Export calcium scores
         exportButton = qt.QPushButton("Export Calcium Scores")
@@ -353,19 +354,26 @@ class CACSLabelerModuleWidget:
                 arteries_sum = OrderedDict()
                 arteries_sum['CC'] = ['LAD', 'LCX', 'RCA']
             else:
-                arteries_dict = OrderedDict()
-                arteries_dict['LAD'] = 1
-                arteries_dict['LCX'] = 2
-                arteries_dict['RCA'] = 3
-                arteries_sum = OrderedDict()
-                arteries_sum['CC'] = ['LAD', 'LCX', 'RCA']
+                arteries_dict0 = OrderedDict()
+                arteries_dict0['LAD'] = 1
+                arteries_dict0['LCX'] = 2
+                arteries_dict0['RCA'] = 3
+                arteries_sum0 = OrderedDict()
+                arteries_sum0['CC'] = ['LAD', 'LCX', 'RCA']
+
+                arteries_dict1 = OrderedDict()
+                arteries_dict1['LAD'] = 2
+                arteries_dict1['LCX'] = 3
+                arteries_dict1['RCA'] = 4
+                arteries_sum1 = OrderedDict()
+                arteries_sum1['CC'] = ['LAD', 'LCX', 'RCA']
 
         filepath_export = os.path.join(self.settings['folderpath_export'], 'export.json')
         volumeNodes = slicer.util.getNodesByClass('vtkMRMLScalarVolumeNode')
         self.calciumScoresResult=[]
         for node in volumeNodes:
             volume_name = node.GetName()
-            if ('label' in volume_name and self.settings['DATASET']=='DISCHARGE') or (volume_name[-1:] == 'R' and self.settings['DATASET']=='ORCASCORE'):
+            if ('label' in volume_name and self.settings['DATASET']=='DISCHARGE') or (('label' in volume_name or volume_name[-1:] == 'R') and self.settings['DATASET']=='ORCASCORE'):
                 # Compute calcium scores
                 scoreResult=[]
                 for score in self.calciumScores:
@@ -376,9 +384,23 @@ class CACSLabelerModuleWidget:
                             if self.settings['DATASET']=='DISCHARGE':
                                 inputVolumeName = inputVolumeNameLabel.split('-')[0]
                             else:
-                                inputVolumeName = inputVolumeNameLabel[0:-1]
+                                if 'lesion' in inputVolumeNameLabel:
+                                    inputVolumeName = inputVolumeNameLabel.split('-')[0]
+                                else:
+                                    inputVolumeName = inputVolumeNameLabel[0:-1]
+                            #print('inputVolumeNameLabel', inputVolumeNameLabel)
+                            #print('inputVolumeName', inputVolumeName)
                             inputVolumeLabel = su.PullVolumeFromSlicer(inputVolumeNameLabel)
                             inputVolume = su.PullVolumeFromSlicer(inputVolumeName)
+                            if self.settings['DATASET']=='ORCASCORE':
+                                if volume_name[-1:] == 'R':
+                                    arteries_dict = arteries_dict0
+                                    arteries_sum = arteries_sum0
+                                else:
+                                    arteries_dict = arteries_dict1
+                                    arteries_sum = arteries_sum1
+                            #print('scorename0', scorename)
+                            #print('arteries_sum0', arteries_sum)
                             s = score.compute(inputVolume, inputVolumeLabel, arteries_dict, arteries_sum)
                             scoreResult.append(s)
 
@@ -417,7 +439,9 @@ class CACSLabelerModuleWidget:
             references = references_lesion + references_lesion_pred
             images = glob(self.settings['folderpath_images'] + '/*.mhd')
         else:
-            references = glob(folderpath_references + '/*R.mhd')
+            references_lesion = glob(folderpath_references + '/*-label-lesion.nrrd')
+            references_orca = glob(folderpath_references + '/*R.mhd')
+            references = references_orca + references_lesion
             images = glob(self.settings['folderpath_images'] + '/*CTI.mhd')
 
         for i,ref in enumerate(references):
@@ -430,12 +454,20 @@ class CACSLabelerModuleWidget:
                 name = name.encode("utf-8")
                 refname = refname.encode("utf-8")
             else:
-                name = refname[0:-1]
-                for im in images:
-                    if name in im:
-                        break
-                name = name.encode("utf-8")
-                refname = refname.encode("utf-8")
+                if 'lesion' in refname:
+                    name = refname.split('-')[0]
+                    for im in images:
+                        if name in im:
+                            break
+                    name = name.encode("utf-8")
+                    refname = refname.encode("utf-8")
+                else:
+                    name = refname[0:-1]
+                    for im in images:
+                        if name in im:
+                            break
+                    name = name.encode("utf-8")
+                    refname = refname.encode("utf-8")
 
             # Read image
             properties={'Name': name}
