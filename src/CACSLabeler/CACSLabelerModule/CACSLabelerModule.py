@@ -33,6 +33,7 @@ dir_src = os.path.dirname(os.path.dirname(dirname))
 sys.path.append(dir_src)
 from CACSTree.CACSTree import CACSTree, Lesion
 from settings.settings import Settings
+import shutil
 
 ############## CACSLabelerModule ##############
 
@@ -412,17 +413,19 @@ class CACSLabelerModuleWidget:
         print('Exporting:')
         for res in self.calciumScoresResult:
             print(res['ImageName'])
-        
+
+        folderpath_export = self.settings['folderpath_export']
+        #shutil.rmtree(folderpath_export)
+        #os.mkdir(folderpath_export)
+        if not os.path.isdir(folderpath_export):
+            os.mkdir(folderpath_export)
+            
         # Load json if exist
         if os.path.exists(filepath_export):
             with open(filepath_export) as f:
                 calciumScoresResult = json.load(f)
             self.calciumScoresResult = calciumScoresResult + self.calciumScoresResult
-        
-        folderpath_export = self.settings['folderpath_export']
-        if not os.path.isdir(folderpath_export):
-            os.mkdir(folderpath_export)
-            
+                    
         # Save json
         with open(filepath_export, 'w') as file:
             file.write(json.dumps(self.calciumScoresResult, indent=4)) # use `json.loads` to do the reverse

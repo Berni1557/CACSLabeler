@@ -86,8 +86,6 @@ class Agatston():
         structure[1,0,1] = 1
         structure[1,1,0] = 1
         
-        #start = time.time()
-        
         # Iterate over arteries
         agatston = OrderedDict([('NAME', self.name), ('AgatstonScore', 0), ('Grading', None)])
         for key in self.arteries_dict.keys():
@@ -106,9 +104,7 @@ class Agatston():
                     # Iterate over lesions from an artery
                     for c in range(1,ncomponents+1):
                         labeledc = labeled==c
-                        #print('labeledc123', labeledc.sum())
                         image_mask = image * labeledc
-                        #print('image_mask', image_mask.sum())
                         # Iterate over slices
                         for s in range(0,labeled.shape[0]):
                             image_mask_slice = image_mask[s,:,:]
@@ -120,10 +116,6 @@ class Agatston():
                             densfactor = self.densityFactor(attenuation)
                             # Calculate agatston score for a lesion
                             agatstonLesionSlice = area * densfactor
-#                            print('attenuation123', attenuation)
-#                            print('densfactor123', densfactor)
-#                            print('pixelArea123', pixelArea)
-                            #print('agatstonLesionSlice123', agatstonLesionSlice)
                             agatstonArtery = agatstonArtery + agatstonLesionSlice
                             
                     agatston[key] = agatstonArtery
@@ -131,22 +123,13 @@ class Agatston():
                     agatston[key] = 0.0
 
         # Sum agatston score over arteries_sum
-        #print('arteries_sum_keys123', arteries_sum_keys)
-        #print('arteries_sum1', arteries_sum)
-        #print('arteries_sum_keys1', arteries_sum_keys)
         for key in arteries_sum_keys:
             value = 0
             for key_sum in arteries_sum[key]:
                 #print('key_sum0', key_sum)
                 value += agatston[key_sum]
             agatston[key] = value
-        #print('agatston0', agatston)
-        
-        # Sum agatston score over arteries
-        #agatstonScore=0.0
-        #for key in self.arteries:
-        #    agatstonScore = agatstonScore + agatston[key]
-        
+
         if 'CC' in list(agatston.keys()):
             agatstonScore = agatston['CC']
         else:
@@ -156,8 +139,6 @@ class Agatston():
         
         agatston['AgatstonScore'] = agatstonScore
         agatston['Grading'] = self.CACSGrading(agatstonScore)
-        
-        #print('agatston1', agatston)
         self.agatston = agatston
         
         return agatston
@@ -198,26 +179,8 @@ class Agatston():
                 scores = sample['Scores']
                 for score in scores:
                     if score['NAME'] == self.name:
-                        # Create row
-#                        if settings['DATASET']=='DISCHARGE':
-#                            name_list = sample['ImageName'].split('_')
-#                            if len(name_list)==2:
-#                                PatientID = sample['ImageName'].split('_')[0]
-#                                SeriesInstanceUID = sample['ImageName'].split('_')[1]
-#                            else:
-#                                PatientID = ''
-#                                SeriesInstanceUID = ''
-#                        else:
-#                            name_list = sample['ImageName']
-#                            PatientID = 'PatientX'
-#                            SeriesInstanceUID = name_list
-
                         PatientID = sample['ImageName'].split('_')[0]
                         SeriesInstanceUID = sample['ImageName'].split('_')[1]
-                        
-                        #print('PatientID', PatientID)
-                        #print('SeriesInstanceUID', SeriesInstanceUID)
-                        #print('score0', score)
                         row = [PatientID, SeriesInstanceUID]
                         for c in columns[2:]:
                             row = row + [str(score[c]).replace('.', ',')]

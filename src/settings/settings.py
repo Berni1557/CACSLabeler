@@ -74,15 +74,8 @@ class Settings:
         :type filepath_settings: str
         """
         
-        CACSTreeDict = CACSTree.initCACSTreeDict()
+        CACSTreeDict, columns_CACSTREE_CUMULATIVE = CACSTree.initCACSTreeDict(tree='tree_V02')
         
-        columns_CACSTREE_CUMULATIVE = ['PatientID', 'SeriesInstanceUID', 'CC', 
-                             'RCA', 'RCA_PROXIMAL', 'RCA_MID', 'RCA_DISTAL',
-                             'LM', 'LM_BIF_LAD_LCX', 'LM_BIF_LAD', 'LM_BIF_LCX', 'LM_BRANCH',
-                             'LAD', 'LAD_PROXIMAL', 'LAD_MID', 'LAD_DISTAL', 'LAD_SIDE_BRANCH',
-                             'LCX', 'LCX_PROXIMAL', 'LCX_MID', 'LCX_DISTAL', 'LCX_SIDE_BRANCH',
-                             'RIM']
-
         columns_CACS = ['PatientID', 'SeriesInstanceUID', 'CC', 'RCA', 'LAD', 'LCX']
 
         # Initialize settings
@@ -111,8 +104,8 @@ class Settings:
                            'CACSTreeDict': CACSTreeDict,
                            'columns_CACSTREE_CUMULATIVE': columns_CACSTREE_CUMULATIVE,
                            'columns_CACS': columns_CACS,
-                           'MODE': 'CACS', # MODE can be 'CACS','CACSTREE' or 'CACSTREE_CUMULATIVE'
-                           'DATASET': 'ORCASCORE'}  # DATaSEt can be "DISCHARGE" or "ORCASCORE"
+                           'MODE': 'CACSTREE_CUMULATIVE', # MODE can be 'CACS','CACSTREE' or 'CACSTREE_CUMULATIVE'
+                           'DATASET': 'DISCHARGE'}  # DATaSEt can be "DISCHARGE" or "ORCASCORE"
                            
         print('Writing setting to ' + filepath_settings)
         with open(filepath_settings, 'a') as file:

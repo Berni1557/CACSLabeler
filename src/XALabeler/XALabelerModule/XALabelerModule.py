@@ -214,7 +214,14 @@ class XALabelerModuleWidget:
         LABEL_LESION_NEW_BUTTON.connect('clicked(bool)', self.onLABEL_LESION_NEW_BUTTONClicked)
         self.LABEL_LESION_NEW_BUTTON = LABEL_LESION_NEW_BUTTON 
 
-        
+        # LABEL_LESION_NEW_BUTTON
+        UNCERTAINTY_BUTTON = qt.QPushButton("Label new lesions")
+        UNCERTAINTY_BUTTON.toolTip = "Stop refinement2"
+        UNCERTAINTY_BUTTON.setStyleSheet("background-color: rgb(230,241,255)")
+        UNCERTAINTY_BUTTON.enabled = False
+        self.measuresFormLayoutH.addRow(UNCERTAINTY_BUTTON)
+        UNCERTAINTY_BUTTON.connect('clicked(bool)', self.onLABEL_UNCERTAINTY_BUTTONClicked)
+        self.UNCERTAINTY_BUTTON = UNCERTAINTY_BUTTON    
         
         
 #        # The Input Volume Selector
@@ -383,6 +390,9 @@ class XALabelerModuleWidget:
         refAction = self.refAction
         refAction['action'] = 'LABEL_LESION_NEW'
         self.refine_lesion_new(refAction)
+        
+    def onLABEL_UNCERTAINTY_BUTTONClicked(self):
+        print('onLABEL_UNCERTAINTY_BUTTONClicked')
         
     def onNextButtonClicked(self):
         # Start client
