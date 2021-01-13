@@ -395,6 +395,7 @@ class XALabelerModuleWidget:
             msgFromServer = UDPClientSocket.recvfrom(self.bufferSize)
             msg = msgFromServer[0]
             refAction = json.loads(msg)
+            print('refAction123', refAction)
             self.refAction = refAction
         except:
             print('Could not get next coommand. Please check the server!')
@@ -654,6 +655,7 @@ class XALabelerModuleWidget:
     def refine_lesion(self, refAction):
         
         filepath = refAction['fp_image'].encode("utf-8")
+        print('filepath1234', filepath)
         _, name,_ = splitFilePath(filepath)
         
         # Check if image already exists
@@ -671,6 +673,7 @@ class XALabelerModuleWidget:
             # Delete old node
             self.onDeleteButtonClicked()
             properties={'name': name}
+            print('filepath123', filepath)
             node = slicer.util.loadVolume(filepath, returnNode=True, properties=properties)[1]
             node.SetName(name)
         else:
@@ -685,9 +688,18 @@ class XALabelerModuleWidget:
         # Create binary mask
         mask = np.zeros(label.shape)
         IDX = refAction['IDX']
-        for p in IDX:
-            mask[p[2], p[1], p[0]] = 1
-        sliceNumber = refAction['SLICE']
+        SLICE = int(refAction['SLICE'])
+        print('IDX123', IDX)
+        print('SLICE123', SLICE)
+        NumPixel = len(IDX[0])
+        for p in range(NumPixel):
+            x=IDX[0][p]
+            y=IDX[1][p]
+            mask[SLICE, x, y] = 1
+
+#        for p in IDX:
+#            mask[SLICE], p[1], p[0]] = 1
+#        sliceNumber = refAction['SLICE']
 
         # Set label
         _, name_label,_ = splitFilePath(filepath_label)
@@ -714,7 +726,7 @@ class XALabelerModuleWidget:
         redLogic = red.sliceLogic()
         offset = redLogic.GetSliceOffset()
         origen = label_im.GetOrigin()
-        offset = origen[2] + sliceNumber * 3.0
+        offset = origen[2] + SLICE * 3.0
         redLogic.SetSliceOffset(offset)
         
         # Creates and adds the custom Editor Widget to the module
