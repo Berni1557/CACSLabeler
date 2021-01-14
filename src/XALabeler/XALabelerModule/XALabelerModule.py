@@ -179,7 +179,7 @@ class XALabelerModuleWidget:
         self.measuresFormLayoutH = qt.QFormLayout(self.measuresCollapsibleButton2)
 
         # LABEL_LESION_BUTTON
-        LABEL_LESION_BUTTON = qt.QPushButton("Label lesion")
+        LABEL_LESION_BUTTON = qt.QPushButton("Verify lesion label")
         LABEL_LESION_BUTTON.toolTip = "Stop refinement2"
         LABEL_LESION_BUTTON.setStyleSheet("background-color: rgb(230,241,255)")
         LABEL_LESION_BUTTON.enabled = False
@@ -188,7 +188,7 @@ class XALabelerModuleWidget:
         self.LABEL_LESION_BUTTON = LABEL_LESION_BUTTON
         
         # LABEL_REGION_BUTTON
-        LABEL_REGION_BUTTON = qt.QPushButton("Label region")
+        LABEL_REGION_BUTTON = qt.QPushButton("Refine coronary artery region")
         LABEL_REGION_BUTTON.toolTip = "Stop refinement2"
         LABEL_REGION_BUTTON.setStyleSheet("background-color: rgb(230,241,255)")
         LABEL_REGION_BUTTON.enabled = False
@@ -197,7 +197,7 @@ class XALabelerModuleWidget:
         self.LABEL_REGION_BUTTON = LABEL_REGION_BUTTON
         
         # LABEL_REGION_BUTTON
-        LABEL_REGION_NEW_BUTTON = qt.QPushButton("Label new lesion region")
+        LABEL_REGION_NEW_BUTTON = qt.QPushButton("Label new coronary artery region")
         LABEL_REGION_NEW_BUTTON.toolTip = "Stop refinement2"
         LABEL_REGION_NEW_BUTTON.setStyleSheet("background-color: rgb(230,241,255)")
         LABEL_REGION_NEW_BUTTON.enabled = False
@@ -215,10 +215,10 @@ class XALabelerModuleWidget:
         self.LABEL_LESION_NEW_BUTTON = LABEL_LESION_NEW_BUTTON 
 
         # LABEL_LESION_NEW_BUTTON
-        UNCERTAINTY_BUTTON = qt.QPushButton("Label new lesions")
+        UNCERTAINTY_BUTTON = qt.QPushButton("Add UNCERTAIN label")
         UNCERTAINTY_BUTTON.toolTip = "Stop refinement2"
         UNCERTAINTY_BUTTON.setStyleSheet("background-color: rgb(230,241,255)")
-        UNCERTAINTY_BUTTON.enabled = False
+        UNCERTAINTY_BUTTON.enabled = True
         self.measuresFormLayoutH.addRow(UNCERTAINTY_BUTTON)
         UNCERTAINTY_BUTTON.connect('clicked(bool)', self.onLABEL_UNCERTAINTY_BUTTONClicked)
         self.UNCERTAINTY_BUTTON = UNCERTAINTY_BUTTON    
