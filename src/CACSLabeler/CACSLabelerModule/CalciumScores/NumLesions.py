@@ -8,9 +8,10 @@ from SimpleITK import ConnectedComponentImageFilter
 import SimpleITK as sitk
 import time
 import csv
+from CalciumScores.CalciumScoreBase import CalciumScoreBase
 
 # Agatston score
-class NumLesions():
+class NumLesions(CalciumScoreBase):
     
     name = 'NUMLESION_SCORE'
     
@@ -123,12 +124,14 @@ class NumLesions():
                     if score['NAME'] == self.name:
                         # Create row
                         name_list = sample['ImageName'].split('_')
-                        if len(name_list)==2:
-                            PatientID = sample['ImageName'].split('_')[0]
-                            SeriesInstanceUID = sample['ImageName'].split('_')[1]
-                        else:
-                            PatientID = ''
-                            SeriesInstanceUID = ''
+                        PatientID = score['PatientID']
+                        SeriesInstanceUID = score['SeriesInstanceUID']
+#                        if len(name_list)==2:
+#                            PatientID = sample['ImageName'].split('_')[0]
+#                            SeriesInstanceUID = sample['ImageName'].split('_')[1]
+#                        else:
+#                            PatientID = ''
+#                            SeriesInstanceUID = ''
                         row = [PatientID, SeriesInstanceUID]
                         for c in columns[2:]:
                             row = row + [str(score[c]).replace('.', ',')]

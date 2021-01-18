@@ -24,6 +24,8 @@ from CalciumScores.VolumeScore import VolumeScore
 from CalciumScores.DensityScore import DensityScore
 from CalciumScores.NumLesions import NumLesions
 from CalciumScores.LesionVolume import LesionVolume
+from CalciumScores.CalciumScoreBase import CalciumScoreBase
+
 from collections import defaultdict, OrderedDict
 import imp
 imp.reload(sys.modules['CalciumScores'])
@@ -49,8 +51,83 @@ def splitFilePath(filepath):
     filename = os.path.basename(head)
     return folderpath, filename, file_extension
 
-   
 
+class Image:
+    def __init__(self, fip_image=None, fip_ref=None):
+        if fip_image is None and fip_ref is not None:
+            _,ref_name,_ = splitFilePath(fip_ref)
+            if len(ref_name.split('_'))==1:
+                PatientID = ''
+                SeriesInstanceUID = ref_name.split('-')[0]
+                image_name = SeriesInstanceUID
+            else:
+                PatientID = ref_name.split('_')[0]
+                SeriesInstanceUID = ref_name.split('_')[1].split('-')[0]
+                image_name = PatientID + '_' + SeriesInstanceUID
+
+            self.fip_ref = fip_ref
+            self.ref_name = ref_name
+            
+            self.fip_image = ''
+            self.image_name = image_name
+            
+            self.PatientID = PatientID
+            self.SeriesInstanceUID = SeriesInstanceUID
+            
+            
+            
+        if fip_image is not None and fip_ref is None:
+            _,image_name,_ = splitFilePath(fip_image)
+            if len(image_name.split('_'))==1:
+                PatientID = ''
+                SeriesInstanceUID = image_name
+            else:
+                PatientID = image_name.split('_')[0]
+                SeriesInstanceUID = image_name.split('_')[1]
+                image_name = PatientID + '_' + SeriesInstanceUID
+
+            self.fip_ref = None
+            self.ref_name = image_name + '-label-lesion'
+            
+            self.fip_image = ''
+            self.image_name = image_name
+
+            self.PatientID = PatientID
+            self.SeriesInstanceUID = SeriesInstanceUID
+        
+        self.scores = []
+        self.arteries_dict = dict()
+        self.arteries_sum = dict()
+            
+    def findImage(self, images):
+        for image in images:
+            if self.image_name in image:
+                self.fip_image = image
+                
+    def setRef_name(self, ref_name):
+        if len(ref_name.split('_'))==1:
+            PatientID = ''
+            SeriesInstanceUID = ref_name.split('-')[0]
+            image_name = SeriesInstanceUID
+        else:
+            PatientID = ref_name.split('_')[0]
+            SeriesInstanceUID = ref_name.split('_')[1].split('-')[0]
+            image_name = PatientID + '_' + SeriesInstanceUID
+            
+        self.PatientID = PatientID
+        self.SeriesInstanceUID = SeriesInstanceUID
+        self.image_name = image_name
+        self.ref_name = ref_name
+    
+    def scoreExist(self, scorename):
+        for s in self.scores:
+            if s['NAME'] == scorename:
+                return True
+        return False
+            
+            
+            
+            
 class CACSLabelerModule(ScriptedLoadableModule):
   """Uses ScriptedLoadableModule base class, available at:
   https://github.com/Slicer/Slicer/blob/master/Base/Python/slicer/ScriptedLoadableModule.py
@@ -82,6 +159,7 @@ class CACSLabelerModuleWidget:
         self.localCardiacEditorWidget = None
         self.filepath_settings = None
         self.settings=Settings()
+        self.imagelist=[]
 
         if not parent:
             self.parent = slicer.qMRMLWidget()
@@ -227,7 +305,7 @@ class CACSLabelerModuleWidget:
         self.parent.layout().addWidget(self.scoreButton)
         
         # Add scores
-        self.calciumScores = [Agatston(), VolumeScore(), DensityScore(), NumLesions(), LesionVolume()]
+        #self.calciumScores = [Agatston(), VolumeScore(), DensityScore(), NumLesions(), LesionVolume()]
         #self.calciumScores = [Agatston()]
 
         # Export calcium scores
@@ -278,10 +356,42 @@ class CACSLabelerModuleWidget:
     def get_arteries_dict(self):
         arteries = self.settings['CACSTree'].getLesionNames()
         arteries_dict = OrderedDict()
-        for k, key in enumerate(arteries):
-            if k>1:
-                arteries_dict[key]=k
-        return arteries_dict
+        for key in arteries:
+            value = self.settings['CACSTree'].getValueByName(key)
+            if value>1:
+                arteries_dict[key] = self.settings['CACSTree'].getValueByName(key)
+
+        arteries_sum = OrderedDict()
+        # Change order with [::-1] that RCA sum is calculated first and CC sum after
+        for key in arteries[::-1]:  
+            children = self.settings['CACSTree'].getChildrenNamesByName(key)
+            value = self.settings['CACSTree'].getValueByName(key)
+            if not value==0 and len(children)>0:
+                arteries_sum[key] = self.settings['CACSTree'].getChildrenNamesByName(key)
+
+        return arteries_dict, arteries_sum
+        
+#    def get_arteries_dict(self):
+#        arteries = self.settings['CACSTree'].getLesionNames()
+#        arteries_dict = OrderedDict()
+#        for k, key in enumerate(arteries):
+#            if k>1:
+#                arteries_dict[key]=k
+#
+#        arteries_sum = OrderedDict()
+#        if self.settings['MODE']=='CACSTREE_CUMULATIVE':
+#            arteries_sum['RCA'] = self.settings['CACSTree'].getChildrenNamesByName('RCA')
+#            arteries_sum['LM'] = self.settings['CACSTree'].getChildrenNamesByName('LM')
+#            arteries_sum['LAD'] = self.settings['CACSTree'].getChildrenNamesByName('LAD')
+#            arteries_sum['LCX'] = self.settings['CACSTree'].getChildrenNamesByName('LCX')
+#            arteries_sum['AORTA'] = self.settings['CACSTree'].getChildrenNamesByName('AORTA')
+#            arteries_sum['VALVES'] = self.settings['CACSTree'].getChildrenNamesByName('VALVES')
+#            arteries_sum['BONE'] = self.settings['CACSTree'].getChildrenNamesByName('BONE')
+#            arteries_sum['LUNG'] = self.settings['CACSTree'].getChildrenNamesByName('LUNG')
+#            arteries_sum['CC'] = self.settings['CACSTree'].getChildrenNamesByName('CC')
+#            arteries_sum['NCC'] = self.settings['CACSTree'].getChildrenNamesByName('NCC')
+#
+#        return arteries_dict, arteries_sum
         
         
     def onScoreButtonClicked(self):
@@ -320,170 +430,116 @@ class CACSLabelerModuleWidget:
             for scorename in self.settings['CalciumScores']:
                 if score.name in scorename:
                     s = score.compute(inputVolume, inputVolumeLabel, arteries_dict=arteries_dict, arteries_sum=arteries_sum)
-                    #s['ImageName'] = 'PatientX_' + inputVolumeName
-                    #print('ImageName', s['ImageName'])
                     score.show()
                     self.calciumScoresResult.append(s)
         print('Computation time', time.time() - start)
     
-    def export_csv(self):
-        for score in self.calciumScores:
-            score.export_csv(self.settings, self.calciumScoresResult)
-
-        
-    def onExportScoreButtonClicked(self):
-        # Export labels
-        arteries_dict = self.get_arteries_dict()
-        arteries_sum = OrderedDict()
-        if self.settings['MODE']=='CACSTREE_CUMULATIVE':
-            arteries_sum['RCA'] = self.settings['CACSTree'].getChildrenNamesByName('RCA')
-            arteries_sum['LM'] = self.settings['CACSTree'].getChildrenNamesByName('LM')
-            arteries_sum['LAD'] = self.settings['CACSTree'].getChildrenNamesByName('LAD')
-            arteries_sum['LCX'] = self.settings['CACSTree'].getChildrenNamesByName('LCX')
-            arteries_sum['AORTA'] = self.settings['CACSTree'].getChildrenNamesByName('AORTA')
-            arteries_sum['VALVES'] = self.settings['CACSTree'].getChildrenNamesByName('VALVES')
-            arteries_sum['BONE'] = self.settings['CACSTree'].getChildrenNamesByName('BONE')
-            arteries_sum['LUNG'] = self.settings['CACSTree'].getChildrenNamesByName('LUNG')
-            arteries_sum['CC'] = self.settings['CACSTree'].getChildrenNamesByName('CC')
-            arteries_sum['NCC'] = self.settings['CACSTree'].getChildrenNamesByName('NCC')
-        elif self.settings['MODE']=='CACS':
-            if self.settings['DATASET']=='DISCHARGE':
-                arteries_dict = OrderedDict()
-                arteries_dict['LAD'] = 2
-                arteries_dict['LCX'] = 3
-                arteries_dict['RCA'] = 4
-                arteries_sum = OrderedDict()
-                arteries_sum['CC'] = ['LAD', 'LCX', 'RCA']
+    def export_csv(self, appendCSV=False):
+        for scorename in self.settings['CalciumScores']:
+            print('scorename', scorename)
+            CalciumScoreBase.export_csv(self.settings, self.imagelist, appendCSV, scorename=scorename)
+            
+    def extractName(self, inputVolumeNameLabel):
+        if self.settings['DATASET']=='DISCHARGE':
+            inputVolumeName = '-'.join(inputVolumeNameLabel.split('-')[0:-2])
+            PatientID = inputVolumeNameLabel.split('_')[0]
+            SeriesInstanceUID = inputVolumeNameLabel.split('_')[1]
+            return inputVolumeName, PatientID, SeriesInstanceUID
+        if self.settings['DATASET']=='ORCASCORE':
+            if 'lesion' in inputVolumeNameLabel:
+                inputVolumeName = inputVolumeNameLabel.split('-')[0]
+                PatientID = inputVolumeNameLabel.split('_')[0]
+                SeriesInstanceUID = inputVolumeNameLabel.split('_')[1]
+                return inputVolumeName, PatientID, SeriesInstanceUID
             else:
-                arteries_dict0 = OrderedDict()
-                arteries_dict0['LAD'] = 1
-                arteries_dict0['LCX'] = 2
-                arteries_dict0['RCA'] = 3
-                arteries_sum0 = OrderedDict()
-                arteries_sum0['CC'] = ['LAD', 'LCX', 'RCA']
-
-                arteries_dict1 = OrderedDict()
-                arteries_dict1['LAD'] = 2
-                arteries_dict1['LCX'] = 3
-                arteries_dict1['RCA'] = 4
-                arteries_sum1 = OrderedDict()
-                arteries_sum1['CC'] = ['LAD', 'LCX', 'RCA']
-
-        filepath_export = os.path.join(self.settings['folderpath_export'], 'export.json')
-        volumeNodes = slicer.util.getNodesByClass('vtkMRMLScalarVolumeNode')
-        self.calciumScoresResult=[]
-        for node in volumeNodes:
-            volume_name = node.GetName()
-            if ('label' in volume_name and self.settings['DATASET']=='DISCHARGE') or (('label' in volume_name or volume_name[-1:] == 'R') and self.settings['DATASET']=='ORCASCORE'):
-                # Compute calcium scores
-                scoreResult=[]
-                for score in self.calciumScores:
-                    for scorename in self.settings['CalciumScores']:
-                        if score.name == scorename:
-                            inputVolumeNameLabel = volume_name
-                            #inputVolumeName = inputVolumeNameLabel[0:-13]
-                            if self.settings['DATASET']=='DISCHARGE':
-                                inputVolumeName = inputVolumeNameLabel.split('-')[0]
-                            else:
-                                if 'lesion' in inputVolumeNameLabel:
-                                    inputVolumeName = inputVolumeNameLabel.split('-')[0]
-                                else:
-                                    inputVolumeName = inputVolumeNameLabel[0:-1]
-                            #print('inputVolumeNameLabel', inputVolumeNameLabel)
-                            #print('inputVolumeName', inputVolumeName)
-                            inputVolumeLabel = su.PullVolumeFromSlicer(inputVolumeNameLabel)
-                            inputVolume = su.PullVolumeFromSlicer(inputVolumeName)
-                            if self.settings['DATASET']=='ORCASCORE':
-                                if volume_name[-1:] == 'R':
-                                    arteries_dict = arteries_dict0
-                                    arteries_sum = arteries_sum0
-                                else:
-                                    arteries_dict = arteries_dict1
-                                    arteries_sum = arteries_sum1
-                            #print('scorename0', scorename)
-                            #print('arteries_sum0', arteries_sum)
-                            s = score.compute(inputVolume, inputVolumeLabel, arteries_dict, arteries_sum)
-                            scoreResult.append(s)
-
-                ImageName = 'PatientX_' + inputVolumeName
-                self.calciumScoresResult.append({'ImageName':ImageName, 'Scores': scoreResult})
-
+                inputVolumeName = inputVolumeNameLabel[0:-1]
+                PatientID = inputVolumeNameLabel.split('_')[0]
+                SeriesInstanceUID = inputVolumeNameLabel.split('_')[1]
+                return inputVolumeName, PatientID, SeriesInstanceUID
+        return None, None, None
         
+    def addScore(self, scorename, image):
+        if scorename=='AGATSTON_SCORE':
+            score = Agatston()
+        elif scorename=='VOLUME_SCORE':
+            score = VolumeScore()
+        elif scorename=='DENSITY_SCORE':
+            score = DensityScore()
+        elif scorename=='NUMLESION_SCORE':
+            score = NumLesions()
+        elif scorename=='LESIONVOLUME_SCORE':
+            score = LesionVolume()
+        else:
+            raise ValueError('Calcium score ' + scorename + ' does not exist.')
+        
+        if not image.scoreExist(scorename):
+            inputVolume = su.PullVolumeFromSlicer(image.image_name)
+            inputVolumeLabel = su.PullVolumeFromSlicer(image.ref_name)
+            arteries_dict, arteries_sum = self.get_arteries_dict()
+            s = score.compute(inputVolume, inputVolumeLabel, arteries_dict, arteries_sum)
+            image.scores.append(s)
+        return image
+        
+    def onExportScoreButtonClicked(self, appendCSV=False):
+        for image in self.imagelist:
+            for scorename in self.settings['CalciumScores']:
+                image = self.addScore(scorename, image)
+
         # Export information
         print('Exporting:')
-        for res in self.calciumScoresResult:
-            print(res['ImageName'])
+        for image in self.imagelist:
+            print(image.image_name)
 
         folderpath_export = self.settings['folderpath_export']
-        #shutil.rmtree(folderpath_export)
-        #os.mkdir(folderpath_export)
-        if not os.path.isdir(folderpath_export):
-            os.mkdir(folderpath_export)
-            
-        # Load json if exist
-        if os.path.exists(filepath_export):
-            with open(filepath_export) as f:
-                calciumScoresResult = json.load(f)
-            self.calciumScoresResult = calciumScoresResult + self.calciumScoresResult
-                    
-        # Save json
-        with open(filepath_export, 'w') as file:
-            file.write(json.dumps(self.calciumScoresResult, indent=4)) # use `json.loads` to do the reverse
-            
-        # Save csv
-        self.export_csv()
+        if not appendCSV:
+            if os.path.isdir(folderpath_export):
+                shutil.rmtree(folderpath_export)
+                os.mkdir(folderpath_export)
+
+        self.export_csv(appendCSV=appendCSV)
+         
+    def loadImages(self):
+        folderpath_references = self.settings['folderpath_references'].encode("utf-8")
+        fip_references = glob(folderpath_references + '/*.nrrd')
+        fip_images = glob(self.settings['folderpath_images'] + '/*CTI.mhd') + glob(self.settings['folderpath_images'] + '/*.mhd')
+        imagelist = []
+        for fip_ref in fip_references:
+            image = Image(fip_ref=fip_ref)
+            image.fip_ref = fip_ref
+            image.findImage(fip_images)
+            imagelist.append(image)
+        return imagelist
+
         
     def onExportScoreButtonRefClicked(self):
+
+        imagelistExp = self.loadImages()
+        print('imagelist0', imagelistExp)
         
-        folderpath_references = self.settings['folderpath_references'].encode("utf-8")
-        if self.settings['DATASET']=='DISCHARGE':
-            references_lesion = glob(folderpath_references + '/*-label-lesion.nrrd')
-            references_lesion_pred = glob(folderpath_references + '/*-label-lesion_pred.nrrd')
-            references = references_lesion + references_lesion_pred
-            images = glob(self.settings['folderpath_images'] + '/*.mhd')
-        else:
-            references_lesion = glob(folderpath_references + '/*-label-lesion.nrrd')
-            references_orca = glob(folderpath_references + '/*R.mhd')
-            references = references_orca + references_lesion
-            images = glob(self.settings['folderpath_images'] + '/*CTI.mhd')
+        # Delete folderpath_export if exist
+        folderpath_export = self.settings['folderpath_export']
+        if os.path.isdir(folderpath_export):
+            shutil.rmtree(folderpath_export)
+            os.mkdir(folderpath_export)
 
-        for i,ref in enumerate(references):
-            _,refname,_ = splitFilePath(ref)
-            if self.settings['DATASET']=='DISCHARGE':
-                name = refname.split('-')[0]
-                for im in images:
-                    if name in im:
-                        break
-                name = name.encode("utf-8")
-                refname = refname.encode("utf-8")
-            else:
-                if 'lesion' in refname:
-                    name = refname.split('-')[0]
-                    for im in images:
-                        if name in im:
-                            break
-                    name = name.encode("utf-8")
-                    refname = refname.encode("utf-8")
-                else:
-                    name = refname[0:-1]
-                    for im in images:
-                        if name in im:
-                            break
-                    name = name.encode("utf-8")
-                    refname = refname.encode("utf-8")
-
+        for image in imagelistExp:
+            
+            self.imagelist = [image]
+            
             # Read image
-            properties={'Name': name}
-            node = slicer.util.loadVolume(im, returnNode=True, properties=properties)[1]
-            node.SetName(name)
+            print('image_name', image.image_name)
+            properties={'Name': image.image_name}
+            node = slicer.util.loadVolume(image.fip_image, returnNode=True, properties=properties)[1]
+            node.SetName(image.image_name)
 
             # Read reference
-            properties={'Name': refname}
-            node = slicer.util.loadVolume(ref, returnNode=True, properties=properties)[1]
-            node.SetName(refname)
+            print('ref_name', image.ref_name)
+            properties={'Name': image.ref_name}
+            node = slicer.util.loadVolume(image.fip_ref, returnNode=True, properties=properties)[1]
+            node.SetName(image.ref_name)
             
             # Export score
-            self.onExportScoreButtonClicked()
+            self.onExportScoreButtonClicked(appendCSV=True)
             
             # Delete node
             self.onDeleteButtonClicked()
@@ -560,6 +616,8 @@ class CACSLabelerModuleWidget:
             node = slicer.util.loadVolume(filepath, returnNode=True, properties=properties)[1]
             node.SetName(name)
             imagenames.append(name)
+            image = Image(fip_image=filepath)
+            self.imagelist.append(image)
             
         # Enable radio button
         self.KEV80.enabled = True
@@ -577,10 +635,16 @@ class CACSLabelerModuleWidget:
         # Threshold image
         self.CACSLabelerModuleLogic = CACSLabelerModuleLogic(self.KEV80.checked, self.KEV120.checked, inputVolumeName)
         self.CACSLabelerModuleLogic.runThreshold()
-        
+
         # View thresholded image as label map and image as background image in red widget
         node = slicer.util.getFirstNodeByName(self.CACSLabelerModuleLogic.calciumName[0:-13])
         slicer.util.setSliceViewerLayers(background=node)
+        
+        # Set ref_name
+        name = self.CACSLabelerModuleLogic.calciumName[0:-13]
+        for image in self.imagelist:
+            if image.image_name == name:
+                image.ref_name = node.GetName() + '-label-lesion'
         
         # Set slicer offset
         slicer.util.resetSliceViews()
@@ -612,6 +676,8 @@ class CACSLabelerModuleWidget:
         slicer.mrmlScene.Clear(0)
 
         globals()[moduleName] = slicer.util.reloadScriptedModule(moduleName)
+        
+        self.imagelist = []
 
     def onReloadAndTest(self,moduleName="CACSLabelerModule"):
         try:
@@ -670,7 +736,7 @@ class CACSLabelerModuleLogic:
             su.PushLabel(castedThresholdImage, calciumName)
         self.assignLabelLUT(calciumName)
         self.setLowerPaintThreshold()
-        self.calciumName=calciumName
+        self.calciumName = calciumName
         self.calciumNode = su.PullVolumeFromSlicer(calciumName)
             #self.addObserver(self.calciumNode, vtk.vtkCommand.ModifiedEvent, self.test02)
 
@@ -901,7 +967,7 @@ class CardiacEditBox(EditorLib.EditBox):
                     self.comboList.append(combo)
 
             # Create combo boxes
-            CACSTreeDict = self.settings['CACSTreeDict']
+            CACSTreeDict = self.settings['CACSTreeDict'][self.settings['MODE']][0]
             self.comboList = []
             addCombo(CACSTreeDict, NumCombos=5)
         
@@ -912,7 +978,7 @@ class CardiacEditBox(EditorLib.EditBox):
             vbox = qt.QVBoxLayout()
             self.mainFrame.setLayout(vbox)
             self.parent.layout().addWidget(self.mainFrame)
-            CACSTreeDict = self.settings['CACSTreeDict']
+            CACSTreeDict = self.settings['CACSTreeDict'][self.settings['MODE']][0]
             
             # The OTHER Label Selector
             color = CACSTreeDict['OTHER']['COLOR']

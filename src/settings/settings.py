@@ -56,7 +56,7 @@ class Settings:
                 settings = OrderedDict(settings)
                 # CreateCACSTree
                 settings['CACSTree'] = CACSTree()
-                settings['CACSTree'].createTree(settings['CACSTreeDict'])
+                settings['CACSTree'].createTree(settings)
                 self.settingsDict = settings
         else:
             print('Settings file:' + filepath_settings + 'does not exist')
@@ -74,9 +74,9 @@ class Settings:
         :type filepath_settings: str
         """
         
-        CACSTreeDict, columns_CACSTREE_CUMULATIVE = CACSTree.initCACSTreeDict(tree='tree_V02')
+        treeList = CACSTree.initCACSTreeDict()
         
-        columns_CACS = ['PatientID', 'SeriesInstanceUID', 'CC', 'RCA', 'LAD', 'LCX']
+        #columns_CACS = ['PatientID', 'SeriesInstanceUID', 'CC', 'RCA', 'LAD', 'LCX']
 
         # Initialize settings
 #        settingsDefault = {'folderpath_images': 'H:/cloud/cloud_data/Projects/DL/Code/src/datasets/DISCHARGE/data_cacs/Images',
@@ -97,13 +97,14 @@ class Settings:
                            'folderpath_references': '/mnt/SSD2/cloud_data/Projects/DL/Code/src/datasets/DISCHARGE/data_cacs/References',
                            'folderpath_export': '/mnt/SSD2/cloud_data/Projects/CACSLabeler/code/data/export',
                            'filter_input': '(*.mhd)',
-                           'CalciumScores': ['AGATSTON_SCORE', 'VOLUME_SCORE', 'DENSITY_SCORE', 'NUMLESION_SCORE', 'LESIONVOLUME_SCORE'],
+                           #'CalciumScores': ['AGATSTON_SCORE', 'VOLUME_SCORE', 'DENSITY_SCORE', 'NUMLESION_SCORE', 'LESIONVOLUME_SCORE'],
+                           'CalciumScores': ['AGATSTON_SCORE', 'VOLUME_SCORE', 'DENSITY_SCORE', 'NUMLESION_SCORE'],
                            'filter_input_by_reference': False,
                            'filter_reference_with': ['-label.'],
                            'filter_reference_without': ['label-lesion.'],
-                           'CACSTreeDict': CACSTreeDict,
-                           'columns_CACSTREE_CUMULATIVE': columns_CACSTREE_CUMULATIVE,
-                           'columns_CACS': columns_CACS,
+                           'CACSTreeDict': treeList,
+                           'columns_CACSTREE_CUMULATIVE': treeList['CACSTREE_CUMULATIVE'][1],
+                           'columns_CACS': treeList['CACS'][1],
                            'MODE': 'CACSTREE_CUMULATIVE', # MODE can be 'CACS','CACSTREE' or 'CACSTREE_CUMULATIVE'
                            'DATASET': 'DISCHARGE'}  # DATaSEt can be "DISCHARGE" or "ORCASCORE"
                            

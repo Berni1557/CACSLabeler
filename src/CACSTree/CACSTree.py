@@ -3,25 +3,27 @@ import os, sys
 from collections import defaultdict, OrderedDict
 
 class Lesion():
-    def __init__(self, name, parent, color):
+    def __init__(self, name, parent, color, value):
         self.name = name
         self.parent = parent
         self.color = color
+        self.value = value
 
 class CACSTree():
     def __init__(self):
         self.lesionList=[]
         
-    def createTree(self, CACSTreeDict):
-        self.root = Lesion(name='CACSTreeDict', parent=None, color=CACSTreeDict['COLOR'])
+    def createTree(self, settings):
+        CACSTreeDict = settings['CACSTreeDict'][settings['MODE']][0]
+        self.root = Lesion(name='CACSTreeDict', parent=None, color=CACSTreeDict['COLOR'], value=CACSTreeDict['VALUE'])
         self.lesionList.append(self.root)
         self.addChildren(CACSTreeDict, 'CACSTreeDict')
         
     def addChildren(self, parent, parent_name):
         for key in parent.keys():
             key = key.encode("utf-8")
-            if not key =='COLOR':
-                lesion = Lesion(name=key, parent=parent_name, color = parent[key]['COLOR'])
+            if not key =='COLOR' and not key =='VALUE':
+                lesion = Lesion(name=key, parent=parent_name, color = parent[key]['COLOR'], value = parent[key]['VALUE'])
                 self.lesionList.append(lesion)
                 self.addChildren(parent[key], key)
                     
@@ -69,6 +71,12 @@ class CACSTree():
                 return lesion.color
         return None
 
+    def getValueByName(self, name):
+        for idx, lesion in enumerate(self.lesionList):
+            if lesion.name == name:
+                return lesion.value
+        return None
+        
     def getLesionByName(self, name):
         for idx, lesion in enumerate(self.lesionList):
             if lesion.name == name:
@@ -118,153 +126,173 @@ class CACSTree():
         f.close()
             
     @staticmethod
-    def initCACSTreeDict(tree='tree_V01'):
+    def initCACSTreeDict():
         
-        if tree=='tree_V01':
+        treeList = dict()
             
-            columns_CACSTREE_CUMULATIVE = ['PatientID', 'SeriesInstanceUID', 'CC', 
-                     'RCA', 'RCA_PROXIMAL', 'RCA_MID', 'RCA_DISTAL',
-                     'LM', 'LM_BIF_LAD_LCX', 'LM_BIF_LAD', 'LM_BIF_LCX', 'LM_BRANCH',
-                     'LAD', 'LAD_PROXIMAL', 'LAD_MID', 'LAD_DISTAL', 'LAD_SIDE_BRANCH',
-                     'LCX', 'LCX_PROXIMAL', 'LCX_MID', 'LCX_DISTAL', 'LCX_SIDE_BRANCH',
-                     'RIM']
-                     
-            OTHER = OrderedDict([('COLOR', (0, 255, 0, 255))])
-            
-            RCA_PROXIMAL = OrderedDict([('COLOR', (204, 0, 0, 255))])
-            RCA_MID = OrderedDict([('COLOR', (255,0,0, 255))])
-            RCA_DISTAL = OrderedDict([('COLOR', (255,80,80, 255))])
-            RCA_SIDE_BRANCH = OrderedDict([('COLOR', (255,124,128, 255))])
-            RCA = OrderedDict([('RCA_PROXIMAL', RCA_PROXIMAL), ('RCA_MID', RCA_MID), 
-                               ('RCA_DISTAL', RCA_DISTAL), ('RCA_SIDE_BRANCH', RCA_SIDE_BRANCH), ('COLOR', (165,0,33, 255))])
-            
-            LM_BIF_LAD_LCX = OrderedDict([('COLOR', (11,253,224, 255))])
-            LM_BIF_LAD = OrderedDict([('COLOR', (26,203,238, 255))])
-            LM_BIF_LCX = OrderedDict([('COLOR', (32,132,130, 255))])
-            LM_BRANCH = OrderedDict([('COLOR', (255,204,102, 255))])
-            LM = OrderedDict([('LM_BIF_LAD_LCX', LM_BIF_LAD_LCX), ('LM_BIF_LAD', LM_BIF_LAD), 
-                               ('LM_BIF_LCX', LM_BIF_LCX), ('LM_BRANCH', LM_BRANCH), ('COLOR', (12,176,198, 255))])
-            
-            LAD_PROXIMAL = OrderedDict([('COLOR', (255,153,155, 255))])
-            LAD_MID = OrderedDict([('COLOR', (255,255,0, 255))])
-            LAD_DISTAL = OrderedDict([('COLOR', (204,255,51, 255))])
-            LAD_SIDE_BRANCH = OrderedDict([('COLOR', (11,253,244, 255))])
-            LAD = OrderedDict([('LAD_PROXIMAL', LAD_PROXIMAL), ('LAD_MID', LAD_MID), ('LAD_DISTAL', LAD_DISTAL), ('LAD_SIDE_BRANCH', LAD_SIDE_BRANCH), ('COLOR', (255,204,0, 255))])
-            
-            RIM = OrderedDict([('COLOR', (255,51,153, 255))])
-            
-            LCX_PROXIMAL = OrderedDict([('COLOR', (255,0,255, 255))])
-            LCX_MID = OrderedDict([('COLOR', (255,102,255, 255))])
-            LCX_DISTAL = OrderedDict([('COLOR', (255,153,255, 255))])
-            LCX_SIDE_BRANCH = OrderedDict([('COLOR', (255,204,255, 255))])
-            LCX = OrderedDict([('LCX_PROXIMAL', LCX_PROXIMAL), ('LCX_MID', LCX_MID), ('LCX_DISTAL', LCX_DISTAL), ('LCX_SIDE_BRANCH', LCX_SIDE_BRANCH), ('COLOR', (204,0,204, 255))])
-    
-            CC = OrderedDict([('RCA', RCA), ('LM', LM), ('LAD', LAD), ('LCX', LCX), ('RIM', RIM), ('COLOR', (165, 0, 33, 255))])
-            
-            AORTA_ASC = OrderedDict([('COLOR', (72,63,255, 255))])
-            AORTA_DSC = OrderedDict([('COLOR', (12,0,246, 255))])
-            AORTA_ARC = OrderedDict([('COLOR', (139,133,255, 255))])
-            AORTA = OrderedDict([('AORTA_ASC', AORTA_ASC), ('AORTA_DSC', AORTA_DSC), ('AORTA_ARC', AORTA_ARC), ('COLOR', (9,0,188, 255))])
-    
-    
-            VALVE_AORTIC = OrderedDict([('COLOR', (0,102,0, 255))])
-            VALVE_PULMONIC = OrderedDict([('COLOR', (51,153,102, 255))])
-            VALVE_TRICUSPID = OrderedDict([('COLOR', (0,153,0, 255))])
-            VALVE_MITRAL = OrderedDict([('COLOR', (0,204,0, 255))])
-            
-            VALVES = OrderedDict([('VALVE_AORTIC', VALVE_AORTIC), ('VALVE_PULMONIC', VALVE_PULMONIC),
-                                  ('VALVE_TRICUSPID', VALVE_TRICUSPID), ('VALVE_MITRAL', VALVE_MITRAL), ('COLOR', (4,68,16, 255))])
-            
-            STERNUM = OrderedDict([('COLOR', (167,149,75, 255))])
-            VERTEBRA = OrderedDict([('COLOR', (198,185,128, 255))])
-            COSTA = OrderedDict([('COLOR', (216,207,168, 255))])
-            BONE = OrderedDict([('STERNUM', STERNUM), ('VERTEBRA', VERTEBRA), ('COSTA', COSTA), ('COLOR', (102,51,0, 255))])
-            
-            TRACHEA = OrderedDict([('COLOR', (204,236,255, 255))])
-            BRONCHUS = OrderedDict([('COLOR', (255,255,204, 255))])
-            NODULE_CALCIFIED  = OrderedDict([('COLOR', (204,255,204, 255))])
-            LUNG_ARTERY = OrderedDict([('COLOR', (255,204,204, 255))])
-            LUNG_VESSEL_NFS = OrderedDict([('COLOR', (153,204,255, 255))])
-            LUNG_PARENCHYMA = OrderedDict([('COLOR', (153,255,204, 255))])
-    
-            LUNG = OrderedDict([('TRACHEA', TRACHEA), ('BRONCHUS', BRONCHUS),
-                                ('NODULE_CALCIFIED', NODULE_CALCIFIED), ('LUNG_ARTERY', LUNG_ARTERY),
-                                ('LUNG_VESSEL_NFS', LUNG_VESSEL_NFS),  ('LUNG_PARENCHYMA', LUNG_PARENCHYMA), ('COLOR', (204,255,255, 255))])
-            
-            
-            NCC = OrderedDict([('AORTA', AORTA), ('VALVES', VALVES), ('BONE', BONE), ('LUNG', LUNG), ('COLOR', (102, 0, 102, 255))])    
-    
-            CACSTreeDict = OrderedDict([('OTHER', OTHER), ('CC', CC), ('NCC', NCC), ('COLOR', (0,0,0,0))])
-            
+        # Create tree tree_V01
+        columns_CACSTREE = ['PatientID', 'SeriesInstanceUID', 'CC', 
+                 'RCA', 'RCA_PROXIMAL', 'RCA_MID', 'RCA_DISTAL',
+                 'LM', 'LM_BIF_LAD_LCX', 'LM_BIF_LAD', 'LM_BIF_LCX', 'LM_BRANCH',
+                 'LAD', 'LAD_PROXIMAL', 'LAD_MID', 'LAD_DISTAL', 'LAD_SIDE_BRANCH',
+                 'LCX', 'LCX_PROXIMAL', 'LCX_MID', 'LCX_DISTAL', 'LCX_SIDE_BRANCH',
+                 'RIM']
+                 
+        OTHER = OrderedDict([('COLOR', (0, 255, 0, 255)), ('VALUE', 1)])
+        
+        RCA_PROXIMAL = OrderedDict([('COLOR', (204, 0, 0, 255)), ('VALUE', 4)])
+        RCA_MID = OrderedDict([('COLOR', (255,0,0, 255)), ('VALUE', 5)])
+        RCA_DISTAL = OrderedDict([('COLOR', (255,80,80, 255)), ('VALUE', 6)])
+        RCA_SIDE_BRANCH = OrderedDict([('COLOR', (255,124,128, 255)), ('VALUE', 7)])
+        RCA = OrderedDict([('RCA_PROXIMAL', RCA_PROXIMAL), ('RCA_MID', RCA_MID), 
+                           ('RCA_DISTAL', RCA_DISTAL), ('RCA_SIDE_BRANCH', RCA_SIDE_BRANCH), ('COLOR', (165,0,33, 255)), ('VALUE', 3)])
+        
+        LM_BIF_LAD_LCX = OrderedDict([('COLOR', (11,253,224, 255)), ('VALUE', 9)])
+        LM_BIF_LAD = OrderedDict([('COLOR', (26,203,238, 255)), ('VALUE', 10)])
+        LM_BIF_LCX = OrderedDict([('COLOR', (32,132,130, 255)), ('VALUE', 11)])
+        LM_BRANCH = OrderedDict([('COLOR', (255,204,102, 255)), ('VALUE', 12)])
+        LM = OrderedDict([('LM_BIF_LAD_LCX', LM_BIF_LAD_LCX), ('LM_BIF_LAD', LM_BIF_LAD), 
+                           ('LM_BIF_LCX', LM_BIF_LCX), ('LM_BRANCH', LM_BRANCH), ('COLOR', (12,176,198, 255)), ('VALUE', 8)])
+        
+        LAD_PROXIMAL = OrderedDict([('COLOR', (255,153,155, 255)), ('VALUE', 14)])
+        LAD_MID = OrderedDict([('COLOR', (255,255,0, 255)), ('VALUE', 15)])
+        LAD_DISTAL = OrderedDict([('COLOR', (204,255,51, 255)), ('VALUE', 16)])
+        LAD_SIDE_BRANCH = OrderedDict([('COLOR', (11,253,244, 255)), ('VALUE', 17)])
+        LAD = OrderedDict([('LAD_PROXIMAL', LAD_PROXIMAL), ('LAD_MID', LAD_MID), ('LAD_DISTAL', LAD_DISTAL), ('LAD_SIDE_BRANCH', LAD_SIDE_BRANCH), ('COLOR', (255,204,0, 255)), ('VALUE', 13)])
+        
+        RIM = OrderedDict([('COLOR', (255,51,153, 255)), ('VALUE', 23)])
+        
+        LCX_PROXIMAL = OrderedDict([('COLOR', (255,0,255, 255)), ('VALUE', 19)])
+        LCX_MID = OrderedDict([('COLOR', (255,102,255, 255)), ('VALUE', 20)])
+        LCX_DISTAL = OrderedDict([('COLOR', (255,153,255, 255)), ('VALUE', 21)])
+        LCX_SIDE_BRANCH = OrderedDict([('COLOR', (255,204,255, 255)), ('VALUE', 22)])
+        LCX = OrderedDict([('LCX_PROXIMAL', LCX_PROXIMAL), ('LCX_MID', LCX_MID), ('LCX_DISTAL', LCX_DISTAL), ('LCX_SIDE_BRANCH', LCX_SIDE_BRANCH), ('COLOR', (204,0,204, 255)), ('VALUE', 18)])
+
+        CC = OrderedDict([('RCA', RCA), ('LM', LM), ('LAD', LAD), ('LCX', LCX), ('RIM', RIM), ('COLOR', (165, 0, 33, 255)), ('VALUE', 22)])
+        
+        AORTA_ASC = OrderedDict([('COLOR', (72,63,255, 255)), ('VALUE', 26)])
+        AORTA_DSC = OrderedDict([('COLOR', (12,0,246, 255)), ('VALUE', 27)])
+        AORTA_ARC = OrderedDict([('COLOR', (139,133,255, 255)), ('VALUE', 28)])
+        AORTA = OrderedDict([('AORTA_ASC', AORTA_ASC), ('AORTA_DSC', AORTA_DSC), ('AORTA_ARC', AORTA_ARC), ('COLOR', (9,0,188, 255)), ('VALUE', 25)])
+
+
+        VALVE_AORTIC = OrderedDict([('COLOR', (0,102,0, 255)), ('VALUE', 30)])
+        VALVE_PULMONIC = OrderedDict([('COLOR', (51,153,102, 255)), ('VALUE', 31)])
+        VALVE_TRICUSPID = OrderedDict([('COLOR', (0,153,0, 255)), ('VALUE', 32)])
+        VALVE_MITRAL = OrderedDict([('COLOR', (0,204,0, 255)), ('VALUE', 33)])
+        
+        VALVES = OrderedDict([('VALVE_AORTIC', VALVE_AORTIC), ('VALVE_PULMONIC', VALVE_PULMONIC),
+                              ('VALVE_TRICUSPID', VALVE_TRICUSPID), ('VALVE_MITRAL', VALVE_MITRAL), ('COLOR', (4,68,16, 255)), ('VALUE', 29)])
+        
+        STERNUM = OrderedDict([('COLOR', (167,149,75, 255)), ('VALUE', -1)])
+        VERTEBRA = OrderedDict([('COLOR', (198,185,128, 255)), ('VALUE', -1)])
+        COSTA = OrderedDict([('COLOR', (216,207,168, 255)), ('VALUE', -1)])
+        BONE = OrderedDict([('STERNUM', STERNUM), ('VERTEBRA', VERTEBRA), ('COSTA', COSTA), ('COLOR', (102,51,0, 255)), ('VALUE', -1)])
+        
+        TRACHEA = OrderedDict([('COLOR', (204,236,255, 255)), ('VALUE', -1)])
+        BRONCHUS = OrderedDict([('COLOR', (255,255,204, 255))])
+        NODULE_CALCIFIED  = OrderedDict([('COLOR', (204,255,204, 255)), ('VALUE', -1)])
+        LUNG_ARTERY = OrderedDict([('COLOR', (255,204,204, 255)), ('VALUE', -1)])
+        LUNG_VESSEL_NFS = OrderedDict([('COLOR', (153,204,255, 255)), ('VALUE', -1)])
+        LUNG_PARENCHYMA = OrderedDict([('COLOR', (153,255,204, 255)), ('VALUE', -1)])
+
+        LUNG = OrderedDict([('TRACHEA', TRACHEA), ('BRONCHUS', BRONCHUS),
+                            ('NODULE_CALCIFIED', NODULE_CALCIFIED), ('LUNG_ARTERY', LUNG_ARTERY),
+                            ('LUNG_VESSEL_NFS', LUNG_VESSEL_NFS),  ('LUNG_PARENCHYMA', LUNG_PARENCHYMA), ('COLOR', (204,255,255, 255)), ('VALUE', -1)])
+        
+        
+        NCC = OrderedDict([('AORTA', AORTA), ('VALVES', VALVES), ('BONE', BONE), ('LUNG', LUNG), ('COLOR', (102, 0, 102, 255)), ('VALUE', -1)])    
+
+        CACSTreeDict = OrderedDict([('OTHER', OTHER), ('CC', CC), ('NCC', NCC), ('COLOR', (0,0,0,0)), ('VALUE', -1)])
+        #treeList['tree_V01'] = (CACSTreeDict, columns_CACSTREE)
+        
 
                              
-        elif tree=='tree_V02':
-            
-            columns_CACSTREE_CUMULATIVE = ['PatientID', 'SeriesInstanceUID','CC', 
-                     'RCA', 'RCA_PROXIMAL', 'RCA_MID', 'RCA_DISTAL',
-                     'LM', 'LM_BIF_LAD_LCX', 'LM_BIF_LAD', 'LM_BIF_LCX', 'LM_BRANCH',
-                     'LAD', 'LAD_PROXIMAL', 'LAD_MID', 'LAD_DISTAL', 'LAD_SIDE_BRANCH',
-                     'LCX', 'LCX_PROXIMAL', 'LCX_MID', 'LCX_DISTAL', 'LCX_SIDE_BRANCH',
-                     'NCC',
-                     'AORTA', 'AORTA_ASC', 'AORTA_DSC', 'AORTA_ARC', 'AORTA',
-                     'VALVES', 'VALVE_AORTIC', 'VALVE_PULMONIC', 'VALVE_TRICUSPID', 'VALVE_MITRAL',
-                     'PAPILLAR_MUSCLE', 'NFS_CACS'
-                     ]
-                     
-            OTHER = OrderedDict([('COLOR', (0, 255, 0, 255))])
-            
-            RCA_PROXIMAL = OrderedDict([('COLOR', (204, 0, 0, 255))])
-            RCA_MID = OrderedDict([('COLOR', (255,0,0, 255))])
-            RCA_DISTAL = OrderedDict([('COLOR', (255,80,80, 255))])
-            RCA_SIDE_BRANCH = OrderedDict([('COLOR', (255,124,128, 255))])
-            RCA = OrderedDict([('RCA_PROXIMAL', RCA_PROXIMAL), ('RCA_MID', RCA_MID), 
-                               ('RCA_DISTAL', RCA_DISTAL), ('RCA_SIDE_BRANCH', RCA_SIDE_BRANCH), ('COLOR', (165,0,33, 255))])
-            
-            LM_BIF_LAD_LCX = OrderedDict([('COLOR', (11,253,224, 255))])
-            LM_BIF_LAD = OrderedDict([('COLOR', (26,203,238, 255))])
-            LM_BIF_LCX = OrderedDict([('COLOR', (32,132,130, 255))])
-            LM_BRANCH = OrderedDict([('COLOR', (255,204,102, 255))])
-            LM = OrderedDict([('LM_BIF_LAD_LCX', LM_BIF_LAD_LCX), ('LM_BIF_LAD', LM_BIF_LAD), 
-                               ('LM_BIF_LCX', LM_BIF_LCX), ('LM_BRANCH', LM_BRANCH), ('COLOR', (12,176,198, 255))])
-            
-            LAD_PROXIMAL = OrderedDict([('COLOR', (255,153,0, 255))])
-            LAD_MID = OrderedDict([('COLOR', (255,255,0, 255))])
-            LAD_DISTAL = OrderedDict([('COLOR', (204,255,51, 255))])
-            LAD_SIDE_BRANCH = OrderedDict([('COLOR', (255,204,102, 255))])
-            LAD = OrderedDict([('LAD_PROXIMAL', LAD_PROXIMAL), ('LAD_MID', LAD_MID), ('LAD_DISTAL', LAD_DISTAL), ('LAD_SIDE_BRANCH', LAD_SIDE_BRANCH), ('COLOR', (255,204,0, 255))])
-            
-            RIM = OrderedDict([('COLOR', (255,51,153, 255))])
-            
-            LCX_PROXIMAL = OrderedDict([('COLOR', (255,0,255, 255))])
-            LCX_MID = OrderedDict([('COLOR', (255,102,255, 255))])
-            LCX_DISTAL = OrderedDict([('COLOR', (255,153,255, 255))])
-            LCX_SIDE_BRANCH = OrderedDict([('COLOR', (255,204,255, 255))])
-            LCX = OrderedDict([('LCX_PROXIMAL', LCX_PROXIMAL), ('LCX_MID', LCX_MID), ('LCX_DISTAL', LCX_DISTAL), ('LCX_SIDE_BRANCH', LCX_SIDE_BRANCH), ('COLOR', (204,0,204, 255))])
-    
-            CC = OrderedDict([('RCA', RCA), ('LM', LM), ('LAD', LAD), ('LCX', LCX), ('RIM', RIM), ('COLOR', (165, 0, 33, 255))])
-            
-            AORTA_ASC = OrderedDict([('COLOR', (72,63,255, 255))])
-            AORTA_DSC = OrderedDict([('COLOR', (12,0,246, 255))])
-            AORTA_ARC = OrderedDict([('COLOR', (139,133,255, 255))])
-            AORTA = OrderedDict([('AORTA_ASC', AORTA_ASC), ('AORTA_DSC', AORTA_DSC), ('AORTA_ARC', AORTA_ARC), ('COLOR', (9,0,188, 255))])
-    
-    
-            VALVE_AORTIC = OrderedDict([('COLOR', (0,102,0, 255))])
-            VALVE_PULMONIC = OrderedDict([('COLOR', (51,153,102, 255))])
-            VALVE_TRICUSPID = OrderedDict([('COLOR', (0,153,0, 255))])
-            VALVE_MITRAL = OrderedDict([('COLOR', (0,204,0, 255))])
-            
-            VALVES = OrderedDict([('VALVE_AORTIC', VALVE_AORTIC), ('VALVE_PULMONIC', VALVE_PULMONIC),
-                                  ('VALVE_TRICUSPID', VALVE_TRICUSPID), ('VALVE_MITRAL', VALVE_MITRAL), ('COLOR', (4,68,16, 255))])
-            
-            PAPILLAR_MUSCLE = OrderedDict([('COLOR', (167,149,75, 255))])
-            NFS_CACS  = OrderedDict([('COLOR', (216,207,168, 255))])
+        # Create tree tree_V02
+        columns_CACSTREE = ['PatientID', 'SeriesInstanceUID','CC', 
+                 'RCA', 'RCA_PROXIMAL', 'RCA_MID', 'RCA_DISTAL',
+                 'LM', 'LM_BIF_LAD_LCX', 'LM_BIF_LAD', 'LM_BIF_LCX', 'LM_BRANCH',
+                 'LAD', 'LAD_PROXIMAL', 'LAD_MID', 'LAD_DISTAL', 'LAD_SIDE_BRANCH',
+                 'LCX', 'LCX_PROXIMAL', 'LCX_MID', 'LCX_DISTAL', 'LCX_SIDE_BRANCH',
+                 'NCC',
+                 'AORTA', 'AORTA_ASC', 'AORTA_DSC', 'AORTA_ARC', 'AORTA',
+                 'VALVES', 'VALVE_AORTIC', 'VALVE_PULMONIC', 'VALVE_TRICUSPID', 'VALVE_MITRAL',
+                 'PAPILLAR_MUSCLE', 'NFS_CACS'
+                 ]
+                 
+        OTHER = OrderedDict([('COLOR', (0, 255, 0, 255)), ('VALUE', 1)])
+        
+        RCA_PROXIMAL = OrderedDict([('COLOR', (204, 0, 0, 255)), ('VALUE', 4)])
+        RCA_MID = OrderedDict([('COLOR', (255,0,0, 255)), ('VALUE', 5)])
+        RCA_DISTAL = OrderedDict([('COLOR', (255,80,80, 255)), ('VALUE', 6)])
+        RCA_SIDE_BRANCH = OrderedDict([('COLOR', (255,124,128, 255)), ('VALUE', 7)])
+        RCA = OrderedDict([('RCA_PROXIMAL', RCA_PROXIMAL), ('RCA_MID', RCA_MID), 
+                           ('RCA_DISTAL', RCA_DISTAL), ('RCA_SIDE_BRANCH', RCA_SIDE_BRANCH), ('COLOR', (165,0,33, 255)), ('VALUE', 3)])
+        
+        LM_BIF_LAD_LCX = OrderedDict([('COLOR', (11,253,224, 255)), ('VALUE', 9)])
+        LM_BIF_LAD = OrderedDict([('COLOR', (26,203,238, 255)), ('VALUE', 10)])
+        LM_BIF_LCX = OrderedDict([('COLOR', (32,132,130, 255)), ('VALUE', 11)])
+        LM_BRANCH = OrderedDict([('COLOR', (255,204,102, 255)), ('VALUE', 12)])
+        LM = OrderedDict([('LM_BIF_LAD_LCX', LM_BIF_LAD_LCX), ('LM_BIF_LAD', LM_BIF_LAD), 
+                           ('LM_BIF_LCX', LM_BIF_LCX), ('LM_BRANCH', LM_BRANCH), ('COLOR', (12,176,198, 255)), ('VALUE', 8)])
+        
+        LAD_PROXIMAL = OrderedDict([('COLOR', (255,153,155, 255)), ('VALUE', 14)])
+        LAD_MID = OrderedDict([('COLOR', (255,255,0, 255)), ('VALUE', 15)])
+        LAD_DISTAL = OrderedDict([('COLOR', (204,255,51, 255)), ('VALUE', 16)])
+        LAD_SIDE_BRANCH = OrderedDict([('COLOR', (11,253,244, 255)), ('VALUE', 17)])
+        LAD = OrderedDict([('LAD_PROXIMAL', LAD_PROXIMAL), ('LAD_MID', LAD_MID), ('LAD_DISTAL', LAD_DISTAL), ('LAD_SIDE_BRANCH', LAD_SIDE_BRANCH), ('COLOR', (255,204,0, 255)), ('VALUE', 13)])
+        
+        RIM = OrderedDict([('COLOR', (255,51,153, 255)), ('VALUE', 23)])
+        
+        LCX_PROXIMAL = OrderedDict([('COLOR', (255,0,255, 255)), ('VALUE', 19)])
+        LCX_MID = OrderedDict([('COLOR', (255,102,255, 255)), ('VALUE', 20)])
+        LCX_DISTAL = OrderedDict([('COLOR', (255,153,255, 255)), ('VALUE', 21)])
+        LCX_SIDE_BRANCH = OrderedDict([('COLOR', (255,204,255, 255)), ('VALUE', 22)])
+        LCX = OrderedDict([('LCX_PROXIMAL', LCX_PROXIMAL), ('LCX_MID', LCX_MID), ('LCX_DISTAL', LCX_DISTAL), ('LCX_SIDE_BRANCH', LCX_SIDE_BRANCH), ('COLOR', (204,0,204, 255)), ('VALUE', 18)])
+
+        CC = OrderedDict([('RCA', RCA), ('LM', LM), ('LAD', LAD), ('LCX', LCX), ('RIM', RIM), ('COLOR', (165, 0, 33, 255)), ('VALUE', 2)])
+        
+        AORTA_ASC = OrderedDict([('COLOR', (72,63,255, 255)), ('VALUE', 26)])
+        AORTA_DSC = OrderedDict([('COLOR', (12,0,246, 255)), ('VALUE', 27)])
+        AORTA_ARC = OrderedDict([('COLOR', (139,133,255, 255)), ('VALUE', 28)])
+        AORTA = OrderedDict([('AORTA_ASC', AORTA_ASC), ('AORTA_DSC', AORTA_DSC), ('AORTA_ARC', AORTA_ARC), ('COLOR', (9,0,188, 255)), ('VALUE', 25)])
+
+
+        VALVE_AORTIC = OrderedDict([('COLOR', (0,102,0, 255)), ('VALUE', 30)])
+        VALVE_PULMONIC = OrderedDict([('COLOR', (51,153,102, 255)), ('VALUE', 31)])
+        VALVE_TRICUSPID = OrderedDict([('COLOR', (0,153,0, 255)), ('VALUE', 32)])
+        VALVE_MITRAL = OrderedDict([('COLOR', (0,204,0, 255)), ('VALUE', 33)])
+        
+        VALVES = OrderedDict([('VALVE_AORTIC', VALVE_AORTIC), ('VALVE_PULMONIC', VALVE_PULMONIC),
+                              ('VALVE_TRICUSPID', VALVE_TRICUSPID), ('VALVE_MITRAL', VALVE_MITRAL), ('COLOR', (4,68,16, 255)), ('VALUE', 29)])
+        
+        PAPILLAR_MUSCLE = OrderedDict([('COLOR', (167,149,75, 255)), ('VALUE', 34)])
+        NFS_CACS  = OrderedDict([('COLOR', (216,207,168, 255)), ('VALUE', 35)])
   
-            NCC = OrderedDict([('AORTA', AORTA), ('VALVES', VALVES), ('PAPILLAR_MUSCLE', PAPILLAR_MUSCLE), ('NFS_CACS', NFS_CACS), ('COLOR', (102, 0, 102, 255))])    
-    
-            CACSTreeDict = OrderedDict([('OTHER', OTHER), ('CC', CC), ('NCC', NCC), ('COLOR', (0,0,0,0))])
-            
-        else:
-            raise ValueError('CACS tree ' + tree + ' is not defined.')
-            
-        return CACSTreeDict, columns_CACSTREE_CUMULATIVE
+        NCC = OrderedDict([('AORTA', AORTA), ('VALVES', VALVES), ('PAPILLAR_MUSCLE', PAPILLAR_MUSCLE), ('NFS_CACS', NFS_CACS), ('COLOR', (102, 0, 102, 255)), ('VALUE', 24)])
+        CACSTreeDict = OrderedDict([('OTHER', OTHER), ('CC', CC), ('NCC', NCC), ('COLOR', (0,0,0,0)), ('VALUE', 0)])
+        treeList['CACSTREE_CUMULATIVE'] = (CACSTreeDict, columns_CACSTREE)
+
+
+        # Create CACS tree
+        columns_CACSTREE = ['PatientID', 'SeriesInstanceUID','CC', 'RCA', 'LAD', 'LCX']        
+        OTHER = OrderedDict([('COLOR', (0, 255, 0, 255)), ('VALUE', 1)])
+        RCA = OrderedDict([('COLOR', (165,0,33, 255)), ('VALUE', 4)])
+        LAD = OrderedDict([('COLOR', (255,204,0, 255)), ('VALUE', 2)])
+        LCX = OrderedDict([('COLOR', (204,0,204, 255)), ('VALUE', 3)])
+        CC = OrderedDict([('RCA', RCA), ('LAD', LAD), ('LCX', LCX), ('COLOR', (165, 0, 33, 255)), ('VALUE', -1)])
+        CACSTreeDict = OrderedDict([('OTHER', OTHER), ('CC', CC), ('COLOR', (0,0,0,0)), ('VALUE', 0)])
+        treeList['CACS'] = (CACSTreeDict, columns_CACSTREE)   
+        
+        
+        # Create CACS tree for orcascore
+        columns_CACSTREE = ['PatientID', 'SeriesInstanceUID','CC', 'RCA', 'LAD', 'LCX']        
+        OTHER = OrderedDict([('COLOR', (0, 255, 0, 255)), ('VALUE', 0)])
+        RCA = OrderedDict([('COLOR', (165,0,33, 255)), ('VALUE', 3)])
+        LAD = OrderedDict([('COLOR', (255,204,0, 255)), ('VALUE', 1)])
+        LCX = OrderedDict([('COLOR', (204,0,204, 255)), ('VALUE', 2)])
+        CC = OrderedDict([('RCA', RCA), ('LAD', LAD), ('LCX', LCX), ('COLOR', (165, 0, 33, 255)), ('VALUE', -1)])
+        CACSTreeDict = OrderedDict([('OTHER', OTHER), ('CC', CC), ('COLOR', (0,0,0,0)), ('VALUE', 0)])
+        treeList['CACS_ORCASCORE'] = (CACSTreeDict, columns_CACSTREE)
+        
+        return treeList

@@ -8,9 +8,11 @@ from SimpleITK import ConnectedComponentImageFilter
 import SimpleITK as sitk
 import time
 import csv
+from CalciumScores.CalciumScoreBase import CalciumScoreBase
+import time
 
 # Agatston score
-class Agatston():
+class Agatston(CalciumScoreBase):
     
     name = 'AGATSTON_SCORE'
     
@@ -66,6 +68,8 @@ class Agatston():
         :type pixelVolume: float
         """
         
+        start = time.time()
+        
         if arteries_dict is not None:
             self.arteries_dict = arteries_dict
 
@@ -89,44 +93,42 @@ class Agatston():
         # Iterate over arteries
         agatston = OrderedDict([('NAME', self.name), ('AgatstonScore', 0), ('Grading', None)])
         for key in self.arteries_dict.keys():
-            if key not in arteries_sum_keys:
-                # Extract binary mask of lesions from one artery
-                imageLabelA = imageLabel==self.arteries_dict[key]
-                if imageLabelA.sum()>0:
-                    image_sitk = sitk.GetImageFromArray(imageLabelA.astype(np.uint8))
-                    # Extract connected components
-                    compFilter = ConnectedComponentImageFilter()
-                    labeled_sitk = compFilter.Execute(image_sitk)
-                    labeled = sitk.GetArrayFromImage(labeled_sitk)
-                    ncomponents = labeled.max()
-                    agatstonArtery = 0
+            # Extract binary mask of lesions from one artery
+            imageLabelA = imageLabel==self.arteries_dict[key]
+            if imageLabelA.sum()>0:
+                image_sitk = sitk.GetImageFromArray(imageLabelA.astype(np.uint8))
+                # Extract connected components
+                compFilter = ConnectedComponentImageFilter()
+                labeled_sitk = compFilter.Execute(image_sitk)
+                labeled = sitk.GetArrayFromImage(labeled_sitk)
+                ncomponents = labeled.max()
+                agatstonArtery = 0
 
-                    # Iterate over lesions from an artery
-                    for c in range(1,ncomponents+1):
-                        labeledc = labeled==c
-                        image_mask = image * labeledc
-                        # Iterate over slices
-                        for s in range(0,labeled.shape[0]):
-                            image_mask_slice = image_mask[s,:,:]
-                            labeledc_slice = labeledc[s,:,:]
-                            # Extract maximum HU of a lesion
-                            attenuation = image_mask_slice.max()
-                            area = labeledc_slice.sum() * pixelArea
-                            # Calculate density weigt factor
-                            densfactor = self.densityFactor(attenuation)
-                            # Calculate agatston score for a lesion
-                            agatstonLesionSlice = area * densfactor
-                            agatstonArtery = agatstonArtery + agatstonLesionSlice
-                            
-                    agatston[key] = agatstonArtery
-                else:
-                    agatston[key] = 0.0
+                # Iterate over lesions from an artery
+                for c in range(1,ncomponents+1):
+                    labeledc = labeled==c
+                    image_mask = image * labeledc
+                    # Iterate over slices
+                    for s in range(0,labeled.shape[0]):
+                        image_mask_slice = image_mask[s,:,:]
+                        labeledc_slice = labeledc[s,:,:]
+                        # Extract maximum HU of a lesion
+                        attenuation = image_mask_slice.max()
+                        area = labeledc_slice.sum() * pixelArea
+                        # Calculate density weigt factor
+                        densfactor = self.densityFactor(attenuation)
+                        # Calculate agatston score for a lesion
+                        agatstonLesionSlice = area * densfactor
+                        agatstonArtery = agatstonArtery + agatstonLesionSlice
+
+                agatston[key] = agatstonArtery
+            else:
+                agatston[key] = 0.0
 
         # Sum agatston score over arteries_sum
         for key in arteries_sum_keys:
             value = 0
             for key_sum in arteries_sum[key]:
-                #print('key_sum0', key_sum)
                 value += agatston[key_sum]
             agatston[key] = value
 
@@ -140,7 +142,6 @@ class Agatston():
         agatston['AgatstonScore'] = agatstonScore
         agatston['Grading'] = self.CACSGrading(agatstonScore)
         self.agatston = agatston
-        
         return agatston
     
     def show(self):
@@ -158,36 +159,6 @@ class Agatston():
         else:
             print('Agatston not defined')
 
-
-    def export_csv(self, settings, calciumScoresResult):
-        # Write calcium scores into csv
-        if settings['MODE'] == 'CACS':
-            columns = settings['columns_CACS']
-        elif settings['MODE'] == 'CACSTREE_CUMULATIVE':
-            columns = settings['columns_CACSTREE_CUMULATIVE']
-        else:
-            raise ValueError('Mode ' + settings['MODE'] + ' does not exist.')
-             
-        folderpath_export_csv = settings['folderpath_export']
-        if not os.path.isdir(folderpath_export_csv):
-            os.mkdir(folderpath_export_csv)
-        filepath_csv = os.path.join(folderpath_export_csv, self.name + '.csv')
-        with open(filepath_csv, 'w') as file:
-            writer = csv.writer(file, delimiter=';', lineterminator="\n")
-            writer.writerow(columns)
-            for s,sample in enumerate(calciumScoresResult):
-                scores = sample['Scores']
-                for score in scores:
-                    if score['NAME'] == self.name:
-                        PatientID = sample['ImageName'].split('_')[0]
-                        SeriesInstanceUID = sample['ImageName'].split('_')[1]
-                        row = [PatientID, SeriesInstanceUID]
-                        for c in columns[2:]:
-                            row = row + [str(score[c]).replace('.', ',')]
-                        writer.writerow(row)
-
-
-                        
                         
                         
                         

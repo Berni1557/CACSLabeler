@@ -8,9 +8,10 @@ from SimpleITK import ConnectedComponentImageFilter
 import SimpleITK as sitk
 import time
 import csv
+from CalciumScores.CalciumScoreBase import CalciumScoreBase
 
 # Agatston score
-class LesionVolume():
+class LesionVolume(CalciumScoreBase):
     
     name = 'LESIONVOLUME_SCORE'
     
@@ -52,28 +53,35 @@ class LesionVolume():
         # Iterate over arteries
         lesvolume = OrderedDict([('NAME', self.name)])
         for key in self.arteries_dict.keys():
-            if key not in arteries_sum_keys:
+            #if key not in arteries_sum_keys:
                 # Extract binary mask of lesions from one artery
-                imageLabelA = imageLabel==self.arteries_dict[key]
-                if imageLabelA.sum()>0:
-                    image_sitk = sitk.GetImageFromArray(imageLabelA.astype(np.uint8))
-                    # Extract connected components
-                    compFilter = ConnectedComponentImageFilter()
-                    labeled_sitk = compFilter.Execute(image_sitk)
-                    labeled = sitk.GetArrayFromImage(labeled_sitk)
-                    ncomponents = labeled.max()
+            imageLabelA = imageLabel==self.arteries_dict[key]
+            if imageLabelA.sum()>0:
+                image_sitk = sitk.GetImageFromArray(imageLabelA.astype(np.uint8))
+                # Extract connected components
+                compFilter = ConnectedComponentImageFilter()
+                labeled_sitk = compFilter.Execute(image_sitk)
+                labeled = sitk.GetArrayFromImage(labeled_sitk)
+                ncomponents = labeled.max()
 
-                    # Iterate over lesions from an artery
-                    volumeList=[]
-                    for c in range(1,ncomponents+1):
-                        labeledc = labeled==c
-                        image_mask = image * labeledc
-                        NumPixels = image_mask.sum()
-                        volume = NumPixels * pixelVolume
-                        volumeList.append({'LesionID': c, 'LesionVolume': volume})
-                    lesvolume[key] = volumeList
-                else:
-                    lesvolume[key] = []
+                # Iterate over lesions from an artery
+                volumeList=[]
+                for c in range(1,ncomponents+1):
+                    labeledc = labeled==c
+                    image_mask = image * labeledc
+                    NumPixels = image_mask.sum()
+                    volume = NumPixels * pixelVolume
+                    volumeList.append({'LesionID': c, 'LesionVolume': volume})
+                lesvolume[key] = volumeList
+            else:
+                lesvolume[key] = 0.0
+
+        # Sum agatston score over arteries_sum
+        for key in arteries_sum_keys:
+            value = 0
+            for key_sum in arteries_sum[key]:
+                value += lesvolume[key_sum]
+            lesvolume[key] = value
 
         # Sum agatston score over arteries_sum
 #        for key in arteries_sum_keys:
@@ -112,41 +120,5 @@ class LesionVolume():
             print('Lesion volume not defined')
 
 
-    def export_csv(self, settings, calciumScoresResult):
-        # Write calcium scores into csv
-        if settings['MODE'] == 'CACS':
-            columns = settings['columns_CACS']
-        elif settings['MODE'] == 'CACSTREE_CUMULATIVE':
-            columns = settings['columns_CACSTREE_CUMULATIVE']
-        else:
-            raise ValueError('Mode ' + settings['MODE'] + ' does not exist.')
-            
-        folderpath_export_csv = settings['folderpath_export']
-        filepath_csv = os.path.join(folderpath_export_csv, self.name + '.csv')
-        if not os.path.isdir(folderpath_export_csv):
-            os.mkdir(folderpath_export_csv)
-        with open(filepath_csv, 'w') as file:
-            writer = csv.writer(file, delimiter=';', lineterminator="\n")
-            writer.writerow(columns)
-            for s,sample in enumerate(calciumScoresResult):
-                scores = sample['Scores']
-                for score in scores:
-                    if score['NAME'] == self.name:
-                        # Create row
-                        name_list = sample['ImageName'].split('_')
-                        if len(name_list)==2:
-                            PatientID = sample['ImageName'].split('_')[0]
-                            SeriesInstanceUID = sample['ImageName'].split('_')[1]
-                        else:
-                            PatientID = ''
-                            SeriesInstanceUID = ''
-                        row = [PatientID, SeriesInstanceUID]
-#                        for c in columns[2:]:
-#                            lesions = score[c]
-#                            for les in lesions:
-#                                row = row + [les['LesionID'].replace('.', ',')]
-                        writer.writerow(row)
-
-                        
                         
                         

@@ -7,9 +7,10 @@ from collections import defaultdict, OrderedDict
 from SimpleITK import ConnectedComponentImageFilter
 import SimpleITK as sitk
 import csv
+from CalciumScores.CalciumScoreBase import CalciumScoreBase
 
 # VolumeScore
-class VolumeScore():
+class VolumeScore(CalciumScoreBase):
     
     name = 'VOLUME_SCORE'
     
@@ -108,36 +109,3 @@ class VolumeScore():
         else:
             print('VolumeScore not defined')
             
-    def export_csv(self, settings, calciumScoresResult):
-        # Write calcium scores into csv
-
-        if settings['MODE'] == 'CACS':
-            columns = settings['columns_CACS']
-        elif settings['MODE'] == 'CACSTREE_CUMULATIVE':
-            columns = settings['columns_CACSTREE_CUMULATIVE']
-        else:
-            raise ValueError('Mode ' + settings['MODE'] + ' does not exist.')
-            
-        folderpath_export_csv = settings['folderpath_export']
-        filepath_csv = os.path.join(folderpath_export_csv, self.name + '.csv')
-        if not os.path.isdir(folderpath_export_csv):
-            os.mkdir(folderpath_export_csv)
-        with open(filepath_csv, 'w') as file:
-            writer = csv.writer(file, delimiter=';', lineterminator="\n")
-            writer.writerow(columns)
-            for s,sample in enumerate(calciumScoresResult):
-                scores = sample['Scores']
-                for score in scores:
-                    if score['NAME'] == self.name:
-                        # Create row
-                        name_list = sample['ImageName'].split('_')
-                        if len(name_list)==2:
-                            PatientID = sample['ImageName'].split('_')[0]
-                            SeriesInstanceUID = sample['ImageName'].split('_')[1]
-                        else:
-                            PatientID = ''
-                            SeriesInstanceUID = ''
-                        row = [PatientID, SeriesInstanceUID]
-                        for c in columns[2:]:
-                            row = row + [str(score[c]).replace('.', ',')]
-                        writer.writerow(row)
