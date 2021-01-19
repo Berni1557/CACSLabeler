@@ -106,7 +106,7 @@ class CACSTree():
             f.write(str(CACS_dict[key]) + ' ' + lesion.name + ' ' + color_str + '\n')
             f.close()
 
-    def createColorTable_CACS_REF(self, filepath_colorTable):
+    def createColorTable_CACS_REF(self, filepath_colorTable, REFValue):
         CACS_dict = OrderedDict([('CACSTreeDict', 0), ('OTHER', 1), ('LAD', 2), ('LCX', 3), ('RCA', 4)])
         f = open(filepath_colorTable, 'w')
         f.write('# Color\n')
@@ -122,7 +122,7 @@ class CACSTree():
         # Add REF color
         f = open(filepath_colorTable, 'a')
         color_str = str(10) + ' ' + str(10) + ' ' + str(250) + ' ' + str(255)
-        f.write(str(5) + ' ' + 'REF' + ' ' + color_str + '\n')
+        f.write(str(REFValue) + ' ' + 'REF' + ' ' + color_str + '\n')
         f.close()
             
     @staticmethod

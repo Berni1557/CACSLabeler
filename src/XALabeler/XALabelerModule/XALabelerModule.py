@@ -25,13 +25,25 @@ import time
 from sys import platform
 from SimpleITK import ConnectedComponentImageFilter
 
-refAction = dict({'fp_image': '', 
+#refAction = dict({'fp_image': '', 
+#                  'fp_label_lesion': '',
+#                  'fp_label': '',
+#                  'IDX': [],
+#                  'SLICE': -1,
+#                  'action': 'LABEL_LESION', # 'LABEL_LESION', 'LABEL_REGION', 'LABEL_REGION_NEW', 'LABEL_LESION_NEW'
+#                  'MSG': ''}) 
+
+ALAction = dict({'fp_image': '', 
                   'fp_label_lesion': '',
                   'fp_label': '',
-                  'IDX': [],
+                  'fp_label_lesion_pred': '',
+                  'fp_label_pred': '',
+                  'IDX': [[]],
                   'SLICE': -1,
-                  'action': 'LABEL_LESION', # 'LABEL_LESION', 'LABEL_REGION', 'LABEL_REGION_NEW', 'LABEL_LESION_NEW'
-                  'MSG': ''}) 
+                  'action': '', # 'LABEL_LESION', 'LABEL_REGION', 'LABEL_REGION_NEW', 'LABEL_LESION_NEW'
+                  'MSG': '',
+                  'STATUS': 'OPEN',         # OPEN, CLOSED
+                  'UNCERTAINT': False}) 
 
 def splitFilePath(filepath):
     """ Split filepath into folderpath, filename and file extension
@@ -80,6 +92,9 @@ class XALabelerModuleWidget:
         print('Settings', self.settings)
         self.images=[]
         self.localXALEditorWidget = None
+        self.refAction = ALAction.copy()
+        self.REFValue = 1000
+        self.continueLabeling = False
 
         if not parent:
             self.parent = slicer.qMRMLWidget()
@@ -95,6 +110,14 @@ class XALabelerModuleWidget:
         # Settings filepath
         currentFile = os.path.dirname(os.path.abspath(__file__))
         self.filepath_settings = os.path.dirname(os.path.dirname(os.path.dirname(currentFile))) + '/data/settings.json'
+        
+    def nodeExist(self, name):
+        nodes=slicer.util.getNodesByClass('vtkMRMLScalarVolumeNode')
+        nodeFound = False
+        for node in nodes:
+            if name==node.GetName():
+                nodeFound = True
+        return nodeFound
 
     def setup(self):
         # Instantiate and connect widgets ...
@@ -152,6 +175,15 @@ class XALabelerModuleWidget:
         self.measuresFormLayout.addRow(nextButton)
         nextButton.connect('clicked(bool)', self.onNextButtonClicked)
         self.nextButton = nextButton
+
+        # Save query button
+        saveQueryButton = qt.QPushButton("SAVE QUERY")
+        saveQueryButton.toolTip = "Save query"
+        saveQueryButton.setStyleSheet("background-color: rgb(230,241,255)")
+        saveQueryButton.enabled = False
+        self.measuresFormLayout.addRow(saveQueryButton)
+        saveQueryButton.connect('clicked(bool)', self.onSaveQueryButtonClicked)
+        self.saveQueryButton = saveQueryButton
         
         # Stop client
         stopButton = qt.QPushButton("STOP REFINEMENT")
@@ -195,30 +227,48 @@ class XALabelerModuleWidget:
         self.measuresFormLayoutH.addRow(LABEL_REGION_BUTTON)
         LABEL_REGION_BUTTON.connect('clicked(bool)', self.onLABEL_REGION_BUTTONClicked)
         self.LABEL_REGION_BUTTON = LABEL_REGION_BUTTON
-        
-        # LABEL_REGION_BUTTON
-        LABEL_REGION_NEW_BUTTON = qt.QPushButton("Label new coronary artery region")
-        LABEL_REGION_NEW_BUTTON.toolTip = "Stop refinement2"
-        LABEL_REGION_NEW_BUTTON.setStyleSheet("background-color: rgb(230,241,255)")
-        LABEL_REGION_NEW_BUTTON.enabled = False
-        self.measuresFormLayoutH.addRow(LABEL_REGION_NEW_BUTTON)
-        LABEL_REGION_NEW_BUTTON.connect('clicked(bool)', self.onLABEL_REGION_NEW_BUTTONClicked)
-        self.LABEL_REGION_NEW_BUTTON = LABEL_REGION_NEW_BUTTON 
-        
-        # LABEL_LESION_NEW_BUTTON
-        LABEL_LESION_NEW_BUTTON = qt.QPushButton("Label new lesions")
-        LABEL_LESION_NEW_BUTTON.toolTip = "Stop refinement2"
-        LABEL_LESION_NEW_BUTTON.setStyleSheet("background-color: rgb(230,241,255)")
-        LABEL_LESION_NEW_BUTTON.enabled = False
-        self.measuresFormLayoutH.addRow(LABEL_LESION_NEW_BUTTON)
-        LABEL_LESION_NEW_BUTTON.connect('clicked(bool)', self.onLABEL_LESION_NEW_BUTTONClicked)
-        self.LABEL_LESION_NEW_BUTTON = LABEL_LESION_NEW_BUTTON 
 
+        # LABEL_REGION_BUTTON
+        LABEL_NEW_BUTTON = qt.QPushButton("Label new coronary artery region")
+        LABEL_NEW_BUTTON.toolTip = "Stop refinement2"
+        LABEL_NEW_BUTTON.setStyleSheet("background-color: rgb(230,241,255)")
+        LABEL_NEW_BUTTON.enabled = False
+        self.measuresFormLayoutH.addRow(LABEL_NEW_BUTTON)
+        LABEL_NEW_BUTTON.connect('clicked(bool)', self.onLABEL_NEW_BUTTONClicked)
+        self.LABEL_NEW_BUTTON = LABEL_NEW_BUTTON 
+        
+#        # LABEL_REGION_BUTTON
+#        LABEL_REGION_NEW_BUTTON = qt.QPushButton("Label new coronary artery region")
+#        LABEL_REGION_NEW_BUTTON.toolTip = "Stop refinement2"
+#        LABEL_REGION_NEW_BUTTON.setStyleSheet("background-color: rgb(230,241,255)")
+#        LABEL_REGION_NEW_BUTTON.enabled = False
+#        self.measuresFormLayoutH.addRow(LABEL_REGION_NEW_BUTTON)
+#        LABEL_REGION_NEW_BUTTON.connect('clicked(bool)', self.onLABEL_REGION_NEW_BUTTONClicked)
+#        self.LABEL_REGION_NEW_BUTTON = LABEL_REGION_NEW_BUTTON 
+#        
+#        # LABEL_LESION_NEW_BUTTON
+#        LABEL_LESION_NEW_BUTTON = qt.QPushButton("Label new lesions")
+#        LABEL_LESION_NEW_BUTTON.toolTip = "Stop refinement2"
+#        LABEL_LESION_NEW_BUTTON.setStyleSheet("background-color: rgb(230,241,255)")
+#        LABEL_LESION_NEW_BUTTON.enabled = False
+#        self.measuresFormLayoutH.addRow(LABEL_LESION_NEW_BUTTON)
+#        LABEL_LESION_NEW_BUTTON.connect('clicked(bool)', self.onLABEL_LESION_NEW_BUTTONClicked)
+#        self.LABEL_LESION_NEW_BUTTON = LABEL_LESION_NEW_BUTTON 
+
+        # LABEL_LESION_NEW_BUTTON
+        CONTINUE_BUTTON = qt.QPushButton("CONTINUE")
+        CONTINUE_BUTTON.toolTip = "Continue labeling"
+        CONTINUE_BUTTON.setStyleSheet("background-color: rgb(230,241,255)")
+        CONTINUE_BUTTON.enabled = False
+        self.measuresFormLayoutH.addRow(CONTINUE_BUTTON)
+        CONTINUE_BUTTON.connect('clicked(bool)', self.onLABEL_CONTINUE_BUTTONClicked)
+        self.CONTINUE_BUTTON = CONTINUE_BUTTON 
+        
         # LABEL_LESION_NEW_BUTTON
         UNCERTAINTY_BUTTON = qt.QPushButton("Add UNCERTAIN label")
         UNCERTAINTY_BUTTON.toolTip = "Stop refinement2"
         UNCERTAINTY_BUTTON.setStyleSheet("background-color: rgb(230,241,255)")
-        UNCERTAINTY_BUTTON.enabled = True
+        UNCERTAINTY_BUTTON.enabled = False
         self.measuresFormLayoutH.addRow(UNCERTAINTY_BUTTON)
         UNCERTAINTY_BUTTON.connect('clicked(bool)', self.onLABEL_UNCERTAINTY_BUTTONClicked)
         self.UNCERTAINTY_BUTTON = UNCERTAINTY_BUTTON    
@@ -299,20 +349,20 @@ class XALabelerModuleWidget:
             
         dirname = os.path.dirname(os.path.abspath(__file__))
         filepath_colorTable = dirname + '/CardiacAgatstonMeasuresLUT.ctbl'
+        self.settings['CACSTree'].createColorTable_CACS_REF(filepath_colorTable, self.REFValue)
         
-        # Set MODE to 'CACS'
         #self.settings['MODE'] = 'CACS'
-        self.settings['MODE'] = 'CACS_REF'
+        #self.settings['MODE'] = 'CACS_REF'
         
-        # Create color table
-        if self.settings['MODE']=='CACSTREE_CUMULATIVE':
-            self.settings['CACSTree'].createColorTable(filepath_colorTable)
-        elif self.settings['MODE']=='CACS':
-            self.settings['CACSTree'].createColorTable_CACS(filepath_colorTable)
-        elif self.settings['MODE']=='CACS_REF':
-            self.settings['CACSTree'].createColorTable_CACS_REF(filepath_colorTable)
-        else:
-            raise ValueError('MODE' + self.settings['MODE'] + 'does not exist!')
+#        # Create color table
+#        if self.settings['MODE']=='CACSTREE_CUMULATIVE':
+#            self.settings['CACSTree'].createColorTable(filepath_colorTable)
+#        elif self.settings['MODE']=='CACS':
+#            self.settings['CACSTree'].createColorTable_CACS(filepath_colorTable)
+#        elif self.settings['MODE']=='CACS_REF':
+#            self.settings['CACSTree'].createColorTable_CACS_REF(filepath_colorTable)
+#        else:
+#            raise ValueError('MODE' + self.settings['MODE'] + 'does not exist!')
         
         # Load color table
         slicer.util.loadColorTable(filepath_colorTable)
@@ -349,27 +399,31 @@ class XALabelerModuleWidget:
     def startClient(self):
         print("Starting client")
         self.dest = ("127.0.0.1", 20001)
-        self.bufferSize = 1024
+        self.bufferSize = 2048
 
     def onStartButtonClicked(self):
         # Start client
         self.startClient()
         self.nextButton.enabled = True
+        self.saveQueryButton.enabled = True
         self.stopButton.enabled = True
-        self.LABEL_LESION_BUTTON.enabled = True
-        self.LABEL_REGION_BUTTON.enabled = True
-        self.LABEL_LESION_NEW_BUTTON.enabled = True
-        self.LABEL_REGION_NEW_BUTTON.enabled = True
+        #self.LABEL_LESION_BUTTON.enabled = True
+        #self.LABEL_REGION_BUTTON.enabled = True
+        #self.LABEL_NEW_BUTTON.enabled = True
+        self.UNCERTAINTY_BUTTON.enabled = True
 
     def onStopButtonClicked(self):
         # Save output
         self.saveOutput(overwrite=False)
         self.nextButton.enabled = False
+        self.saveQueryButton.enabled = False
         self.stopButton.enabled = False
         self.LABEL_LESION_BUTTON.enabled = False
         self.LABEL_REGION_BUTTON.enabled = False
-        self.LABEL_LESION_NEW_BUTTON.enabled = False
-        self.LABEL_REGION_NEW_BUTTON.enabled = False
+        self.LABEL_NEW_BUTTON.enabled = False
+        self.UNCERTAINTY_BUTTON.enabled = False
+        #self.LABEL_LESION_NEW_BUTTON.enabled = False
+        #self.LABEL_REGION_NEW_BUTTON.enabled = False
         
     def onLABEL_LESION_BUTTONClicked(self):
         refAction = self.refAction
@@ -381,352 +435,223 @@ class XALabelerModuleWidget:
         refAction['action'] = 'LABEL_REGION'
         self.refine_region(refAction)
         
-    def onLABEL_REGION_NEW_BUTTONClicked(self):
+    def onLABEL_NEW_BUTTONClicked(self):
         refAction = self.refAction
-        refAction['action'] = 'LABEL_REGION_NEW'
+        refAction['action'] = 'LABEL_NEW'
         self.refine_region_new(refAction)
 
     def onLABEL_LESION_NEW_BUTTONClicked(self):
         refAction = self.refAction
         refAction['action'] = 'LABEL_LESION_NEW'
         self.refine_lesion_new(refAction)
+    
+    def onLABEL_CONTINUE_BUTTONClicked(self):
+        self.continueLabeling = True
+        self.CONTINUE_BUTTON.enabled = False
+        self.editUtil.toggleLabelOutline
+        self.refine_lesion(self.refAction, use_pred=True)
         
     def onLABEL_UNCERTAINTY_BUTTONClicked(self):
         print('onLABEL_UNCERTAINTY_BUTTONClicked')
+        refAction = self.refAction
+        refAction['UNCERTAINT'] = True
         
     def onNextButtonClicked(self):
         # Start client
-        msg = ("NEXT").encode('utf-8')
+        #msg = ("NEXT").encode('utf-8')
         #msg = (refAction_str).encode('utf-8')
+        self.refAction['MSG'] = self.refAction['MSG'] + 'NEXT'
+        ALAction_str = json.dumps(self.refAction)
+        msg = (ALAction_str).encode('utf-8')
         
         UDPClientSocket = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
+        UDPClientSocket.settimeout(10)
+        print('Sending NEXT command')
         UDPClientSocket.sendto(msg, self.dest)
+
         try:
             msgFromServer = UDPClientSocket.recvfrom(self.bufferSize)
             msg = msgFromServer[0]
             refAction = json.loads(msg)
-            print('refAction123', refAction)
             self.refAction = refAction
         except:
-            print('Could not get next coommand. Please check the server!')
-        
-        if refAction['action'] == 'LABEL_LESION':
-            self.refine_lesion(refAction)
-        elif refAction['action'] == 'LABEL_REGION':
-            #self.refine_lesion_close()
+            print('Could not get next query. Please check the server!')
+            
+        if self.refAction['action'] == '':
+            pass
+        elif self.refAction['action'] == 'LABEL_LESION':
+            self.refine_lesion(refAction, use_pred=False)
+        elif self.refAction['action'] == 'LABEL_REGION':
             self.refine_region(refAction)
-        elif refAction['action'] == 'LABEL_REGION_NEW':
-            self.refine_region_new(refAction)
-        elif refAction['action'] == 'LABEL_LESION_NEW':
-            self.refine_lesion_new(refAction)
+        elif self.refAction['action'] == 'LABEL_NEW':
+            self.refine_new(refAction)
         else:
             raise ValueError('Action: ' + refAction['action'] + ' does not exist.')
 
-    def refine_lesion_new(self, refAction):
-        
-        filepath = refAction['fp_image'].encode("utf-8")
-        _, name,_ = splitFilePath(filepath)
-        
-        # Check if image already exists
-        nodes=slicer.util.getNodesByClass('vtkMRMLScalarVolumeNode')
-        nodeFound = False
-        for node in nodes:
-            name_node = node.GetName()
-            if name_node==name:
-                nodeFound = True
+    def onSaveQueryButtonClicked(self):
+        self.saveOutput(overwrite=False)
 
-        # Load image
-        if not nodeFound:
-            # Save old nodes
-            self.saveOutput(overwrite=False)
-            # Delete old node
-            self.onDeleteButtonClicked()
-            properties={'name': name}
-            node = slicer.util.loadVolume(filepath, returnNode=True, properties=properties)[1]
-            if node is None:
-                raise ValueError('Could not load image: ', filepath)
-                
-            node.SetName(name)
-        else:
-            # Save old nodes
-            self.saveOutput(overwrite=False)
+    def refine_new(self, refAction):
+        print('refine_new')
+        self.nextButton.enabled = False
+        self.saveQueryButton.enabled = False
+        self.CONTINUE_BUTTON.enabled = True
 
-        # Load label
-        filepath_label = refAction['fp_label_lesion'].encode("utf-8")
-        label_im = sitk.ReadImage(filepath_label)
-        label = sitk.GetArrayFromImage(label_im)
         
-        # Create binary mask
-        sliceNumber = refAction['SLICE']
-
-        # Set label
-        _, name_label,_ = splitFilePath(filepath_label)
-        if not nodeFound:
-            label = sitk.GetImageFromArray(label)
-            label.CopyInformation(label_im)
-            node = su.PushVolumeToSlicer(label, name=name_label, className='vtkMRMLLabelMapVolumeNode')
-            node.SetName(name_label)
-            slicer.util.setSliceViewerLayers(label = node)
-            self.assignLabelLUT(name_label)
-        else:
-            node = slicer.mrmlScene.GetFirstNodeByName(name_label)
-            label = slicer.util.arrayFromVolume(node)
-            slicer.util.updateVolumeFromArray(node, label)
-            self.assignLabelLUT(name_label)
-
-        # Show action
-        self.label.setText('ACTION: ' + refAction['action'])
-        
-        # Change view
-        red = self.layoutManager.sliceWidget('Red')
-        redLogic = red.sliceLogic()
-        offset = redLogic.GetSliceOffset()
-        origen = label_im.GetOrigin()
-        offset = origen[2] + sliceNumber * 3.0
-        redLogic.SetSliceOffset(offset)
-        
-        # Creates and adds the custom Editor Widget to the module
-        if self.localXALEditorWidget is None:
-            self.localXALEditorWidget = XALEditorWidget(parent=self.parent, showVolumesFrame=False, settings=self.settings)
-            self.localXALEditorWidget.setup()
-            self.localXALEditorWidget.enter()
-    
-        # Set LowerPaintThreshold
-        self.lowerThresholdValue = 130
-        self.upperThresholdValue = 1000
-        self.setLowerPaintThreshold()
-        
-    def refine_region_new(self, refAction):
-        # Save all existing nodes
-        filepath = refAction['fp_image'].encode("utf-8")
-        _, name,_ = splitFilePath(filepath)
-        
-        # Check if image already exists
-        nodes=slicer.util.getNodesByClass('vtkMRMLScalarVolumeNode')
-        nodeFound = False
-        for node in nodes:
-            name_node = node.GetName()
-            if name_node==name:
-                nodeFound = True
-        
-        # Load image
-        if not nodeFound:
-            # Save old nodes
-            self.saveOutput(overwrite=False)
-            # Delete old node
-            self.onDeleteButtonClicked()
-            properties={'name': name}
-            node = slicer.util.loadVolume(filepath, returnNode=True, properties=properties)[1]
-            node.SetName(name)
-        else:
-            # Save old nodes
-            self.saveOutput(overwrite=False)
-            
-        # Load label
-        filepath_label = refAction['fp_label'].encode("utf-8")
-        label_im = sitk.ReadImage(filepath_label)
-        label = sitk.GetArrayFromImage(label_im)
-        
-        sliceNumber = refAction['SLICE']
-
-        # Set label
-        _, name_label,_ = splitFilePath(filepath_label)
-        if not nodeFound:
-            label = sitk.GetImageFromArray(label)
-            label.CopyInformation(label_im)
-            node = su.PushVolumeToSlicer(label, name=name_label, className='vtkMRMLLabelMapVolumeNode')
-            node.SetName(name_label)
-            slicer.util.setSliceViewerLayers(label = node, foreground = node, foregroundOpacity = 0.3, labelOpacity = 0.0)
-            self.assignLabelLUT(name_label)
-        else:
-            node = slicer.mrmlScene.GetFirstNodeByName(name_label)
-            label = slicer.util.arrayFromVolume(node)
-            slicer.util.updateVolumeFromArray(node, label)
-            self.assignLabelLUT(name_label)
-            
-            node = slicer.mrmlScene.GetFirstNodeByName(name_label)
-            slicer.util.setSliceViewerLayers(label = node, foreground = node, foregroundOpacity = 0.5, labelOpacity = 0.0)
-            self.assignLabelLUT(name_label)
-            
-        # Show action
-        self.label.setText('ACTION: ' + refAction['action'])
-
-        # Change view
-        red = self.layoutManager.sliceWidget('Red')
-        redLogic = red.sliceLogic()
-        offset = redLogic.GetSliceOffset()
-        origen = label_im.GetOrigin()
-        offset = origen[2] + sliceNumber * 3.0
-        redLogic.SetSliceOffset(offset)
-        
-        # Creates and adds the custom Editor Widget to the module
-        if self.localXALEditorWidget is None:
-            self.localXALEditorWidget = XALEditorWidget(parent=self.parent, showVolumesFrame=False, settings=self.settings)
-            self.localXALEditorWidget.setup()
-            self.localXALEditorWidget.enter()
-            
-        # Set LowerPaintThreshold
-        self.lowerThresholdValue = -5000
-        self.upperThresholdValue = 5000
-        self.setLowerPaintThreshold()
-            
-            
+        self.continueLabeling = False
+        self.refine_region(refAction)
+ 
     def refine_region(self, refAction):
-        
+        print('refine_region')
         # Save all existing nodes
         filepath = refAction['fp_image'].encode("utf-8")
-        _, name,_ = splitFilePath(filepath)
+        _, imagename,_ = splitFilePath(filepath)
         
-        # Check if image already exists
-        nodes=slicer.util.getNodesByClass('vtkMRMLScalarVolumeNode')
-        nodeFound = False
-        for node in nodes:
-            if name==node.GetName():
-                nodeFound = True
-        
+        self.deleteNodesREFValue()
+        self.saveOutput(overwrite=False)
+        self.deleteNodes(imagename)
+ 
+        imageFound = self.nodeExist(imagename)
+              
         # Load image
-        if not nodeFound:
-            # Save old nodes
-            self.saveOutput(overwrite=False)
-            # Delete old node
-            self.onDeleteButtonClicked()
-            properties={'name': name}
+        if not imageFound:
+            #self.saveOutput(overwrite=False)  
+            print('Loading:', filepath)
+            properties={'name': imagename}
             node = slicer.util.loadVolume(filepath, returnNode=True, properties=properties)[1]
-            node.SetName(name)
-        else:
-            # Save old nodes
-            self.saveOutput(overwrite=False)
-            
+            node.SetName(imagename)  
+
         # Load label
-        filepath_label = refAction['fp_label'].encode("utf-8")
+        filepath_label_org = refAction['fp_label_pred'].encode("utf-8")
+        _, labelname,_ = splitFilePath(filepath_label_org)
+        folder, labelname,_ = splitFilePath(filepath_label_org)
+        filepath_label_list = sorted(glob(os.path.join(folder, labelname + '-*.nrrd')))
+        if len(filepath_label_list)>0:
+            filepath_label = filepath_label_list[-1]
+        else:
+            filepath_label = filepath_label_org
         
         label_im = sitk.ReadImage(filepath_label)
+        print('Loading:', filepath_label)
         label = sitk.GetArrayFromImage(label_im)
 
         IDX = refAction['IDX']
         sliceNumber = refAction['SLICE']
 
-        # Check if label already exists
-        print('filepath_label1', filepath_label)
-        _, name_label,_ = splitFilePath(filepath_label)
-        print('name_label2', name_label)
-        nodes=slicer.util.getNodesByClass('vtkMRMLLabelMapVolumeNode')
-        nodeFound = False
-        for node in nodes:
-            if name_label==node.GetName():
-                nodeFound = True
+        labelFound = self.nodeExist(labelname)
 
-        # Set label
-        if not nodeFound:
-            for p in IDX:
-                label[p[2], p[1], p[0]] = 5
-            label = sitk.GetImageFromArray(label)
-            label.CopyInformation(label_im)
-            print('name_label1', name_label)
-            node = su.PushVolumeToSlicer(label, name=name_label, className='vtkMRMLLabelMapVolumeNode')
-            node.SetName(name_label)
-            slicer.util.setSliceViewerLayers(label = node, foreground = node, foregroundOpacity = 0.3, labelOpacity = 0.0)
-            self.assignLabelLUT(name_label)
-        else:
-            print('name_label', name_label)
-            node = slicer.mrmlScene.GetFirstNodeByName(name_label)
-            label = slicer.util.arrayFromVolume(node)
-            for p in IDX:
-                label[p[2], p[1], p[0]] = 5
-            slicer.util.updateVolumeFromArray(node, label)
-            self.assignLabelLUT(name_label)
-            
-            node = slicer.mrmlScene.GetFirstNodeByName(name_label)
-            slicer.util.setSliceViewerLayers(label = node, foreground = node, foregroundOpacity = 0.5, labelOpacity = 0.0)
-            self.assignLabelLUT(name_label)
-            
-        # Show action
-        self.label.setText('ACTION: ' + refAction['action'])
-
-        # Change view
-        red = self.layoutManager.sliceWidget('Red')
-        redLogic = red.sliceLogic()
-        offset = redLogic.GetSliceOffset()
-        origen = label_im.GetOrigin()
-        offset = origen[2] + sliceNumber * 3.0
-        redLogic.SetSliceOffset(offset)
-        
-        # Creates and adds the custom Editor Widget to the module
-        if self.localXALEditorWidget is None:
-            self.localXALEditorWidget = XALEditorWidget(parent=self.parent, showVolumesFrame=False, settings=self.settings)
-            self.localXALEditorWidget.setup()
-            self.localXALEditorWidget.enter()
-        
-        # Set LowerPaintThreshold
-        self.lowerThresholdValue = -5000
-        self.upperThresholdValue = 5000
-        self.setLowerPaintThreshold()
-        
-    def refine_lesion(self, refAction):
-        
-        filepath = refAction['fp_image'].encode("utf-8")
-        print('filepath1234', filepath)
-        _, name,_ = splitFilePath(filepath)
-        
-        # Check if image already exists
-        nodes=slicer.util.getNodesByClass('vtkMRMLScalarVolumeNode')
-        nodeFound = False
-        for node in nodes:
-            name_node = node.GetName()
-            if name_node==name:
-                nodeFound = True
-
-        # Load image
-        if not nodeFound:
-            # Save old nodes
-            self.saveOutput(overwrite=False)
-            # Delete old node
-            self.onDeleteButtonClicked()
-            properties={'name': name}
-            print('filepath123', filepath)
-            node = slicer.util.loadVolume(filepath, returnNode=True, properties=properties)[1]
-            node.SetName(name)
-        else:
-            # Save old nodes
-            self.saveOutput(overwrite=False)
-
-        # Load label
-        filepath_label = refAction['fp_label_lesion'].encode("utf-8")
-        label_im = sitk.ReadImage(filepath_label)
-        label = sitk.GetArrayFromImage(label_im)
-        
         # Create binary mask
         mask = np.zeros(label.shape)
         IDX = refAction['IDX']
         SLICE = int(refAction['SLICE'])
-        print('IDX123', IDX)
-        print('SLICE123', SLICE)
         NumPixel = len(IDX[0])
         for p in range(NumPixel):
             x=IDX[0][p]
             y=IDX[1][p]
             mask[SLICE, x, y] = 1
 
-#        for p in IDX:
-#            mask[SLICE], p[1], p[0]] = 1
-#        sliceNumber = refAction['SLICE']
-
         # Set label
-        _, name_label,_ = splitFilePath(filepath_label)
-        if not nodeFound:
-            label = label * mask
-            label = sitk.GetImageFromArray(label)
-            label.CopyInformation(label_im)
-            node = su.PushVolumeToSlicer(label, name=name_label, className='vtkMRMLLabelMapVolumeNode')
-            node.SetName(name_label)
-            slicer.util.setSliceViewerLayers(label = node)
-            self.assignLabelLUT(name_label)
+        if not labelFound:
+            label = label * (1-mask) + self.REFValue * mask
+            labelSitk = sitk.GetImageFromArray(label)
+            labelSitk.CopyInformation(label_im)
+            node = su.PushVolumeToSlicer(labelSitk, name=labelname, className='vtkMRMLLabelMapVolumeNode')
+            node.SetName(labelname)
+            slicer.util.setSliceViewerLayers(label = node, foreground = node, foregroundOpacity = 0.3, labelOpacity = 0.0)
+            self.assignLabelLUT(labelname)
         else:
-            node = slicer.mrmlScene.GetFirstNodeByName(name_label)
+            node = slicer.mrmlScene.GetFirstNodeByName(labelname)
             label_node = slicer.util.arrayFromVolume(node)
             label = label_node * (1-mask) + label * mask
             slicer.util.updateVolumeFromArray(node, label)
-            self.assignLabelLUT(name_label)
+            self.assignLabelLUT(labelname)
+            
+        # Show action
+        self.label.setText('ACTION: ' + refAction['action'])
+
+        # Change view
+        red = self.layoutManager.sliceWidget('Red')
+        redLogic = red.sliceLogic()
+        offset = redLogic.GetSliceOffset()
+        origen = label_im.GetOrigin()
+        offset = origen[2] + sliceNumber * 3.0
+        redLogic.SetSliceOffset(offset)
+        
+        # Creates and adds the custom Editor Widget to the module
+        if self.localXALEditorWidget is None:
+            self.localXALEditorWidget = XALEditorWidget(parent=self.parent, showVolumesFrame=False, settings=self.settings)
+            self.localXALEditorWidget.setup()
+            self.localXALEditorWidget.enter()
+        
+        # Set LowerPaintThreshold
+        self.lowerThresholdValue = -5000
+        self.upperThresholdValue = 5000
+        self.setLowerPaintThreshold()
+        
+    def refine_lesion(self, refAction, use_pred=False):
+        print('refine_lesion')
+        # Load label
+        if use_pred:
+            filepath_label_org = refAction['fp_label_lesion_pred'].encode("utf-8")
+            _, labelname,_ = splitFilePath(filepath_label_org)
+            folder, labelname,_ = splitFilePath(filepath_label_org)
+            filepath_label_list = sorted(glob(os.path.join(folder, labelname + '-*.nrrd')))
+            if len(filepath_label_list)>0:
+                filepath_label = filepath_label_list[-1]
+            else:
+                filepath_label = filepath_label_org
+        else:
+            filepath_label = refAction['fp_label_lesion'].encode("utf-8")
+            _, labelname,_ = splitFilePath(filepath_label)
+            
+        filepath = refAction['fp_image'].encode("utf-8")
+        _, imagename,_ = splitFilePath(filepath)
+        
+        self.deleteNodesREFValue()
+        self.saveOutput(overwrite=False)
+        self.deleteNodes(imagename)
+
+        imageFound = self.nodeExist(imagename)
+
+        # Load image
+        if not imageFound:
+            print('Loading:', filepath)
+            properties={'name': imagename}
+            node = slicer.util.loadVolume(filepath, returnNode=True, properties=properties)[1]
+            node.SetName(imagename)        
+            
+        label_im = sitk.ReadImage(filepath_label)
+        print('Loading:', filepath_label)
+        label = sitk.GetArrayFromImage(label_im)
+        
+        # Create binary mask
+        mask = np.zeros(label.shape)
+        IDX = refAction['IDX']
+        SLICE = int(refAction['SLICE'])
+        NumPixel = len(IDX[0])
+        for p in range(NumPixel):
+            x=IDX[0][p]
+            y=IDX[1][p]
+            mask[SLICE, x, y] = 1
+
+        labelFound = self.nodeExist(labelname)
+
+        # Set label
+        if not labelFound:
+            if not use_pred:
+                label = label * mask
+            label = sitk.GetImageFromArray(label)
+            label.CopyInformation(label_im)
+            node = su.PushVolumeToSlicer(label, name=labelname, className='vtkMRMLLabelMapVolumeNode')
+            node.SetName(labelname)
+            slicer.util.setSliceViewerLayers(label = node, foreground = node, foregroundOpacity = 0.0, labelOpacity = 1.0)
+            self.assignLabelLUT(labelname)
+        else:
+            node = slicer.mrmlScene.GetFirstNodeByName(labelname)
+            label_node = slicer.util.arrayFromVolume(node)
+            label = label_node * (1-mask) + label * mask
+            slicer.util.updateVolumeFromArray(node, label)
+            self.assignLabelLUT(labelname)
 
         # Show action
         self.label.setText('ACTION: ' + refAction['action'])
@@ -750,6 +675,9 @@ class XALabelerModuleWidget:
         self.upperThresholdValue = 1000
         self.setLowerPaintThreshold()
         
+        self.nextButton.enabled = True
+        self.saveQueryButton.enabled = True
+        
     def refine_lesion_close(self):
         if self.localXALEditorWidget is not None:
             self.localXALEditorWidget.close()
@@ -763,11 +691,34 @@ class XALabelerModuleWidget:
         parameterNode.SetParameter("LabelEffect,paintThresholdMin","{0}".format(self.lowerThresholdValue))
         parameterNode.SetParameter("LabelEffect,paintThresholdMax","{0}".format(self.upperThresholdValue))
 
-    def onDeleteButtonClicked(self):
-        # Deleta all old nodes
+    def deleteNodesREFValue(self):
         nodes=slicer.util.getNodesByClass('vtkMRMLScalarVolumeNode')
         for node in nodes:
-            slicer.mrmlScene.RemoveNode(node)
+            arr = slicer.util.arrayFromVolume(node)
+            REFValueExist = (arr==self.REFValue).sum()
+            if REFValueExist:
+                slicer.mrmlScene.RemoveNode(node)
+                
+
+                
+                
+    def deleteNodes(self, delete_exception=[]):
+        nodes=slicer.util.getNodesByClass('vtkMRMLScalarVolumeNode')
+        for node in nodes:
+            nodename=node.GetName()
+            if not any([name==nodename for name in delete_exception]):
+                slicer.mrmlScene.RemoveNode(node)
+    
+    def onDeleteButtonClicked(self):
+        # Deleta all old nodes
+        self.deleteNodes()
+        
+        
+#    def onDeleteButtonClicked(self):
+#        # Deleta all old nodes
+#        nodes=slicer.util.getNodesByClass('vtkMRMLScalarVolumeNode')
+#        for node in nodes:
+#            slicer.mrmlScene.RemoveNode(node)
             
     def filterBG(self, image):
         # Filter labeled background
@@ -835,7 +786,7 @@ class XALabelerModuleWidget:
                     num = 0
                     while exist:
                         num_str = "{:02n}".format(num)
-                        filepath = folderpath_output + '/' + filename_output + '_' + num_str +'.nrrd'
+                        filepath = folderpath_output + '/' + filename_output + '-' + num_str +'.nrrd'
                         exist = os.path.isfile(filepath)
                         num = num + 1
                         
@@ -942,7 +893,7 @@ class XALEditBox(EditorLib.EditBox):
         self.icons = {}
         self.callbacks = {}
 
-        CACSTreeDict = self.settings['CACSTreeDict']
+        CACSTreeDict = self.settings['CACSTreeDict'][self.settings['MODE']][0]
 
         # The Default Label Selector
         color = CACSTreeDict['OTHER']['COLOR']

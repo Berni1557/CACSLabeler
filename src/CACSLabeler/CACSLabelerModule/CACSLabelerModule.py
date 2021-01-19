@@ -527,7 +527,7 @@ class CACSLabelerModuleWidget:
             self.imagelist = [image]
             
             # Read image
-            print('image_name', image.image_name)
+            print('image_nameX', image.image_name)
             properties={'Name': image.image_name}
             node = slicer.util.loadVolume(image.fip_image, returnNode=True, properties=properties)[1]
             node.SetName(image.image_name)
