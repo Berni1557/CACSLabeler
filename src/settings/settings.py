@@ -75,31 +75,18 @@ class Settings:
         """
         
         treeList = CACSTree.initCACSTreeDict()
-        
-        #columns_CACS = ['PatientID', 'SeriesInstanceUID', 'CC', 'RCA', 'LAD', 'LCX']
 
         # Initialize settings
-#        settingsDefault = {'folderpath_images': 'H:/cloud/cloud_data/Projects/DL/Code/src/datasets/DISCHARGE/data_cacs/Images',
-#                           'folderpath_references': 'H:/cloud/cloud_data/Projects/DL/Code/src/datasets/DISCHARGE/data_cacs/References',
-#                           'filepath_export': 'H:/cloud/cloud_data/Projects/CACSLabeler/code/data/export.json',
-#                           'folderpath_export_csv': 'H:/cloud/cloud_data/Projects/CACSLabeler/code/data/export_csv',
-#                           'filter_input': '(*.mhd)',
-#                           'CalciumScores': ['AGATSTON_SCORE', 'VOLUME_SCORE', 'DENSITY_SCORE', 'NUMLESION_SCORE', 'LESIONVOLUME_SCORE'],
-#                           'filter_input_by_reference': False,
-#                           'filter_reference_with': ['-label.'],
-#                           'filter_reference_without': ['label-lesion.'],
-#                           'CACSTreeDict': CACSTreeDict,
-#                           'columns_CACSTREE_CUMULATIVE': columns_CACSTREE_CUMULATIVE,
-#                           'columns_CACS': columns_CACS,
-#                           'MODE': 'CACSTREE_CUMULATIVE'} # MODE can be 'CACS','CACSTREE' or 'CACSTREE_CUMULATIVE'
-
         settingsDefault = {'folderpath_images': '/mnt/SSD2/cloud_data/Projects/DL/Code/src/datasets/DISCHARGE/data_cacs/Images',
                            'folderpath_references': '/mnt/SSD2/cloud_data/Projects/DL/Code/src/datasets/DISCHARGE/data_cacs/References',
                            'folderpath_export': '/mnt/SSD2/cloud_data/Projects/CACSLabeler/code/data/export',
-                           'filter_input': '(*.mhd)',
+                           'filter_input': "Files(*.mhd, *.txt)",
                            #'CalciumScores': ['AGATSTON_SCORE', 'VOLUME_SCORE', 'DENSITY_SCORE', 'NUMLESION_SCORE', 'LESIONVOLUME_SCORE'],
-                           'CalciumScores': ['AGATSTON_SCORE', 'VOLUME_SCORE', 'DENSITY_SCORE', 'NUMLESION_SCORE'],
-                           'filter_input_by_reference': False,
+                           #'CalciumScores': ['AGATSTON_SCORE', 'VOLUME_SCORE', 'DENSITY_SCORE', 'NUMLESION_SCORE'],
+                           'CalciumScores': ['AGATSTON_SCORE'],
+                           'show_input_if_ref_found': True,
+                           'show_input_if_ref_not_found': True,
+                           'load_reference_if_exist': False,
                            'filter_reference_with': ['-label.'],
                            'filter_reference_without': ['label-lesion.'],
                            'CACSTreeDict': treeList,

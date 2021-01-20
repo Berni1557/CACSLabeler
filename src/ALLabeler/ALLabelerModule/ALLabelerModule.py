@@ -192,6 +192,7 @@ class ALLabelerModuleWidget:
         # sets the layout to Red Slice Only
         layoutManager = slicer.app.layoutManager()
         layoutManager.setLayout(slicer.vtkMRMLLayoutNode.SlicerLayoutOneUpRedSliceView)
+        self.layoutManager = layoutManager
         
         # Load color table
         dirname = os.path.dirname(os.path.abspath(__file__))
@@ -222,7 +223,26 @@ class ALLabelerModuleWidget:
         slicer.util.loadColorTable(filepath_colorTable)
 
     def onCurrentNodeChanged(self):
-        # Create label
+        
+        # Load reference if load_reference_if_exist is true and reference file exist and no label node exist
+        if self.settings['load_reference_if_exist']:
+            inputImageNode = self.inputSelector.currentNode()
+            if inputImageNode is not None:
+                inputVolumeName = inputImageNode.GetName()
+                calciumName = inputVolumeName + '-label'
+                node_label = slicer.util.getFirstNodeByName(calciumName)
+                if node_label is None and 'label' not in inputVolumeName and not inputVolumeName == '1':
+                    calciumName = inputVolumeName + '-label'
+                    filepath_ref = os.path.join(self.settings['folderpath_references'], calciumName + '.nrrd')
+                    properties={'name': calciumName, 'labelmap': True}
+                    if os.path.isfile(filepath_ref):
+                        node_label = slicer.util.loadVolume(filepath_ref, returnNode=True, properties=properties)[1]
+                        node_label.SetName(calciumName)
+                        self.assignLabelLUT(calciumName)
+                        self.inputSelector.setCurrentNode(inputImageNode)
+                        #slicer.util.setSliceViewerLayers(background = inputImageNode, foreground = node_label, foregroundOpacity = 0.3, labelOpacity = 0.0)
+       
+        # Create label if not exist
         inputImageNode = self.inputSelector.currentNode()
         if inputImageNode is not None:
             inputVolumeName = inputImageNode.GetName()
@@ -234,8 +254,26 @@ class ALLabelerModuleWidget:
                 labelImage.CopyInformation(inputVolume)
                 su.PushLabel(labelImage, calciumName)
                 self.assignLabelLUT(calciumName)
+                self.inputSelector.setCurrentNode(inputImageNode)
         
+        # Set slicer offset
+        slicer.util.resetSliceViews()
         
+        # Change visualization
+        if inputImageNode is not None:
+            sliceNumber = 30
+            red = self.layoutManager.sliceWidget('Red')
+            redLogic = red.sliceLogic()
+            offset = redLogic.GetSliceOffset()
+            #origen = label_im.GetOrigin()
+            origen = inputImageNode.GetOrigin()
+            offset = origen[2] + sliceNumber * 3.0
+            redLogic.SetSliceOffset(offset)
+        if inputImageNode is not None and node_label is not None:
+            slicer.util.setSliceViewerLayers(label = node_label, background = inputImageNode, foreground = node_label, foregroundOpacity = 0.3, labelOpacity = 1.0)
+        if inputImageNode is not None and node_label is None:
+            slicer.util.setSliceViewerLayers(background = inputImageNode)
+
     def writeSettings(self, filepath_settings):
         self.settings.writeSettings(filepath_settings)
     
@@ -253,59 +291,43 @@ class ALLabelerModuleWidget:
     def onLoadInputButtonClicked(self):
         
         # Deleta all old nodes
-        if self.settings['filter_input_by_reference']:
-            filenames_ref = glob(self.settings['folderpath_references'] + '/*label.nrrd')
-            filter_input = self.settings['filter_input'].decode('utf-8')[1:-1]
-            filenames = glob(self.settings['folderpath_images'] + '/' + filter_input)
+        if self.settings['show_input_if_ref_found'] or self.settings['show_input_if_ref_not_found']:
+            files_ref = glob(self.settings['folderpath_references'] + '/*label.nrrd')
+            filter_input = self.settings['filter_input'].decode('utf-8')
+            filter_input_list = filter_input.split('(')[1].split(')')[0].split(',')
+            filter_input_list = [x.replace(" ", "") for x in filter_input_list]
+
+            # Collect filenames
+            files=[]
+            for filt in filter_input_list:
+                files = files + glob(self.settings['folderpath_images'] + '/' + filt)
             filter_input_ref = ''
-            for f in filenames:
+            for f in files:
                 _,fname,_ = splitFilePath(f)
-                ref_found = False
-                for ref in filenames_ref:
-                    ref_found = ref_found or (fname in ref)
-                if not ref_found:
+                ref_found = any([fname in ref for ref in files_ref])
+                print('ref_found', ref_found)
+                if ref_found and self.settings['show_input_if_ref_found']:
                     filter_input_ref = filter_input_ref + fname + '.mhd '
-                    
-            filter_input_ref = '(' + filter_input_ref + ')'
-            filenames = qt.QFileDialog.getOpenFileNames(self.parent, 
-                                                   'Open files', 
-                                                   self.settings['folderpath_images'],
-                                                   filter_input_ref)
-            
+                if not ref_found and self.settings['show_input_if_ref_not_found']:
+                    filter_input_ref = filter_input_ref + fname + '.mhd '
+
+            filenames = qt.QFileDialog.getOpenFileNames(self.parent, 'Open files', self.settings['folderpath_images'],filter_input_ref)
         else:
-            filenames = qt.QFileDialog.getOpenFileNames(self.parent, 
-                                                   'Open files', 
-                                                   self.settings['folderpath_images'],
-                                                   self.settings['filter_input'])
+            filenames = qt.QFileDialog.getOpenFileNames(self.parent, 'Open files', self.settings['folderpath_images'],self.settings['filter_input'])
         
         # Read images
         imagenames = []
         for filepath in filenames:
             _, name,_ = splitFilePath(filepath)
-            properties={'Name': name}
+            properties={'name': name}
             node = slicer.util.loadVolume(filepath, returnNode=True, properties=properties)[1]
-            node.SetName(name)
+            slicer.util.setSliceViewerLayers(background=node)
             imagenames.append(name)
 
         if len(filenames)>0:
             self.bgGrowingButton.enabled = True
             self.saveOutputButton.enabled = True
             self.deleteButton.enabled = True
-            
-            # Create label
-            inputImageNode = self.inputSelector.currentNode()
-            inputVolumeName = inputImageNode.GetName()
-
-            #if 'label' not in inputVolumeName:
-            calciumName = inputVolumeName + '-label'
-            node_label = slicer.util.getFirstNodeByName(calciumName)
-            if node_label is None and 'label' not in inputVolumeName:
-                inputVolume = su.PullVolumeFromSlicer(inputVolumeName)
-                labelImage = sitk.Image(inputVolume.GetSize(), sitk.sitkInt16)
-                labelImage.CopyInformation(inputVolume)
-                calciumName = inputVolumeName + '-label'
-                su.PushLabel(labelImage, calciumName)
-                self.assignLabelLUT(calciumName)
 
             # Creates and adds the custom Editor Widget to the module
             if self.localALEditorWidget is None:
@@ -473,7 +495,7 @@ class ALEditBox(EditorLib.EditBox):
         self.icons = {}
         self.callbacks = {}
 
-        CACSTreeDict = self.settings['CACSTreeDict']
+        CACSTreeDict = self.settings['CACSTreeDict'][self.settings['MODE']][0]
 
         # The Default Label Selector
         color = CACSTreeDict['OTHER']['COLOR']

@@ -37,14 +37,14 @@ class VolumeScore(CalciumScoreBase):
         arteries_sum_keys = list(arteries_sum.keys())
 
         # Neighborhood of connected components (6-connectivity)
-        structure = np.zeros((3,3,3))
-        structure[1,1,1] = 1
-        structure[2,1,1] = 1
-        structure[1,2,1] = 1
-        structure[1,1,2] = 1
-        structure[0,1,1] = 1
-        structure[1,0,1] = 1
-        structure[1,1,0] = 1
+#        structure = np.zeros((3,3,3))
+#        structure[1,1,1] = 1
+#        structure[2,1,1] = 1
+#        structure[1,2,1] = 1
+#        structure[1,1,2] = 1
+#        structure[0,1,1] = 1
+#        structure[1,0,1] = 1
+#        structure[1,1,0] = 1
 
         # Iterate over arteries
         #VolumeScore = defaultdict(lambda: None, {'NAME': 'VolumeScore', 'LAD': 0, 'LCX': 0, 'RCA': 0, 'VolumeScore': 0})

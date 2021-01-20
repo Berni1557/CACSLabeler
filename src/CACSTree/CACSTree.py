@@ -22,6 +22,7 @@ class CACSTree():
     def addChildren(self, parent, parent_name):
         for key in parent.keys():
             key = key.encode("utf-8")
+            #print('key', key)
             if not key =='COLOR' and not key =='VALUE':
                 lesion = Lesion(name=key, parent=parent_name, color = parent[key]['COLOR'], value = parent[key]['VALUE'])
                 self.lesionList.append(lesion)

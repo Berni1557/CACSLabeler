@@ -436,7 +436,6 @@ class CACSLabelerModuleWidget:
     
     def export_csv(self, appendCSV=False):
         for scorename in self.settings['CalciumScores']:
-            print('scorename', scorename)
             CalciumScoreBase.export_csv(self.settings, self.imagelist, appendCSV, scorename=scorename)
             
     def extractName(self, inputVolumeNameLabel):
@@ -500,7 +499,7 @@ class CACSLabelerModuleWidget:
          
     def loadImages(self):
         folderpath_references = self.settings['folderpath_references'].encode("utf-8")
-        fip_references = glob(folderpath_references + '/*.nrrd')
+        fip_references = glob(folderpath_references + '/*lesion.nrrd') + glob(folderpath_references + '/*lesion-pred.nrrd')
         fip_images = glob(self.settings['folderpath_images'] + '/*CTI.mhd') + glob(self.settings['folderpath_images'] + '/*.mhd')
         imagelist = []
         for fip_ref in fip_references:
@@ -514,7 +513,6 @@ class CACSLabelerModuleWidget:
     def onExportScoreButtonRefClicked(self):
 
         imagelistExp = self.loadImages()
-        print('imagelist0', imagelistExp)
         
         # Delete folderpath_export if exist
         folderpath_export = self.settings['folderpath_export']
@@ -524,19 +522,20 @@ class CACSLabelerModuleWidget:
 
         for image in imagelistExp:
             
+            
             self.imagelist = [image]
             
             # Read image
-            print('image_nameX', image.image_name)
             properties={'Name': image.image_name}
             node = slicer.util.loadVolume(image.fip_image, returnNode=True, properties=properties)[1]
             node.SetName(image.image_name)
 
             # Read reference
-            print('ref_name', image.ref_name)
             properties={'Name': image.ref_name}
             node = slicer.util.loadVolume(image.fip_ref, returnNode=True, properties=properties)[1]
             node.SetName(image.ref_name)
+            
+            print('image.fip_ref', image.fip_ref)
             
             # Export score
             self.onExportScoreButtonClicked(appendCSV=True)
@@ -578,35 +577,30 @@ class CACSLabelerModuleWidget:
                     
         
     def onLoadInputButtonClicked(self):
-                   
-        if self.settings['filter_input_by_reference']:
-            
-            filter_input = self.settings['filter_input'].decode('utf-8')[1:-1]
-            filepaths = glob(self.settings['folderpath_images'] + '/' + filter_input)
-            filepaths_ref = glob(self.settings['folderpath_references'] + '/*.nrrd')
-            
-            # Filter files by filter_reference_with and filter_reference_without
-            filenames_filt = self.filter_by_reference(filepaths, filepaths_ref, self.settings['filter_reference_with'], self.settings['filter_reference_without'])
 
+        # Deleta all old nodes
+        if self.settings['show_input_if_ref_found'] or self.settings['show_input_if_ref_not_found']:
+            files_ref = glob(self.settings['folderpath_references'] + '/*label-lesion.nrrd')
+            filter_input = self.settings['filter_input'].decode('utf-8')
+            filter_input_list = filter_input.split('(')[1].split(')')[0].split(',')
+            filter_input_list = [x.replace(" ", "") for x in filter_input_list]
+
+            # Collect filenames
+            files=[]
+            for filt in filter_input_list:
+                files = files + glob(self.settings['folderpath_images'] + '/' + filt)
             filter_input_ref = ''
-            for f in filenames_filt:
+            for f in files:
                 _,fname,_ = splitFilePath(f)
-                filter_input_ref = filter_input_ref + fname + '.mhd '
-            if len(filenames_filt)>0:
-                filter_input_ref = '(' + filter_input_ref + ')'
-            else:
-                filter_input_ref = '(_)'
-                
-            filenames = qt.QFileDialog.getOpenFileNames(self.parent, 
-                                                   'Open files', 
-                                                   self.settings['folderpath_images'],
-                                                   filter_input_ref)
-            
+                ref_found = any([fname in ref for ref in files_ref])
+                if ref_found and self.settings['show_input_if_ref_found']:
+                    filter_input_ref = filter_input_ref + fname + '.mhd '
+                if not ref_found and self.settings['show_input_if_ref_not_found']:
+                    filter_input_ref = filter_input_ref + fname + '.mhd '
+
+            filenames = qt.QFileDialog.getOpenFileNames(self.parent, 'Open files', self.settings['folderpath_images'],filter_input_ref)
         else:
-            filenames = qt.QFileDialog.getOpenFileNames(self.parent, 
-                                                   'Open files', 
-                                                   self.settings['folderpath_images'],
-                                                   self.settings['filter_input'])
+            filenames = qt.QFileDialog.getOpenFileNames(self.parent, 'Open files', self.settings['folderpath_images'],self.settings['filter_input'])
         
         # Read images
         imagenames = []
@@ -622,6 +616,100 @@ class CACSLabelerModuleWidget:
         # Enable radio button
         self.KEV80.enabled = True
         self.KEV120.enabled = True
+
+#        if len(filenames)>0:
+#            self.bgGrowingButton.enabled = True
+#            self.saveOutputButton.enabled = True
+#            self.deleteButton.enabled = True
+#
+#            # Creates and adds the custom Editor Widget to the module
+#            if self.localALEditorWidget is None:
+#                self.localALEditorWidget = ALEditorWidget(parent=self.parent, showVolumesFrame=False, settings=self.settings)
+#                self.localALEditorWidget.setup()
+#                self.localALEditorWidget.enter()
+                
+#        # Deleta all old nodes
+#        if self.settings['show_input_if_ref_found'] or self.settings['show_input_if_ref_not_found']:
+#            files_ref = glob(self.settings['folderpath_references'] + '/*label.nrrd')
+#            filter_input = self.settings['filter_input'].decode('utf-8')[1:-1]
+#
+#            filter_input = 'Files(*.mhd *.jpg *.txt)'
+#            filter_input_list = filter_input.split('(')[1].split(')')[0].split(' *')
+#
+#            # Collect filenames
+#            files=[]
+#            for filt in filter_input_list:
+#                print('filt', self.settings['folderpath_images'] + '/*' + filt)
+#                files = files + glob(self.settings['folderpath_images'] + '/*' + filt)
+#                
+#            print('files', files)
+#
+#            k=0
+#            filter_input_ref = ''
+#            for f in files:
+#                _,fname,_ = splitFilePath(f)
+#                ref_found = any([fname in ref for ref in files_ref])
+#                if ref_found and self.settings['show_input_if_ref_found']:
+#                    filter_input_ref = filter_input_ref + fname + '.mhd '
+#                    k=k+1
+#                if not ref_found and self.settings['show_input_if_ref_not_found']:
+#                    filter_input_ref = filter_input_ref + fname + '.mhd '
+#                    k=k+1
+#            print('k',k)
+#            filter_input_ref = '(' + filter_input_ref + ')'
+#            #print('filter_input_ref', len(filter_input_ref))
+#            filenames = qt.QFileDialog.getOpenFileNames(self.parent, 'Open files', self.settings['folderpath_images'],filter_input_ref)
+#            
+#        else:
+#            filenames = qt.QFileDialog.getOpenFileNames(self.parent, 'Open files', self.settings['folderpath_images'],self.settings['filter_input'])
+
+        #if self.settings['filter_input_by_reference']:
+            
+            
+            
+#        if self.settings['filter_input_by_reference']:
+#            
+#            filter_input = self.settings['filter_input'].decode('utf-8')[1:-1]
+#            filepaths = glob(self.settings['folderpath_images'] + '/' + filter_input)
+#            filepaths_ref = glob(self.settings['folderpath_references'] + '/*.nrrd')
+#            
+#            # Filter files by filter_reference_with and filter_reference_without
+#            filenames_filt = self.filter_by_reference(filepaths, filepaths_ref, self.settings['filter_reference_with'], self.settings['filter_reference_without'])
+#
+#            filter_input_ref = ''
+#            for f in filenames_filt:
+#                _,fname,_ = splitFilePath(f)
+#                filter_input_ref = filter_input_ref + fname + '.mhd '
+#            if len(filenames_filt)>0:
+#                filter_input_ref = '(' + filter_input_ref + ')'
+#            else:
+#                filter_input_ref = '(_)'
+#                
+#            filenames = qt.QFileDialog.getOpenFileNames(self.parent, 
+#                                                   'Open files', 
+#                                                   self.settings['folderpath_images'],
+#                                                   filter_input_ref)
+#            
+#        else:
+#            filenames = qt.QFileDialog.getOpenFileNames(self.parent, 
+#                                                   'Open files', 
+#                                                   self.settings['folderpath_images'],
+#                                                   self.settings['filter_input'])
+#        
+#        # Read images
+#        imagenames = []
+#        for filepath in filenames:
+#            _, name,_ = splitFilePath(filepath)
+#            properties={'Name': name}
+#            node = slicer.util.loadVolume(filepath, returnNode=True, properties=properties)[1]
+#            node.SetName(name)
+#            imagenames.append(name)
+#            image = Image(fip_image=filepath)
+#            self.imagelist.append(image)
+#            
+#        # Enable radio button
+#        self.KEV80.enabled = True
+#        self.KEV120.enabled = True
         
     def onThresholdButtonClicked(self):
         if not self.KEV120.checked and not self.KEV80.checked:
@@ -632,6 +720,23 @@ class CACSLabelerModuleWidget:
         self.inputImageNode = self.inputSelector.currentNode()
         inputVolumeName = self.inputImageNode.GetName()
         
+        # Load reference if load_reference_if_exist is true and reference file exist and no label node exist
+        if self.settings['load_reference_if_exist']:
+            print('load_reference_if_exist')
+            if self.inputImageNode is not None:
+                calciumName = inputVolumeName + '-label-lesion'
+                node_label = slicer.util.getFirstNodeByName(calciumName)
+                if node_label is None and 'label' not in inputVolumeName and not inputVolumeName == '1':
+                    #print('node_label', node_label)
+                    calciumName = inputVolumeName + '-label-lesion'
+                    filepath_ref = os.path.join(self.settings['folderpath_references'], calciumName + '.nrrd')
+                    properties={'name': calciumName, 'labelmap': True}
+                    if os.path.isfile(filepath_ref):
+                        node_label = slicer.util.loadVolume(filepath_ref, returnNode=True, properties=properties)[1]
+                        node_label.SetName(calciumName)
+                        #self.CACSLabelerModuleLogic.calciumName = calciumName
+                        
+        
         # Threshold image
         self.CACSLabelerModuleLogic = CACSLabelerModuleLogic(self.KEV80.checked, self.KEV120.checked, inputVolumeName)
         self.CACSLabelerModuleLogic.runThreshold()
@@ -639,6 +744,9 @@ class CACSLabelerModuleWidget:
         # View thresholded image as label map and image as background image in red widget
         node = slicer.util.getFirstNodeByName(self.CACSLabelerModuleLogic.calciumName[0:-13])
         slicer.util.setSliceViewerLayers(background=node)
+        
+        #self.CACSLabelerModuleLogic.inputSelector.setCurrentNode(self.inputImageNode)
+        self.CACSLabelerModuleLogic.assignLabelLUT(calciumName)
         
         # Set ref_name
         name = self.CACSLabelerModuleLogic.calciumName[0:-13]
@@ -945,7 +1053,7 @@ class CardiacEditBox(EditorLib.EditBox):
                     combo = qt.QComboBox()
                     if i==0:
                         items = list(CACSTreeDict.keys())
-                        items = [x for x in items if not x=='COLOR']
+                        items = [x for x in items if not x=='COLOR' and not x=='VALUE']
                         combo.addItems(items)
                         combo.setCurrentIndex(items.index('OTHER'))
                         combo.toolTip = "Label - Default"
