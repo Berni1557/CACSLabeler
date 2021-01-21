@@ -133,7 +133,7 @@ class CACSTree():
             
         # Create tree tree_V01
         columns_CACSTREE = ['PatientID', 'SeriesInstanceUID', 'CC', 
-                 'RCA', 'RCA_PROXIMAL', 'RCA_MID', 'RCA_DISTAL',
+                 'RCA', 'RCA_PROXIMAL', 'RCA_MID', 'RCA_DISTAL', 'RCA_SIDE_BRANCH',
                  'LM', 'LM_BIF_LAD_LCX', 'LM_BIF_LAD', 'LM_BIF_LCX', 'LM_BRANCH',
                  'LAD', 'LAD_PROXIMAL', 'LAD_MID', 'LAD_DISTAL', 'LAD_SIDE_BRANCH',
                  'LCX', 'LCX_PROXIMAL', 'LCX_MID', 'LCX_DISTAL', 'LCX_SIDE_BRANCH',
@@ -211,7 +211,7 @@ class CACSTree():
                              
         # Create tree tree_V02
         columns_CACSTREE = ['PatientID', 'SeriesInstanceUID','CC', 
-                 'RCA', 'RCA_PROXIMAL', 'RCA_MID', 'RCA_DISTAL',
+                 'RCA', 'RCA_PROXIMAL', 'RCA_MID', 'RCA_DISTAL', 'RCA_SIDE_BRANCH',
                  'LM', 'LM_BIF_LAD_LCX', 'LM_BIF_LAD', 'LM_BIF_LCX', 'LM_BRANCH',
                  'LAD', 'LAD_PROXIMAL', 'LAD_MID', 'LAD_DISTAL', 'LAD_SIDE_BRANCH',
                  'LCX', 'LCX_PROXIMAL', 'LCX_MID', 'LCX_DISTAL', 'LCX_SIDE_BRANCH',
