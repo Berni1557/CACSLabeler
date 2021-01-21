@@ -93,7 +93,8 @@ class XALabelerModuleWidget:
         self.images=[]
         self.localXALEditorWidget = None
         self.refAction = ALAction.copy()
-        self.REFValue = 1000
+        self.REFValue = 200
+        self.UCValue = 201
         self.continueLabeling = False
 
         if not parent:
@@ -349,7 +350,13 @@ class XALabelerModuleWidget:
             
         dirname = os.path.dirname(os.path.abspath(__file__))
         filepath_colorTable = dirname + '/CardiacAgatstonMeasuresLUT.ctbl'
-        self.settings['CACSTree'].createColorTable_CACS_REF(filepath_colorTable, self.REFValue)
+        
+        if self.settings['MODE'] == 'CACS':
+            self.settings['CACSTree'].createColorTable_CACS(filepath_colorTable)
+        if self.settings['MODE'] == 'CACS_REF':
+            self.settings['CACSTree'].createColorTable_CACS_REF(filepath_colorTable, self.REFValue, self.UCValue)
+            
+        #self.settings['CACSTree'].createColorTable_CACS_REF_LESION(filepath_colorTable, self.REFValue, self.UCValue)
         
         #self.settings['MODE'] = 'CACS'
         #self.settings['MODE'] = 'CACS_REF'
@@ -582,6 +589,7 @@ class XALabelerModuleWidget:
             self.localXALEditorWidget = XALEditorWidget(parent=self.parent, showVolumesFrame=False, settings=self.settings)
             self.localXALEditorWidget.setup()
             self.localXALEditorWidget.enter()
+        self.localXALEditorWidget.toolsBox.UCchangeIslandButton.setEnabled(False)
         
         # Set LowerPaintThreshold
         self.lowerThresholdValue = -5000
@@ -669,6 +677,8 @@ class XALabelerModuleWidget:
             self.localXALEditorWidget = XALEditorWidget(parent=self.parent, showVolumesFrame=False, settings=self.settings)
             self.localXALEditorWidget.setup()
             self.localXALEditorWidget.enter()
+        self.localXALEditorWidget.toolsBox.UCchangeIslandButton.setEnabled(True)
+        
     
         # Set LowerPaintThreshold
         self.lowerThresholdValue = 130
@@ -696,7 +706,7 @@ class XALabelerModuleWidget:
         for node in nodes:
             arr = slicer.util.arrayFromVolume(node)
             REFValueExist = (arr==self.REFValue).sum()
-            if REFValueExist:
+            if REFValueExist>0:
                 slicer.mrmlScene.RemoveNode(node)
                 
 
@@ -931,6 +941,16 @@ class XALEditBox(EditorLib.EditBox):
         self.mainFrame.layout().addWidget(RCAchangeIslandButton)
         RCAchangeIslandButton.connect('clicked(bool)', self.onRCAchangeIslandButtonClicked)
 
+        # The UNCERTAINTY (UC) Label Selector
+        color = CACSTreeDict['CC']['UC']['COLOR']
+        color_str = 'background-color: rgb(' + str(color[0]) + ',' + str(color[1]) + ',' + str(color[2]) + ')'
+        UCchangeIslandButton = qt.QPushButton("UNCERTAINTY")
+        UCchangeIslandButton.toolTip = "Label - UNCERTAINTY (UC)"
+        UCchangeIslandButton.setStyleSheet(color_str)
+        self.mainFrame.layout().addWidget(UCchangeIslandButton)
+        UCchangeIslandButton.connect('clicked(bool)', self.onUCchangeIslandButtonClicked)
+
+        
         # create all of the buttons
         # createButtonRow() ensures that only effects in self.effects are exposed,
         self.createButtonRow( ("PreviousCheckPoint", "NextCheckPoint",
@@ -961,6 +981,7 @@ class XALEditBox(EditorLib.EditBox):
         self.LCXchangeIslandButton = LCXchangeIslandButton
         self.RCAchangeIslandButton = RCAchangeIslandButton
         self.OTHERChangeIslandButton = OTHERChangeIslandButton
+        self.UCchangeIslandButton = UCchangeIslandButton
 
         vbox.addStretch(1)
 
@@ -978,6 +999,10 @@ class XALEditBox(EditorLib.EditBox):
 
     def onRCAchangeIslandButtonClicked(self):
         self.changeIslandButtonClicked(4)
+
+    def onUCchangeIslandButtonClicked(self):
+        self.changeIslandButtonClicked(100)
+        
 
     def changeIslandButtonClicked(self, label):
         self.selectEffect("PaintEffect")

@@ -92,7 +92,7 @@ class Settings:
                            'CACSTreeDict': treeList,
                            'columns_CACSTREE_CUMULATIVE': treeList['CACSTREE_CUMULATIVE'][1],
                            'columns_CACS': treeList['CACS'][1],
-                           'MODE': 'CACSTREE_CUMULATIVE', # MODE can be 'CACS','CACSTREE' or 'CACSTREE_CUMULATIVE'
+                           'MODE': 'CACSTREE_CUMULATIVE', # MODE can be 'CACS','CACSTREE' or 'CACSTREE_CUMULATIVE', 'CACS_REF'
                            'DATASET': 'DISCHARGE'}  # DATaSEt can be "DISCHARGE" or "ORCASCORE"
                            
         print('Writing setting to ' + filepath_settings)
