@@ -101,7 +101,11 @@ class Image:
             
     def findImage(self, images):
         for image in images:
-            if self.image_name in image:
+            _,name,_ = splitFilePath(image)
+#            print('image', image)
+#            print('name', name)
+#            print('self.image_name', self.image_name)
+            if self.image_name == name:
                 self.fip_image = image
                 
     def setRef_name(self, ref_name):
@@ -513,7 +517,7 @@ class CACSLabelerModuleWidget:
     def onExportScoreButtonRefClicked(self):
 
         imagelistExp = self.loadImages()
-        
+
         # Delete folderpath_export if exist
         folderpath_export = self.settings['folderpath_export']
         if os.path.isdir(folderpath_export):
@@ -521,25 +525,19 @@ class CACSLabelerModuleWidget:
             os.mkdir(folderpath_export)
 
         for image in imagelistExp:
-            
-            
             self.imagelist = [image]
-            
             # Read image
+            print('image.image_name', image.image_name)
+            print('image.fip_image', image.fip_image)
             properties={'Name': image.image_name}
             node = slicer.util.loadVolume(image.fip_image, returnNode=True, properties=properties)[1]
             node.SetName(image.image_name)
-
             # Read reference
             properties={'Name': image.ref_name}
             node = slicer.util.loadVolume(image.fip_ref, returnNode=True, properties=properties)[1]
             node.SetName(image.ref_name)
-            
-            print('image.fip_ref', image.fip_ref)
-            
             # Export score
             self.onExportScoreButtonClicked(appendCSV=True)
-            
             # Delete node
             self.onDeleteButtonClicked()
             
@@ -734,6 +732,7 @@ class CACSLabelerModuleWidget:
                     if os.path.isfile(filepath_ref):
                         node_label = slicer.util.loadVolume(filepath_ref, returnNode=True, properties=properties)[1]
                         node_label.SetName(calciumName)
+                        self.CACSLabelerModuleLogic.assignLabelLUT(calciumName)
                         #self.CACSLabelerModuleLogic.calciumName = calciumName
                         
         
@@ -746,7 +745,7 @@ class CACSLabelerModuleWidget:
         slicer.util.setSliceViewerLayers(background=node)
         
         #self.CACSLabelerModuleLogic.inputSelector.setCurrentNode(self.inputImageNode)
-        self.CACSLabelerModuleLogic.assignLabelLUT(calciumName)
+        #self.CACSLabelerModuleLogic.assignLabelLUT(calciumName)
         
         # Set ref_name
         name = self.CACSLabelerModuleLogic.calciumName[0:-13]
