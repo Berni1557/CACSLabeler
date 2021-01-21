@@ -527,8 +527,6 @@ class CACSLabelerModuleWidget:
         for image in imagelistExp:
             self.imagelist = [image]
             # Read image
-            print('image.image_name', image.image_name)
-            print('image.fip_image', image.fip_image)
             properties={'Name': image.image_name}
             node = slicer.util.loadVolume(image.fip_image, returnNode=True, properties=properties)[1]
             node.SetName(image.image_name)
@@ -732,7 +730,7 @@ class CACSLabelerModuleWidget:
                     if os.path.isfile(filepath_ref):
                         node_label = slicer.util.loadVolume(filepath_ref, returnNode=True, properties=properties)[1]
                         node_label.SetName(calciumName)
-                        self.CACSLabelerModuleLogic.assignLabelLUT(calciumName)
+                        #self.CACSLabelerModuleLogic.assignLabelLUT(calciumName)
                         #self.CACSLabelerModuleLogic.calciumName = calciumName
                         
         
@@ -745,7 +743,8 @@ class CACSLabelerModuleWidget:
         slicer.util.setSliceViewerLayers(background=node)
         
         #self.CACSLabelerModuleLogic.inputSelector.setCurrentNode(self.inputImageNode)
-        #self.CACSLabelerModuleLogic.assignLabelLUT(calciumName)
+        #self.CACSLabelerModuleLogic.calciumName = calciumName
+        #self.CACSLabelerModuleLogic.assignLabelLUT(self.CACSLabelerModuleLogic.calciumName)
         
         # Set ref_name
         name = self.CACSLabelerModuleLogic.calciumName[0:-13]
@@ -827,6 +826,7 @@ class CACSLabelerModuleLogic:
         # Sets minimum threshold value based on KEV80 or KEV120
         if self.KEV80:
             print('!!! Method for KEV80 not implemented !!!')
+            calciumName = "{0}-label-lesion".format(self.inputVolumeName)
         elif self.KEV120:
             self.lowerThresholdValue = 130
             #calciumName = "{0}_120KEV_{1}HU_Calcium_Label".format(self.inputVolumeName, self.lowerThresholdValue)
