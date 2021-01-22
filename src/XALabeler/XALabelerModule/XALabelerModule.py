@@ -25,23 +25,18 @@ import time
 from sys import platform
 from SimpleITK import ConnectedComponentImageFilter
 
-#refAction = dict({'fp_image': '', 
-#                  'fp_label_lesion': '',
-#                  'fp_label': '',
-#                  'IDX': [],
-#                  'SLICE': -1,
-#                  'action': 'LABEL_LESION', # 'LABEL_LESION', 'LABEL_REGION', 'LABEL_REGION_NEW', 'LABEL_LESION_NEW'
-#                  'MSG': ''}) 
-
-ALAction = dict({'fp_image': '', 
+ALAction = dict({'ID': -1, 
+                 'fp_image': '', 
                   'fp_label_lesion': '',
                   'fp_label': '',
                   'fp_label_lesion_pred': '',
                   'fp_label_pred': '',
                   'IDX': [[]],
+                  'QUERY': (0,0),
                   'SLICE': -1,
                   'action': '', # 'LABEL_LESION', 'LABEL_REGION', 'LABEL_REGION_NEW', 'LABEL_LESION_NEW'
                   'MSG': '',
+                  'COMMAND': '',
                   'STATUS': 'OPEN',         # OPEN, CLOSED
                   'UNCERTAINT': False}) 
 
@@ -89,7 +84,6 @@ class XALabelerModuleWidget:
         #self.inputImageNode = None
         self.localCardiacEditorWidget = None
         self.settings=Settings()
-        print('Settings', self.settings)
         self.images=[]
         self.localXALEditorWidget = None
         self.refAction = ALAction.copy()
@@ -177,6 +171,15 @@ class XALabelerModuleWidget:
         nextButton.connect('clicked(bool)', self.onNextButtonClicked)
         self.nextButton = nextButton
 
+        # SKIP button
+        skipButton = qt.QPushButton("SKIP QUERY")
+        skipButton.toolTip = "Skip query"
+        skipButton.setStyleSheet("background-color: rgb(230,241,255)")
+        skipButton.enabled = False
+        self.measuresFormLayout.addRow(skipButton)
+        skipButton.connect('clicked(bool)', self.onSkipButtonClicked)
+        self.skipButton = skipButton
+        
         # Save query button
         saveQueryButton = qt.QPushButton("SAVE QUERY")
         saveQueryButton.toolTip = "Save query"
@@ -412,6 +415,7 @@ class XALabelerModuleWidget:
         # Start client
         self.startClient()
         self.nextButton.enabled = True
+        self.skipButton.enabled = True
         self.saveQueryButton.enabled = True
         self.stopButton.enabled = True
         #self.LABEL_LESION_BUTTON.enabled = True
@@ -423,6 +427,7 @@ class XALabelerModuleWidget:
         # Save output
         self.saveOutput(overwrite=False)
         self.nextButton.enabled = False
+        self.skipButton.enabled = False
         self.saveQueryButton.enabled = False
         self.stopButton.enabled = False
         self.LABEL_LESION_BUTTON.enabled = False
@@ -467,7 +472,40 @@ class XALabelerModuleWidget:
         # Start client
         #msg = ("NEXT").encode('utf-8')
         #msg = (refAction_str).encode('utf-8')
-        self.refAction['MSG'] = self.refAction['MSG'] + 'NEXT'
+        self.refAction['COMMAND'] = self.refAction['COMMAND'] + 'NEXT'
+        self.refAction['STATUS'] = 'SOLVED'
+        ALAction_str = json.dumps(self.refAction)
+        msg = (ALAction_str).encode('utf-8')
+        
+        UDPClientSocket = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
+        UDPClientSocket.settimeout(10)
+        print('Sending NEXT command')
+        UDPClientSocket.sendto(msg, self.dest)
+
+        try:
+            msgFromServer = UDPClientSocket.recvfrom(self.bufferSize)
+            msg = msgFromServer[0]
+            refAction = json.loads(msg)
+            self.refAction = refAction
+            print('Processing query: ', refAction['QUERY'])
+        except:
+            print('Could not get next query. Please check the server!')
+            
+        if self.refAction['action'] == '':
+            pass
+        elif self.refAction['action'] == 'LABEL_LESION':
+            self.refine_lesion(refAction, use_pred=False, save=True)
+        elif self.refAction['action'] == 'LABEL_REGION':
+            self.refine_region(refAction, save=True)
+        elif self.refAction['action'] == 'LABEL_NEW':
+            self.refine_new(refAction, save=True)
+        else:
+            raise ValueError('Action: ' + refAction['action'] + ' does not exist.')
+            
+    def onSkipButtonClicked(self):
+
+        self.refAction['COMMAND'] = self.refAction['COMMAND'] + 'NEXT'
+        self.refAction['STATUS'] = 'SKIPED'
         ALAction_str = json.dumps(self.refAction)
         msg = (ALAction_str).encode('utf-8')
         
@@ -487,35 +525,37 @@ class XALabelerModuleWidget:
         if self.refAction['action'] == '':
             pass
         elif self.refAction['action'] == 'LABEL_LESION':
-            self.refine_lesion(refAction, use_pred=False)
+            self.refine_lesion(refAction, use_pred=False, save=False)
         elif self.refAction['action'] == 'LABEL_REGION':
-            self.refine_region(refAction)
+            self.refine_region(refAction, save=False, showREFValue=True)
         elif self.refAction['action'] == 'LABEL_NEW':
-            self.refine_new(refAction)
+            self.refine_new(refAction, save=False)
         else:
             raise ValueError('Action: ' + refAction['action'] + ' does not exist.')
-
+    
     def onSaveQueryButtonClicked(self):
         self.saveOutput(overwrite=False)
 
-    def refine_new(self, refAction):
+    def refine_new(self, refAction, save=True):
         print('refine_new')
         self.nextButton.enabled = False
+        self.skipButton.enabled = False
         self.saveQueryButton.enabled = False
         self.CONTINUE_BUTTON.enabled = True
 
         
         self.continueLabeling = False
-        self.refine_region(refAction)
+        self.refine_region(refAction, save=save, showREFValue=False)
  
-    def refine_region(self, refAction):
+    def refine_region(self, refAction, save=True, showREFValue=True):
         print('refine_region')
         # Save all existing nodes
         filepath = refAction['fp_image'].encode("utf-8")
         _, imagename,_ = splitFilePath(filepath)
         
         self.deleteNodesREFValue()
-        self.saveOutput(overwrite=False)
+        if save:
+            self.saveOutput(overwrite=False)
         self.deleteNodes(imagename)
  
         imageFound = self.nodeExist(imagename)
@@ -523,7 +563,7 @@ class XALabelerModuleWidget:
         # Load image
         if not imageFound:
             #self.saveOutput(overwrite=False)  
-            print('Loading:', filepath)
+            print('Loading: ' + filepath)
             properties={'name': imagename}
             node = slicer.util.loadVolume(filepath, returnNode=True, properties=properties)[1]
             node.SetName(imagename)  
@@ -539,7 +579,7 @@ class XALabelerModuleWidget:
             filepath_label = filepath_label_org
         
         label_im = sitk.ReadImage(filepath_label)
-        print('Loading:', filepath_label)
+        print('Loading: ' + filepath_label)
         label = sitk.GetArrayFromImage(label_im)
 
         IDX = refAction['IDX']
@@ -559,7 +599,8 @@ class XALabelerModuleWidget:
 
         # Set label
         if not labelFound:
-            label = label * (1-mask) + self.REFValue * mask
+            if showREFValue:
+                label = label * (1-mask) + self.REFValue * mask
             labelSitk = sitk.GetImageFromArray(label)
             labelSitk.CopyInformation(label_im)
             node = su.PushVolumeToSlicer(labelSitk, name=labelname, className='vtkMRMLLabelMapVolumeNode')
@@ -596,7 +637,7 @@ class XALabelerModuleWidget:
         self.upperThresholdValue = 5000
         self.setLowerPaintThreshold()
         
-    def refine_lesion(self, refAction, use_pred=False):
+    def refine_lesion(self, refAction, use_pred=False, save=True):
         print('refine_lesion')
         # Load label
         if use_pred:
@@ -616,20 +657,21 @@ class XALabelerModuleWidget:
         _, imagename,_ = splitFilePath(filepath)
         
         self.deleteNodesREFValue()
-        self.saveOutput(overwrite=False)
+        if save:
+            self.saveOutput(overwrite=False)
         self.deleteNodes(imagename)
 
         imageFound = self.nodeExist(imagename)
 
         # Load image
         if not imageFound:
-            print('Loading:', filepath)
+            print('Loading: ' + filepath)
             properties={'name': imagename}
             node = slicer.util.loadVolume(filepath, returnNode=True, properties=properties)[1]
             node.SetName(imagename)        
             
         label_im = sitk.ReadImage(filepath_label)
-        print('Loading:', filepath_label)
+        print('Loading: ' + filepath_label)
         label = sitk.GetArrayFromImage(label_im)
         
         # Create binary mask
@@ -686,6 +728,7 @@ class XALabelerModuleWidget:
         self.setLowerPaintThreshold()
         
         self.nextButton.enabled = True
+        self.skipButton.enabled = True
         self.saveQueryButton.enabled = True
         
     def refine_lesion_close(self):
@@ -904,6 +947,7 @@ class XALEditBox(EditorLib.EditBox):
         self.callbacks = {}
 
         CACSTreeDict = self.settings['CACSTreeDict'][self.settings['MODE']][0]
+        self.CACSTreeDict = CACSTreeDict
 
         # The Default Label Selector
         color = CACSTreeDict['OTHER']['COLOR']
@@ -989,19 +1033,19 @@ class XALEditBox(EditorLib.EditBox):
         self._onParameterNodeModified(EditUtil.getParameterNode())
 
     def onOTHERChangeIslandButtonClicked(self):
-        self.changeIslandButtonClicked(1)
+        self.changeIslandButtonClicked(self.CACSTreeDict['OTHER']['VALUE'])
         
     def onLADchangeIslandButtonClicked(self):
-        self.changeIslandButtonClicked(2)
+        self.changeIslandButtonClicked(self.CACSTreeDict['CC']['LAD']['VALUE'])
 
     def onLCXchangeIslandButtonClicked(self):
-        self.changeIslandButtonClicked(3)
+        self.changeIslandButtonClicked(self.CACSTreeDict['CC']['LCX']['VALUE'])
 
     def onRCAchangeIslandButtonClicked(self):
-        self.changeIslandButtonClicked(4)
+        self.changeIslandButtonClicked(self.CACSTreeDict['CC']['RCA']['VALUE'])
 
     def onUCchangeIslandButtonClicked(self):
-        self.changeIslandButtonClicked(100)
+        self.changeIslandButtonClicked(self.CACSTreeDict['CC']['UC']['VALUE'])
         
 
     def changeIslandButtonClicked(self, label):

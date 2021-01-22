@@ -13,10 +13,7 @@ class CACSTree():
     def __init__(self):
         self.lesionList=[]
         
-    def createTree(self, settings):
-        for key in settings['CACSTreeDict'].keys():
-            print('key', key)
-            
+    def createTree(self, settings):            
         CACSTreeDict = settings['CACSTreeDict'][settings['MODE']][0]
         self.root = Lesion(name='CACSTreeDict', parent=None, color=CACSTreeDict['COLOR'], value=CACSTreeDict['VALUE'])
         self.lesionList.append(self.root)
@@ -322,11 +319,12 @@ class CACSTree():
 
         # Create CACS tree for CACS_REF
         columns_CACSTREE = ['PatientID', 'SeriesInstanceUID','CC', 'RCA', 'LAD', 'LCX', 'UC']        
-        OTHER = OrderedDict([('COLOR', (0, 255, 0, 255)), ('VALUE', 0)])
-        RCA = OrderedDict([('COLOR', (165,0,33, 255)), ('VALUE', 3)])
-        LAD = OrderedDict([('COLOR', (255,204,0, 255)), ('VALUE', 1)])
-        LCX = OrderedDict([('COLOR', (204,0,204, 255)), ('VALUE', 2)])
-        UC = OrderedDict([('COLOR', (50,50,100, 255)), ('VALUE', 100)])
+        OTHER = OrderedDict([('COLOR', (0, 255, 0, 255)), ('VALUE', 1)])
+        RCA = OrderedDict([('COLOR', (165,0,33, 255)), ('VALUE', 4)])
+        LAD = OrderedDict([('COLOR', (255,204,0, 255)), ('VALUE', 2)])
+        LCX = OrderedDict([('COLOR', (204,0,204, 255)), ('VALUE', 3)])
+        REF = OrderedDict([('COLOR', (10,10,250, 255)), ('VALUE', 200)])
+        UC = OrderedDict([('COLOR', (50,50,100, 255)), ('VALUE', 201)])
         CC = OrderedDict([('RCA', RCA), ('LAD', LAD), ('LCX', LCX), ('UC', UC), ('COLOR', (165, 0, 33, 255)), ('VALUE', -1)])
         CACSTreeDict = OrderedDict([('OTHER', OTHER), ('CC', CC), ('COLOR', (0,0,0,0)), ('VALUE', 0)])
         treeList['CACS_REF'] = (CACSTreeDict, columns_CACSTREE)
