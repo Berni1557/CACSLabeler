@@ -478,7 +478,7 @@ class XALabelerModuleWidget:
         msg = (ALAction_str).encode('utf-8')
         
         UDPClientSocket = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
-        UDPClientSocket.settimeout(10)
+        UDPClientSocket.settimeout(30)
         print('Sending NEXT command')
         UDPClientSocket.sendto(msg, self.dest)
 
@@ -547,7 +547,7 @@ class XALabelerModuleWidget:
         self.continueLabeling = False
         self.refine_region(refAction, save=save, showREFValue=False)
  
-    def refine_region(self, refAction, save=True, showREFValue=True):
+    def refine_region(self, refAction, use_pred=True, save=True, showREFValue=True):
         print('refine_region')
         # Save all existing nodes
         filepath = refAction['fp_image'].encode("utf-8")
@@ -568,15 +568,30 @@ class XALabelerModuleWidget:
             node = slicer.util.loadVolume(filepath, returnNode=True, properties=properties)[1]
             node.SetName(imagename)  
 
-        # Load label
-        filepath_label_org = refAction['fp_label_pred'].encode("utf-8")
-        _, labelname,_ = splitFilePath(filepath_label_org)
-        folder, labelname,_ = splitFilePath(filepath_label_org)
-        filepath_label_list = sorted(glob(os.path.join(folder, labelname + '-*.nrrd')))
-        if len(filepath_label_list)>0:
-            filepath_label = filepath_label_list[-1]
+        if use_pred:
+            filepath_label_org = refAction['fp_label_pred'].encode("utf-8")
+            filepath_label = self.load_label_lesion_pred(filepath_label_org)
+            _, labelname,_ = splitFilePath(filepath_label)
         else:
-            filepath_label = filepath_label_org
+            filepath_label_org = refAction['fp_label'].encode("utf-8")
+            if filepath_label_org=='':
+                filepath_label = self.load_label_lesion_pred(filepath_label_org)
+                _, labelname,_ = splitFilePath(filepath_label)
+            else:
+                filepath_label = filepath_label_org
+                _, labelname,_ = splitFilePath(filepath_label)
+                
+#        # Load label
+#        if use_pred
+#            filepath_label_org = refAction['fp_label_pred'].encode("utf-8")
+#            _, labelname,_ = splitFilePath(filepath_label_org)
+#            folder, labelname,_ = splitFilePath(filepath_label_org)
+#            filepath_label_list = sorted(glob(os.path.join(folder, labelname + '-*.nrrd')))
+#            if len(filepath_label_list)>0:
+#                filepath_label = filepath_label_list[-1]
+#            else:
+#                filepath_label = filepath_label_org
+#        else:
         
         label_im = sitk.ReadImage(filepath_label)
         print('Loading: ' + filepath_label)
@@ -637,21 +652,31 @@ class XALabelerModuleWidget:
         self.upperThresholdValue = 5000
         self.setLowerPaintThreshold()
         
+    def load_label_lesion_pred(self, filepath_label_org):
+        _, labelname,_ = splitFilePath(filepath_label_org)
+        folder, labelname,_ = splitFilePath(filepath_label_org)
+        filepath_label_list = sorted(glob(os.path.join(folder, labelname + '-*.nrrd')))
+        if len(filepath_label_list)>0:
+            filepath_label = filepath_label_list[-1]
+        else:
+            filepath_label = filepath_label_org
+        return filepath_label
+        
     def refine_lesion(self, refAction, use_pred=False, save=True):
         print('refine_lesion')
         # Load label
         if use_pred:
             filepath_label_org = refAction['fp_label_lesion_pred'].encode("utf-8")
-            _, labelname,_ = splitFilePath(filepath_label_org)
-            folder, labelname,_ = splitFilePath(filepath_label_org)
-            filepath_label_list = sorted(glob(os.path.join(folder, labelname + '-*.nrrd')))
-            if len(filepath_label_list)>0:
-                filepath_label = filepath_label_list[-1]
+            filepath_label = self.load_label_lesion_pred(filepath_label_org)
+            _, labelname,_ = splitFilePath(filepath_label)
+        else:
+            filepath_label_org = refAction['fp_label_lesion'].encode("utf-8")
+            if filepath_label_org=='':
+                filepath_label = self.load_label_lesion_pred(filepath_label_org)
+                _, labelname,_ = splitFilePath(filepath_label)
             else:
                 filepath_label = filepath_label_org
-        else:
-            filepath_label = refAction['fp_label_lesion'].encode("utf-8")
-            _, labelname,_ = splitFilePath(filepath_label)
+                _, labelname,_ = splitFilePath(filepath_label)
             
         filepath = refAction['fp_image'].encode("utf-8")
         _, imagename,_ = splitFilePath(filepath)
@@ -825,6 +850,73 @@ class XALabelerModuleWidget:
     def onSaveOutputButtonClicked(self):
         self.saveOutput(overwrite=True)
         
+    def outputFilepathSave(self, volume_name, folderpath_output):
+
+        filename = volume_name
+        SeriesInstanceUID = filename.split('_')[1] .split('-')[0]
+        label=[]
+        lesion=[]
+        label_pred=[]
+        lesion_pred=[]
+        
+        labelfiles = glob(folderpath_output + '/*.nrrd')
+        SeriesInstanceUIDLabel=[]
+        for labelfile in labelfiles:
+            SeriesInstanceUIDLabel.append(splitFilePath(labelfile)[1].split('_')[1] .split('-')[0])
+            
+        for j,labelid in enumerate(SeriesInstanceUIDLabel):
+            labelfile = labelfiles[j]
+            #SeriesInstanceUIDLabel = splitFilePath(labelfile)[1].split('_')[1] .split('-')[0]
+            if SeriesInstanceUID == labelid:
+                if 'lesion-pred' in labelfile:
+                    lesion_pred.append(labelfile)
+                elif 'label-pred' in labelfile:
+                    label_pred.append(labelfile)
+                elif 'lesion' in labelfile:
+                    lesion.append(labelfile)
+                elif 'label' in labelfile:
+                    label.append(labelfile)
+                else:
+                    raise ValueError('Filepath not correct!')
+      
+        if 'lesion-pred' in filename:
+            if len(lesion_pred)>1:
+                num = len(lesion_pred)-1
+                num_str = "{:02n}".format(num)
+                filepathSave = folderpath_output + '/' + volume_name[0:-3] + '-' + num_str +'.nrrd'
+            else:
+                num_str = "{:02n}".format(0)
+                filepathSave = folderpath_output + '/' + volume_name + '-' + num_str +'.nrrd'
+        elif 'label-pred' in filename:
+            if len(label_pred)>1:
+                num = len(label_pred)-1
+                num_str = "{:02n}".format(num)
+                filepathSave = folderpath_output + '/' + volume_name[0:-3] + '-' + num_str +'.nrrd'
+            else:
+                num_str = "{:02n}".format(0)
+                filepathSave = folderpath_output + '/' + volume_name + '-' + num_str +'.nrrd'
+        elif 'lesion' in filename:
+            if len(lesion)>1:
+                num = len(lesion)-1
+                num_str = "{:02n}".format(num)
+                filepathSave = folderpath_output + '/' + volume_name[0:-3] + '-' + num_str +'.nrrd'
+            else:
+                num_str = "{:02n}".format(0)
+                filepathSave = folderpath_output + '/' + volume_name + '-' + num_str +'.nrrd'
+        elif 'label' in filename:
+            if len(label)>1:
+                num = len(label)-1
+                num_str = "{:02n}".format(num)
+                filepathSave = folderpath_output + '/' + volume_name[0:-3] + '-' + num_str +'.nrrd'
+            else:
+                num_str = "{:02n}".format(0)
+                filepathSave = folderpath_output + '/' + volume_name + '-' + num_str +'.nrrd'
+        else:
+            raise ValueError('Filepath not correct!')
+
+        return filepathSave
+            
+ 
     def saveOutput(self, overwrite=True):
         # Save references
         folderpath_output = self.settings['folderpath_references']
@@ -832,17 +924,10 @@ class XALabelerModuleWidget:
         for node in volumeNodes:
             volume_name = node.GetName()
             if 'label' in volume_name:
-                filename_output = volume_name
-                filepath = folderpath_output + '/' + filename_output + '.nrrd'
+                #filename_output = volume_name
+                filepath = folderpath_output + '/' + volume_name + '.nrrd'
                 if not overwrite:
-                    exist = os.path.isfile(filepath)
-                    num = 0
-                    while exist:
-                        num_str = "{:02n}".format(num)
-                        filepath = folderpath_output + '/' + filename_output + '-' + num_str +'.nrrd'
-                        exist = os.path.isfile(filepath)
-                        num = num + 1
-                        
+                    filepath = self.outputFilepathSave(volume_name, folderpath_output)
                 slicer.util.saveNode(node, filepath)
                 print('Saveing reference to: ' + filepath)
 
