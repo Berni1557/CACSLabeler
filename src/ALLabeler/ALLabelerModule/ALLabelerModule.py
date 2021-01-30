@@ -323,6 +323,7 @@ class ALLabelerModuleWidget:
             node = slicer.util.loadVolume(filepath, returnNode=True, properties=properties)[1]
             slicer.util.setSliceViewerLayers(background=node)
             imagenames.append(name)
+            self.inputSelector.setCurrentNode(node)
 
         if len(filenames)>0:
             self.bgGrowingButton.enabled = True
