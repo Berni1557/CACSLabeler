@@ -53,13 +53,20 @@ def splitFilePath(filepath):
 
 
 class Image:
-    def __init__(self, fip_image=None, fip_ref=None):
+    def __init__(self, fip_image=None, fip_ref=None, settings=None):
         if fip_image is None and fip_ref is not None:
             _,ref_name,_ = splitFilePath(fip_ref)
+            print('ref_nameD123', ref_name)
             if len(ref_name.split('_'))==1:
-                PatientID = ''
-                SeriesInstanceUID = ref_name.split('-')[0]
-                image_name = SeriesInstanceUID
+                if settings['MODE']=='CACS_ORCASCORE':
+                    PatientID = ''
+                    SeriesInstanceUID = ref_name.split('-')[0][0:-1]
+                    print('SeriesInstanceUID123', SeriesInstanceUID)
+                    image_name = SeriesInstanceUID
+                else:
+                    PatientID = ''
+                    SeriesInstanceUID = ref_name.split('-')[0]
+                    image_name = SeriesInstanceUID
             else:
                 PatientID = ref_name.split('_')[0]
                 SeriesInstanceUID = ref_name.split('_')[1].split('-')[0]
@@ -73,9 +80,7 @@ class Image:
             
             self.PatientID = PatientID
             self.SeriesInstanceUID = SeriesInstanceUID
-            
-            
-            
+
         if fip_image is not None and fip_ref is None:
             _,image_name,_ = splitFilePath(fip_image)
             if len(image_name.split('_'))==1:
@@ -99,14 +104,18 @@ class Image:
         self.arteries_dict = dict()
         self.arteries_sum = dict()
             
-    def findImage(self, images):
-        for image in images:
-            _,name,_ = splitFilePath(image)
-#            print('image', image)
-#            print('name', name)
-#            print('self.image_name', self.image_name)
-            if self.image_name == name:
-                self.fip_image = image
+    def findImage(self, images, dataset):
+        if dataset=='ORCASCORE':
+            for image in images:
+                _,name,_ = splitFilePath(image)
+                if self.image_name == name[0:-3]:
+                    self.fip_image = image
+                    print('image567', image)
+        else:
+            for image in images:
+                _,name,_ = splitFilePath(image)
+                if self.image_name == name:
+                    self.fip_image = image
                 
     def setRef_name(self, ref_name):
         if len(ref_name.split('_'))==1:
@@ -334,11 +343,11 @@ class CACSLabelerModuleWidget:
         filepath_colorTable = dirname + '/CardiacAgatstonMeasuresLUT.ctbl'
         
         # Create color table
-        if self.settings['MODE']=='CACSTREE_CUMULATIVE':
-            self.settings['CACSTree'].createColorTable(filepath_colorTable)
-        else:
-            self.settings['CACSTree'].createColorTable_CACS(filepath_colorTable)
-        
+#        if self.settings['MODE']=='CACSTREE_CUMULATIVE':
+#            self.settings['CACSTree'].createColorTable(filepath_colorTable)
+#        else:
+#            self.settings['CACSTree'].createColorTable_CACS(filepath_colorTable)
+#        
         # Load color table
         slicer.util.loadColorTable(filepath_colorTable)
         
@@ -362,8 +371,12 @@ class CACSLabelerModuleWidget:
         arteries_dict = OrderedDict()
         for key in arteries:
             value = self.settings['CACSTree'].getValueByName(key)
-            if value>1:
-                arteries_dict[key] = self.settings['CACSTree'].getValueByName(key)
+            if self.settings['MODE']=="CACS_ORCASCORE":
+                if value>0:
+                    arteries_dict[key] = self.settings['CACSTree'].getValueByName(key)
+            else:
+                if value>1:
+                    arteries_dict[key] = self.settings['CACSTree'].getValueByName(key)
 
         arteries_sum = OrderedDict()
         # Change order with [::-1] that RCA sum is calculated first and CC sum after
@@ -371,8 +384,7 @@ class CACSLabelerModuleWidget:
             children = self.settings['CACSTree'].getChildrenNamesByName(key)
             value = self.settings['CACSTree'].getValueByName(key)
             if not value==0 and len(children)>0:
-                arteries_sum[key] = self.settings['CACSTree'].getChildrenNamesByName(key)
-
+                arteries_sum[key] = self.settings['CACSTree'].getChildrenNamesByName(key)        
         return arteries_dict, arteries_sum
         
 #    def get_arteries_dict(self):
@@ -503,13 +515,13 @@ class CACSLabelerModuleWidget:
          
     def loadImages(self):
         folderpath_references = self.settings['folderpath_references'].encode("utf-8")
-        fip_references = glob(folderpath_references + '/*lesion.nrrd') + glob(folderpath_references + '/*lesion-pred.nrrd')
+        fip_references = glob(folderpath_references + '/*lesion.nrrd') + glob(folderpath_references + '/*lesion-pred.nrrd') + glob(folderpath_references + '/*.mhd')
         fip_images = glob(self.settings['folderpath_images'] + '/*CTI.mhd') + glob(self.settings['folderpath_images'] + '/*.mhd')
         imagelist = []
         for fip_ref in fip_references:
-            image = Image(fip_ref=fip_ref)
+            image = Image(fip_ref=fip_ref, settings=self.settings)
             image.fip_ref = fip_ref
-            image.findImage(fip_images)
+            image.findImage(fip_images, dataset=self.settings['DATASET'])
             imagelist.append(image)
         return imagelist
 

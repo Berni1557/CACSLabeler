@@ -36,6 +36,7 @@ ALAction = dict({'ID': -1,
                   'SLICE': -1,
                   'action': '', # 'LABEL_LESION', 'LABEL_REGION', 'LABEL_REGION_NEW', 'LABEL_LESION_NEW'
                   'MSG': '',
+                  'AUTO': '',
                   'COMMAND': '',
                   'STATUS': 'OPEN',         # OPEN, CLOSED
                   'UNCERTAINT': False}) 
@@ -90,6 +91,7 @@ class XALabelerModuleWidget:
         self.REFValue = 200
         self.UCValue = 201
         self.continueLabeling = False
+        self.label_org = None
 
         if not parent:
             self.parent = slicer.qMRMLWidget()
@@ -225,7 +227,7 @@ class XALabelerModuleWidget:
         
         # LABEL_REGION_BUTTON
         LABEL_REGION_BUTTON = qt.QPushButton("Refine coronary artery region")
-        LABEL_REGION_BUTTON.toolTip = "Stop refinement2"
+        LABEL_REGION_BUTTON.toolTip = "Refine coronary artery region"
         LABEL_REGION_BUTTON.setStyleSheet("background-color: rgb(230,241,255)")
         LABEL_REGION_BUTTON.enabled = False
         self.measuresFormLayoutH.addRow(LABEL_REGION_BUTTON)
@@ -267,68 +269,15 @@ class XALabelerModuleWidget:
         self.measuresFormLayoutH.addRow(CONTINUE_BUTTON)
         CONTINUE_BUTTON.connect('clicked(bool)', self.onLABEL_CONTINUE_BUTTONClicked)
         self.CONTINUE_BUTTON = CONTINUE_BUTTON 
-        
+ 
         # LABEL_LESION_NEW_BUTTON
-        UNCERTAINTY_BUTTON = qt.QPushButton("Add UNCERTAIN label")
-        UNCERTAINTY_BUTTON.toolTip = "Stop refinement2"
-        UNCERTAINTY_BUTTON.setStyleSheet("background-color: rgb(230,241,255)")
-        UNCERTAINTY_BUTTON.enabled = False
-        self.measuresFormLayoutH.addRow(UNCERTAINTY_BUTTON)
-        UNCERTAINTY_BUTTON.connect('clicked(bool)', self.onLABEL_UNCERTAINTY_BUTTONClicked)
-        self.UNCERTAINTY_BUTTON = UNCERTAINTY_BUTTON    
-        
-        
-#        # The Input Volume Selector
-#        self.inputFrame = qt.QFrame(self.measuresCollapsibleButton)
-#        self.inputFrame.setLayout(qt.QHBoxLayout())
-#        self.measuresFormLayout.addRow(self.inputFrame)
-#        
-#        inputSelector = qt.QLabel("Input Volume: ", self.inputFrame)
-#        self.inputFrame.layout().addWidget(inputSelector)
-#        inputSelector = slicer.qMRMLNodeComboBox(self.inputFrame)
-#        inputSelector.nodeTypes = ( ("vtkMRMLScalarVolumeNode"), "" )
-#        inputSelector.addEnabled = False
-#        inputSelector.removeEnabled = False
-#        inputSelector.setMRMLScene( slicer.mrmlScene )
-#        self.inputSelector = inputSelector
-#        self.inputSelector.currentNodeChanged.connect(self.onCurrentNodeChanged)
-#        self.measuresFormLayout.addRow(self.inputSelector)
-#        #self.inputFrame.layout().addWidget(self.inputSelector)
-#
-#        # Collapsible button for Output Parameters
-#        self.measuresCollapsibleButtonOutput = ctk.ctkCollapsibleButton()
-#        self.measuresCollapsibleButtonOutput.text = "Output Parameters"
-#        self.layout.addWidget(self.measuresCollapsibleButtonOutput)
-#        
-#        # Layout within the sample collapsible button
-#        self.measuresFormLayoutOutput = qt.QFormLayout(self.measuresCollapsibleButtonOutput)
-#
-#        # Apply background growing 
-#        bgGrowingButton = qt.QPushButton("Apply background growing")
-#        bgGrowingButton.toolTip = "Apply background growi"
-#        bgGrowingButton.setStyleSheet("background-color: rgb(230,241,255)")
-#        bgGrowingButton.enabled = False
-#        self.measuresFormLayoutOutput.addRow(bgGrowingButton)
-#        bgGrowingButton.connect('clicked(bool)', self.onBgGrowingButtonButtonClicked)
-#        self.bgGrowingButton = bgGrowingButton
-#        
-#        # Save output button
-#        saveOutputButton = qt.QPushButton("Save output data")
-#        saveOutputButton.toolTip = "Save data"
-#        saveOutputButton.setStyleSheet("background-color: rgb(230,241,255)")
-#        saveOutputButton.enabled = False
-#        self.measuresFormLayoutOutput.addRow(saveOutputButton)
-#        saveOutputButton.connect('clicked(bool)', self.onSaveOutputButtonClicked)
-#        self.saveOutputButton = saveOutputButton
-#        
-#        # Delete scans button
-#        deleteButton = qt.QPushButton("Delete data")
-#        deleteButton.toolTip = "Delete data"
-#        deleteButton.setStyleSheet("background-color: rgb(230,241,255)")
-#        deleteButton.enabled = False
-#        self.measuresFormLayoutOutput.addRow(deleteButton)
-#        deleteButton.connect('clicked(bool)', self.onDeleteButtonClicked)
-#        self.deleteButton = deleteButton
+        LOADCTA_BUTTON = qt.QPushButton("LOAD CTA")
+        LOADCTA_BUTTON.toolTip = "Load CTA"
+        LOADCTA_BUTTON.setStyleSheet("background-color: rgb(230,241,255)")
+        LOADCTA_BUTTON.enabled = False
+        self.measuresFormLayoutH.addRow(LOADCTA_BUTTON)
+        LOADCTA_BUTTON.connect('clicked(bool)', self.onLOADCTA_BUTTONClicked)
+        self.LOADCTA_BUTTON = LOADCTA_BUTTON 
         
         # Add vertical spacer
         self.layout.addStretch(1)
@@ -377,6 +326,7 @@ class XALabelerModuleWidget:
         # Load color table
         slicer.util.loadColorTable(filepath_colorTable)
 
+
     def onCurrentNodeChanged(self):
         # Create label
         inputImageNode = self.inputSelector.currentNode()
@@ -421,11 +371,11 @@ class XALabelerModuleWidget:
         #self.LABEL_LESION_BUTTON.enabled = True
         #self.LABEL_REGION_BUTTON.enabled = True
         #self.LABEL_NEW_BUTTON.enabled = True
-        self.UNCERTAINTY_BUTTON.enabled = True
+        #self.UNCERTAINTY_BUTTON.enabled = True
 
     def onStopButtonClicked(self):
         # Save output
-        self.saveOutput(overwrite=False)
+        #self.saveOutput(overwrite=False)
         self.nextButton.enabled = False
         self.skipButton.enabled = False
         self.saveQueryButton.enabled = False
@@ -433,41 +383,53 @@ class XALabelerModuleWidget:
         self.LABEL_LESION_BUTTON.enabled = False
         self.LABEL_REGION_BUTTON.enabled = False
         self.LABEL_NEW_BUTTON.enabled = False
-        self.UNCERTAINTY_BUTTON.enabled = False
+        #self.UNCERTAINTY_BUTTON.enabled = False
         #self.LABEL_LESION_NEW_BUTTON.enabled = False
         #self.LABEL_REGION_NEW_BUTTON.enabled = False
         
     def onLABEL_LESION_BUTTONClicked(self):
         refAction = self.refAction
         refAction['action'] = 'LABEL_LESION'
+        self.LABEL_LESION_BUTTON.enabled = False
+        self.LABEL_REGION_BUTTON.enabled = True
+        self.LABEL_NEW_BUTTON.enabled = True
         self.refine_lesion(refAction)
         
     def onLABEL_REGION_BUTTONClicked(self):
         refAction = self.refAction
         refAction['action'] = 'LABEL_REGION'
+        self.LABEL_LESION_BUTTON.enabled = True
+        self.LABEL_REGION_BUTTON.enabled = False
+        self.LABEL_NEW_BUTTON.enabled = True
         self.refine_region(refAction)
         
     def onLABEL_NEW_BUTTONClicked(self):
         refAction = self.refAction
         refAction['action'] = 'LABEL_NEW'
-        self.refine_region_new(refAction)
+        self.LABEL_LESION_BUTTON.enabled = False
+        self.LABEL_REGION_BUTTON.enabled = False
+        self.LABEL_NEW_BUTTON.enabled = False
+        self.refine_new(refAction)
 
-    def onLABEL_LESION_NEW_BUTTONClicked(self):
-        refAction = self.refAction
-        refAction['action'] = 'LABEL_LESION_NEW'
-        self.refine_lesion_new(refAction)
-    
+#    def onLABEL_LESION_NEW_BUTTONClicked(self):
+#        refAction = self.refAction
+#        refAction['action'] = 'LABEL_LESION_NEW'
+#        self.LABEL_LESION_BUTTON.enabled = False
+#        self.LABEL_REGION_BUTTON.enabled = True
+#        self.LABEL_NEW_BUTTON.enabled = True
+#        self.refine_lesion_new(refAction)
+#    
     def onLABEL_CONTINUE_BUTTONClicked(self):
         self.continueLabeling = True
         self.CONTINUE_BUTTON.enabled = False
         self.editUtil.toggleLabelOutline
-        self.refine_lesion(self.refAction, use_pred=True)
-        
-    def onLABEL_UNCERTAINTY_BUTTONClicked(self):
-        print('onLABEL_UNCERTAINTY_BUTTONClicked')
-        refAction = self.refAction
-        refAction['UNCERTAINT'] = True
-        
+        self.refine_lesion(self.refAction, use_pred=True, save=True, saveDiff=False)
+
+    def onLOADCTA_BUTTONClicked(self):
+        pass
+                
+    
+    
     def onNextButtonClicked(self):
         # Start client
         #msg = ("NEXT").encode('utf-8')
@@ -481,7 +443,8 @@ class XALabelerModuleWidget:
         UDPClientSocket.settimeout(30)
         print('Sending NEXT command')
         UDPClientSocket.sendto(msg, self.dest)
-
+        
+        server_error = False
         try:
             msgFromServer = UDPClientSocket.recvfrom(self.bufferSize)
             msg = msgFromServer[0]
@@ -490,17 +453,28 @@ class XALabelerModuleWidget:
             print('Processing query: ', refAction['QUERY'])
         except:
             print('Could not get next query. Please check the server!')
-            
-        if self.refAction['action'] == '':
-            pass
-        elif self.refAction['action'] == 'LABEL_LESION':
-            self.refine_lesion(refAction, use_pred=False, save=True)
-        elif self.refAction['action'] == 'LABEL_REGION':
-            self.refine_region(refAction, save=True)
-        elif self.refAction['action'] == 'LABEL_NEW':
-            self.refine_new(refAction, save=True)
-        else:
-            raise ValueError('Action: ' + refAction['action'] + ' does not exist.')
+            server_error = True
+        
+        if not server_error:
+            if self.refAction['action'] == '':
+                pass
+            elif self.refAction['action'] == 'LABEL_LESION':
+                self.LABEL_LESION_BUTTON.enabled = False
+                self.LABEL_REGION_BUTTON.enabled = True
+                self.LABEL_NEW_BUTTON.enabled = True
+                self.refine_lesion(refAction, use_pred=False, save=True, saveDiff=True)
+            elif self.refAction['action'] == 'LABEL_REGION':
+                self.LABEL_LESION_BUTTON.enabled = True
+                self.LABEL_REGION_BUTTON.enabled = False
+                self.LABEL_NEW_BUTTON.enabled = True
+                self.refine_region(refAction, save=True, saveDiff=True)
+            elif self.refAction['action'] == 'LABEL_NEW':
+                self.LABEL_LESION_BUTTON.enabled = False
+                self.LABEL_REGION_BUTTON.enabled = False
+                self.LABEL_NEW_BUTTON.enabled = False
+                self.refine_new(refAction, save=True)
+            else:
+                raise ValueError('Action: ' + refAction['action'] + ' does not exist.')
             
     def onSkipButtonClicked(self):
 
@@ -525,10 +499,19 @@ class XALabelerModuleWidget:
         if self.refAction['action'] == '':
             pass
         elif self.refAction['action'] == 'LABEL_LESION':
-            self.refine_lesion(refAction, use_pred=False, save=False)
+            self.LABEL_LESION_BUTTON.enabled = False
+            self.LABEL_REGION_BUTTON.enabled = True
+            self.LABEL_NEW_BUTTON.enabled = True
+            self.refine_lesion(refAction, use_pred=False, save=False, saveDiff=True)
         elif self.refAction['action'] == 'LABEL_REGION':
-            self.refine_region(refAction, save=False, showREFValue=True)
+            self.LABEL_LESION_BUTTON.enabled = True
+            self.LABEL_REGION_BUTTON.enabled = False
+            self.LABEL_NEW_BUTTON.enabled = True
+            self.refine_region(refAction, save=False, showREFValue=True, saveDiff=True)
         elif self.refAction['action'] == 'LABEL_NEW':
+            self.LABEL_LESION_BUTTON.enabled = False
+            self.LABEL_REGION_BUTTON.enabled = False
+            self.LABEL_NEW_BUTTON.enabled = False
             self.refine_new(refAction, save=False)
         else:
             raise ValueError('Action: ' + refAction['action'] + ' does not exist.')
@@ -542,12 +525,26 @@ class XALabelerModuleWidget:
         self.skipButton.enabled = False
         self.saveQueryButton.enabled = False
         self.CONTINUE_BUTTON.enabled = True
-
-        
         self.continueLabeling = False
-        self.refine_region(refAction, save=save, showREFValue=False)
+        self.refine_region(refAction, save=save, showREFValue=False, saveDiff=False)
+        
+    def load_label_list(self, filepath_label_list):
+        label_list = filepath_label_list
+        ref = None
+        for labelfile in label_list:
+            labeltmp = sitk.ReadImage(labelfile)
+            labeltmp_arr = sitk.GetArrayFromImage(labeltmp)
+            if ref is None:
+                ref = labeltmp_arr
+            else:
+                refnew = labeltmp_arr
+                ref[refnew>0] = refnew[refnew>0]
+        label = sitk.GetImageFromArray(ref)
+        label.CopyInformation(labeltmp)
+        return label
+
  
-    def refine_region(self, refAction, use_pred=True, save=True, showREFValue=True):
+    def refine_region(self, refAction, use_pred=True, save=True, showREFValue=True, saveDiff=False):
         print('refine_region')
         # Save all existing nodes
         filepath = refAction['fp_image'].encode("utf-8")
@@ -555,6 +552,8 @@ class XALabelerModuleWidget:
         
         self.deleteNodesREFValue()
         if save:
+            if saveDiff:
+                self.updateDiffOutput()
             self.saveOutput(overwrite=False)
         self.deleteNodes(imagename)
  
@@ -567,20 +566,30 @@ class XALabelerModuleWidget:
             properties={'name': imagename}
             node = slicer.util.loadVolume(filepath, returnNode=True, properties=properties)[1]
             node.SetName(imagename)  
+        
+        
 
         if use_pred:
             filepath_label_org = refAction['fp_label_pred'].encode("utf-8")
-            filepath_label = self.load_label_lesion_pred(filepath_label_org)
+            print('filepath_label_org', filepath_label_org)
+            filepath_label, filepath_label_list = self.load_label_lesion_pred(filepath_label_org)
             _, labelname,_ = splitFilePath(filepath_label)
         else:
             filepath_label_org = refAction['fp_label'].encode("utf-8")
             if filepath_label_org=='':
-                filepath_label = self.load_label_lesion_pred(filepath_label_org)
+                filepath_label, filepath_label_list = self.load_label_lesion_pred(filepath_label_org)
                 _, labelname,_ = splitFilePath(filepath_label)
             else:
                 filepath_label = filepath_label_org
                 _, labelname,_ = splitFilePath(filepath_label)
+                filepath_label_list = [filepath_label]
                 
+        # Load image_org
+        #self.label_org = sitk.ReadImage(filepath_label)
+        print('filepath_label_list', filepath_label_list)
+        self.label_org = self.load_label_list(filepath_label_list)
+        
+        
 #        # Load label
 #        if use_pred
 #            filepath_label_org = refAction['fp_label_pred'].encode("utf-8")
@@ -593,7 +602,8 @@ class XALabelerModuleWidget:
 #                filepath_label = filepath_label_org
 #        else:
         
-        label_im = sitk.ReadImage(filepath_label)
+        #label_im = sitk.ReadImage(filepath_label)
+        label_im = self.load_label_list(filepath_label_list)
         print('Loading: ' + filepath_label)
         label = sitk.GetArrayFromImage(label_im)
 
@@ -653,36 +663,40 @@ class XALabelerModuleWidget:
         self.setLowerPaintThreshold()
         
     def load_label_lesion_pred(self, filepath_label_org):
-        _, labelname,_ = splitFilePath(filepath_label_org)
         folder, labelname,_ = splitFilePath(filepath_label_org)
-        filepath_label_list = sorted(glob(os.path.join(folder, labelname + '-*.nrrd')))
+        filepath_label_list = glob(os.path.join(folder, labelname + '*.nrrd'))
+        filepath_label_list = sorted(filepath_label_list)
+        filepath_label_list = sorted(filepath_label_list, key=len, reverse=False)
         if len(filepath_label_list)>0:
             filepath_label = filepath_label_list[-1]
         else:
             filepath_label = filepath_label_org
-        return filepath_label
+        return filepath_label, filepath_label_list
         
-    def refine_lesion(self, refAction, use_pred=False, save=True):
+    def refine_lesion(self, refAction, use_pred=False, save=True, saveDiff=False):
         print('refine_lesion')
         # Load label
         if use_pred:
             filepath_label_org = refAction['fp_label_lesion_pred'].encode("utf-8")
-            filepath_label = self.load_label_lesion_pred(filepath_label_org)
+            filepath_label, filepath_label_list = self.load_label_lesion_pred(filepath_label_org)
             _, labelname,_ = splitFilePath(filepath_label)
         else:
             filepath_label_org = refAction['fp_label_lesion'].encode("utf-8")
             if filepath_label_org=='':
-                filepath_label = self.load_label_lesion_pred(filepath_label_org)
+                filepath_label, filepath_label_list = self.load_label_lesion_pred(filepath_label_org)
                 _, labelname,_ = splitFilePath(filepath_label)
             else:
                 filepath_label = filepath_label_org
                 _, labelname,_ = splitFilePath(filepath_label)
+                filepath_label_list = [filepath_label]
             
         filepath = refAction['fp_image'].encode("utf-8")
         _, imagename,_ = splitFilePath(filepath)
         
         self.deleteNodesREFValue()
         if save:
+            if saveDiff:
+                self.updateDiffOutput()
             self.saveOutput(overwrite=False)
         self.deleteNodes(imagename)
 
@@ -695,9 +709,14 @@ class XALabelerModuleWidget:
             node = slicer.util.loadVolume(filepath, returnNode=True, properties=properties)[1]
             node.SetName(imagename)        
             
-        label_im = sitk.ReadImage(filepath_label)
+        #label_im = sitk.ReadImage(filepath_label)
+        label_im = self.load_label_list(filepath_label_list)
         print('Loading: ' + filepath_label)
         label = sitk.GetArrayFromImage(label_im)
+        
+        # Load image_org
+        #self.label_org = sitk.ReadImage(filepath_label)
+        self.label_org = self.load_label_list(filepath_label_list)
         
         # Create binary mask
         mask = np.zeros(label.shape)
@@ -749,7 +768,7 @@ class XALabelerModuleWidget:
     
         # Set LowerPaintThreshold
         self.lowerThresholdValue = 130
-        self.upperThresholdValue = 1000
+        self.upperThresholdValue = 100000
         self.setLowerPaintThreshold()
         
         self.nextButton.enabled = True
@@ -930,6 +949,18 @@ class XALabelerModuleWidget:
                     filepath = self.outputFilepathSave(volume_name, folderpath_output)
                 slicer.util.saveNode(node, filepath)
                 print('Saveing reference to: ' + filepath)
+                
+    def updateDiffOutput(self):
+        volumeNodes = slicer.util.getNodesByClass('vtkMRMLScalarVolumeNode')
+        for node in volumeNodes:
+            volume_name = node.GetName()
+            if 'label' in volume_name:
+                arr = sitk.GetArrayFromImage(su.PullVolumeFromSlicer(node))
+                arr_org = sitk.GetArrayFromImage(self.label_org)
+                arr_diff = np.zeros(arr_org.shape)
+                arr_diff[arr!=arr_org] = arr[arr!=arr_org]
+                slicer.util.updateVolumeFromArray(node, arr_diff)
+        
 
     def onReload(self,moduleName="XALabelerModule"):
         """Generic reload method for any scripted module.

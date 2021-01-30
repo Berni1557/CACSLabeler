@@ -298,7 +298,7 @@ class CACSTree():
 
         # Create CACS tree for CACS
         columns_CACSTREE = ['PatientID', 'SeriesInstanceUID','CC', 'RCA', 'LAD', 'LCX']        
-        OTHER = OrderedDict([('COLOR', (0, 255, 0, 255)), ('VALUE', 1)])
+        OTHER = OrderedDict([('COLOR', (0, 255, 0, 0)), ('VALUE', 1)])
         RCA = OrderedDict([('COLOR', (165,0,33, 255)), ('VALUE', 4)])
         LAD = OrderedDict([('COLOR', (255,204,0, 255)), ('VALUE', 2)])
         LCX = OrderedDict([('COLOR', (204,0,204, 255)), ('VALUE', 3)])
