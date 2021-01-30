@@ -305,7 +305,7 @@ class ALLabelerModuleWidget:
             for f in files:
                 _,fname,_ = splitFilePath(f)
                 ref_found = any([fname in ref for ref in files_ref])
-                print('ref_found', ref_found)
+                #print('ref_found', ref_found)
                 if ref_found and self.settings['show_input_if_ref_found']:
                     filter_input_ref = filter_input_ref + fname + '.mhd '
                 if not ref_found and self.settings['show_input_if_ref_not_found']:
@@ -361,7 +361,7 @@ class ALLabelerModuleWidget:
         mask_bg = (labeled==idx_max)*1
         # Combine FG mask and BG mask
         mask_fg = image
-        mask_fg[mask_fg==1]=0
+        mask_fg[mask_fg==1]=1
         mask = mask_bg + mask_fg
         return mask
         

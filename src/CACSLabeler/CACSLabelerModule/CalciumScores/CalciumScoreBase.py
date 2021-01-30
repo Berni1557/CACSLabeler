@@ -14,6 +14,8 @@ class CalciumScoreBase:
             columns = settings['columns_CACS']
         elif settings['MODE'] == 'CACSTREE_CUMULATIVE':
             columns = settings['columns_CACSTREE_CUMULATIVE']
+        elif settings['MODE'] == 'CACS_4':
+            columns = settings['columns_CACS_4']
         elif settings['MODE'] == 'CACS_ORCASCORE':
             columns = settings['columns_CACS']
         else:

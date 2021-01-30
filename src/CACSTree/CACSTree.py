@@ -91,7 +91,9 @@ class CACSTree():
         for idx, lesion in enumerate(self.lesionList):
             f = open(filepath_colorTable, 'a')
             color_str = str(lesion.color[0]) + ' ' + str(lesion.color[1]) + ' ' + str(lesion.color[2]) + ' ' + str(lesion.color[3])
-            f.write(str(idx) + ' ' + lesion.name + ' ' + color_str + '\n')
+            #f.write(str(idx) + ' ' + lesion.name + ' ' + color_str + '\n')
+            value_str = lesion.value
+            f.write(str(value_str) + ' ' + lesion.name + ' ' + color_str + '\n')
             f.close()
     
     def createColorTable_CACS(self, filepath_colorTable):
@@ -328,5 +330,15 @@ class CACSTree():
         CC = OrderedDict([('RCA', RCA), ('LAD', LAD), ('LCX', LCX), ('UC', UC), ('COLOR', (165, 0, 33, 255)), ('VALUE', -1)])
         CACSTreeDict = OrderedDict([('OTHER', OTHER), ('CC', CC), ('COLOR', (0,0,0,0)), ('VALUE', 0)])
         treeList['CACS_REF'] = (CACSTreeDict, columns_CACSTREE)
+
+        # Create CACS tree for CACS_REF
+        columns_CACSTREE = ['PatientID', 'SeriesInstanceUID', 'LM', 'RCA', 'LAD', 'LCX']        
+        OTHER = OrderedDict([('COLOR', (0, 255, 0, 255)), ('VALUE', 1)])
+        LM = OrderedDict([('COLOR', (50,165,33, 255)), ('VALUE', 5)])
+        RCA = OrderedDict([('COLOR', (165,0,33, 255)), ('VALUE', 4)])
+        LAD = OrderedDict([('COLOR', (255,204,0, 255)), ('VALUE', 2)])
+        LCX = OrderedDict([('COLOR', (204,0,204, 255)), ('VALUE', 3)])
+        CACSTreeDict = OrderedDict([('OTHER', OTHER), ('LM', LM), ('RCA', RCA), ('LAD', LAD), ('LCX', LCX), ('COLOR', (0,0,0,0)), ('VALUE', 0)])
+        treeList['CACS_4'] = (CACSTreeDict, columns_CACSTREE)
         
         return treeList

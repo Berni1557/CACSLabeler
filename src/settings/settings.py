@@ -77,9 +77,9 @@ class Settings:
         treeList = CACSTree.initCACSTreeDict()
 
         # Initialize settings
-        settingsDefault = {'folderpath_images': '/mnt/SSD2/cloud_data/Projects/DL/Code/src/datasets/DISCHARGE/data_cacs/Images',
-                           'folderpath_references': '/mnt/SSD2/cloud_data/Projects/DL/Code/src/datasets/DISCHARGE/data_cacs/References',
-                           'folderpath_export': '/mnt/SSD2/cloud_data/Projects/CACSLabeler/code/data/export',
+        settingsDefault = {'folderpath_images': 'H:/cloud/cloud_data/Projects/DL/Code/src/datasets/DISCHARGE/data_cacs/Images',
+                           'folderpath_references': 'H:/cloud/cloud_data/Projects/DL/Code/src/datasets/DISCHARGE/data_cacs/References',
+                           'folderpath_export': 'H:/cloud/cloud_data/Projects/CACSLabeler/code/data/export',
                            'filter_input': "Files(*.mhd, *.txt)",
                            #'CalciumScores': ['AGATSTON_SCORE', 'VOLUME_SCORE', 'DENSITY_SCORE', 'NUMLESION_SCORE', 'LESIONVOLUME_SCORE'],
                            #'CalciumScores': ['AGATSTON_SCORE', 'VOLUME_SCORE', 'DENSITY_SCORE', 'NUMLESION_SCORE'],
@@ -92,7 +92,8 @@ class Settings:
                            'CACSTreeDict': treeList,
                            'columns_CACSTREE_CUMULATIVE': treeList['CACSTREE_CUMULATIVE'][1],
                            'columns_CACS': treeList['CACS'][1],
-                           'MODE': 'CACSTREE_CUMULATIVE', # MODE can be 'CACS','CACSTREE' or 'CACSTREE_CUMULATIVE', 'CACS_REF'
+                           'columns_CACS_4': treeList['CACS_4'][1],
+                           'MODE': 'CACS_4', # MODE can be 'CACS','CACSTREE' or 'CACSTREE_CUMULATIVE', 'CACS_REF', 'CACS_4'
                            'DATASET': 'DISCHARGE'}  # DATaSEt can be "DISCHARGE" or "ORCASCORE"
                            
         print('Writing setting to ' + filepath_settings)

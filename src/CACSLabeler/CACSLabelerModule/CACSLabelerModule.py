@@ -343,11 +343,13 @@ class CACSLabelerModuleWidget:
         filepath_colorTable = dirname + '/CardiacAgatstonMeasuresLUT.ctbl'
         
         # Create color table
-#        if self.settings['MODE']=='CACSTREE_CUMULATIVE':
-#            self.settings['CACSTree'].createColorTable(filepath_colorTable)
-#        else:
-#            self.settings['CACSTree'].createColorTable_CACS(filepath_colorTable)
-#        
+        if self.settings['MODE']=='CACSTREE_CUMULATIVE':
+            self.settings['CACSTree'].createColorTable(filepath_colorTable)
+        elif self.settings['MODE']=='CACS_4':
+            self.settings['CACSTree'].createColorTable(filepath_colorTable)
+        else:
+            self.settings['CACSTree'].createColorTable_CACS(filepath_colorTable)
+        
         # Load color table
         slicer.util.loadColorTable(filepath_colorTable)
         
@@ -384,31 +386,10 @@ class CACSLabelerModuleWidget:
             children = self.settings['CACSTree'].getChildrenNamesByName(key)
             value = self.settings['CACSTree'].getValueByName(key)
             if not value==0 and len(children)>0:
-                arteries_sum[key] = self.settings['CACSTree'].getChildrenNamesByName(key)        
+                arteries_sum[key] = self.settings['CACSTree'].getChildrenNamesByName(key) 
+        print('arteries_dict', arteries_dict)
+        print('arteries_sum', arteries_sum)
         return arteries_dict, arteries_sum
-        
-#    def get_arteries_dict(self):
-#        arteries = self.settings['CACSTree'].getLesionNames()
-#        arteries_dict = OrderedDict()
-#        for k, key in enumerate(arteries):
-#            if k>1:
-#                arteries_dict[key]=k
-#
-#        arteries_sum = OrderedDict()
-#        if self.settings['MODE']=='CACSTREE_CUMULATIVE':
-#            arteries_sum['RCA'] = self.settings['CACSTree'].getChildrenNamesByName('RCA')
-#            arteries_sum['LM'] = self.settings['CACSTree'].getChildrenNamesByName('LM')
-#            arteries_sum['LAD'] = self.settings['CACSTree'].getChildrenNamesByName('LAD')
-#            arteries_sum['LCX'] = self.settings['CACSTree'].getChildrenNamesByName('LCX')
-#            arteries_sum['AORTA'] = self.settings['CACSTree'].getChildrenNamesByName('AORTA')
-#            arteries_sum['VALVES'] = self.settings['CACSTree'].getChildrenNamesByName('VALVES')
-#            arteries_sum['BONE'] = self.settings['CACSTree'].getChildrenNamesByName('BONE')
-#            arteries_sum['LUNG'] = self.settings['CACSTree'].getChildrenNamesByName('LUNG')
-#            arteries_sum['CC'] = self.settings['CACSTree'].getChildrenNamesByName('CC')
-#            arteries_sum['NCC'] = self.settings['CACSTree'].getChildrenNamesByName('NCC')
-#
-#        return arteries_dict, arteries_sum
-        
         
     def onScoreButtonClicked(self):
         # Get image and imageLabel
@@ -625,99 +606,6 @@ class CACSLabelerModuleWidget:
         self.KEV80.enabled = True
         self.KEV120.enabled = True
 
-#        if len(filenames)>0:
-#            self.bgGrowingButton.enabled = True
-#            self.saveOutputButton.enabled = True
-#            self.deleteButton.enabled = True
-#
-#            # Creates and adds the custom Editor Widget to the module
-#            if self.localALEditorWidget is None:
-#                self.localALEditorWidget = ALEditorWidget(parent=self.parent, showVolumesFrame=False, settings=self.settings)
-#                self.localALEditorWidget.setup()
-#                self.localALEditorWidget.enter()
-                
-#        # Deleta all old nodes
-#        if self.settings['show_input_if_ref_found'] or self.settings['show_input_if_ref_not_found']:
-#            files_ref = glob(self.settings['folderpath_references'] + '/*label.nrrd')
-#            filter_input = self.settings['filter_input'].decode('utf-8')[1:-1]
-#
-#            filter_input = 'Files(*.mhd *.jpg *.txt)'
-#            filter_input_list = filter_input.split('(')[1].split(')')[0].split(' *')
-#
-#            # Collect filenames
-#            files=[]
-#            for filt in filter_input_list:
-#                print('filt', self.settings['folderpath_images'] + '/*' + filt)
-#                files = files + glob(self.settings['folderpath_images'] + '/*' + filt)
-#                
-#            print('files', files)
-#
-#            k=0
-#            filter_input_ref = ''
-#            for f in files:
-#                _,fname,_ = splitFilePath(f)
-#                ref_found = any([fname in ref for ref in files_ref])
-#                if ref_found and self.settings['show_input_if_ref_found']:
-#                    filter_input_ref = filter_input_ref + fname + '.mhd '
-#                    k=k+1
-#                if not ref_found and self.settings['show_input_if_ref_not_found']:
-#                    filter_input_ref = filter_input_ref + fname + '.mhd '
-#                    k=k+1
-#            print('k',k)
-#            filter_input_ref = '(' + filter_input_ref + ')'
-#            #print('filter_input_ref', len(filter_input_ref))
-#            filenames = qt.QFileDialog.getOpenFileNames(self.parent, 'Open files', self.settings['folderpath_images'],filter_input_ref)
-#            
-#        else:
-#            filenames = qt.QFileDialog.getOpenFileNames(self.parent, 'Open files', self.settings['folderpath_images'],self.settings['filter_input'])
-
-        #if self.settings['filter_input_by_reference']:
-            
-            
-            
-#        if self.settings['filter_input_by_reference']:
-#            
-#            filter_input = self.settings['filter_input'].decode('utf-8')[1:-1]
-#            filepaths = glob(self.settings['folderpath_images'] + '/' + filter_input)
-#            filepaths_ref = glob(self.settings['folderpath_references'] + '/*.nrrd')
-#            
-#            # Filter files by filter_reference_with and filter_reference_without
-#            filenames_filt = self.filter_by_reference(filepaths, filepaths_ref, self.settings['filter_reference_with'], self.settings['filter_reference_without'])
-#
-#            filter_input_ref = ''
-#            for f in filenames_filt:
-#                _,fname,_ = splitFilePath(f)
-#                filter_input_ref = filter_input_ref + fname + '.mhd '
-#            if len(filenames_filt)>0:
-#                filter_input_ref = '(' + filter_input_ref + ')'
-#            else:
-#                filter_input_ref = '(_)'
-#                
-#            filenames = qt.QFileDialog.getOpenFileNames(self.parent, 
-#                                                   'Open files', 
-#                                                   self.settings['folderpath_images'],
-#                                                   filter_input_ref)
-#            
-#        else:
-#            filenames = qt.QFileDialog.getOpenFileNames(self.parent, 
-#                                                   'Open files', 
-#                                                   self.settings['folderpath_images'],
-#                                                   self.settings['filter_input'])
-#        
-#        # Read images
-#        imagenames = []
-#        for filepath in filenames:
-#            _, name,_ = splitFilePath(filepath)
-#            properties={'Name': name}
-#            node = slicer.util.loadVolume(filepath, returnNode=True, properties=properties)[1]
-#            node.SetName(name)
-#            imagenames.append(name)
-#            image = Image(fip_image=filepath)
-#            self.imagelist.append(image)
-#            
-#        # Enable radio button
-#        self.KEV80.enabled = True
-#        self.KEV120.enabled = True
         
     def onThresholdButtonClicked(self):
         if not self.KEV120.checked and not self.KEV80.checked:
@@ -983,58 +871,37 @@ class CardiacEditorWidget(Editor.EditorWidget):
         self.editBoxFrame.setLayout(qt.QVBoxLayout())
         self.effectsToolsFrame.layout().addWidget(self.editBoxFrame)
         self.toolsBox = CardiacEditBox(self.settings, self.editBoxFrame, optionsFrame=self.effectOptionsFrame)
+
+    def updateComboShortcut(self, idx):
+        def updateIdx():
+            self.toolsBox.comboList[0].setCurrentIndex(idx)
+        return updateIdx
         
-        #parameterNode = self.editUtil.getParameterNode()
-        #print('parameterNode', parameterNode.GetParameterNames())
-        #propagationMode = parameterNode.GetParameter("propagationMode")
-        #print('propagationMode', propagationMode)
-        #effect = parameterNode.GetParameter("effect")
-        #print('effect', effect)
-        #name = parameterNode.GetParameterName(0, 0)
-        #print('name', name)
-        
-        #print('toolsBox', self.toolsBox)
-        #print('effectOptionsFrame', self.effectOptionsFrame)
-        #self.effectOptionsFrame.setEnabled(False)
-        
-        #child = self.effectOptionsFrame.findChildren(qt.QCheckBox)
-        #print('child', child)
-        
-        #print('self.effectsToolsFrame123', self.effectsToolsFrame)
-        
-        
-#        n=parameterNode
-#        for groupIndex in range(n.GetNumberOfParameterGroups()):
-#            for parameterIndex in range(n.GetNumberOfParametersInGroup(groupIndex)):
-#                print('Parameter ({0}/{1}): {2} ({3})'.format(groupIndex, parameterIndex, n.GetParameterName(groupIndex, parameterIndex), n.GetParameterLabel(groupIndex, parameterIndex)))
-#
-#                
-#                
-#    def installShortcutKeys(self):
-#        """Turn on editor-wide shortcuts.  These are active independent
-#        of the currently selected effect."""
-#        Key_Escape = 0x01000000 # not in PythonQt
-#        Key_Space = 0x20 # not in PythonQt
-#        self.shortcuts = []
-#        keysAndCallbacks = (
-#            ('z', self.toolsBox.undoRedo.undo),
-#            ('y', self.toolsBox.undoRedo.redo),
-#            ('h', self.editUtil.toggleCrosshair),
-#            ('o', self.editUtil.toggleLabelOutline),
-#            ('t', self.editUtil.toggleForegroundBackground),
-#            (Key_Escape, self.toolsBox.defaultEffect),
-#            ('p', lambda : self.toolsBox.selectEffect('PaintEffect')),
-#            ('1', self.toolsBox.onDefaultChangeIslandButtonClicked),
-#            #('2', self.toolsBox.onLMchangeIslandButtonClicked),
-#            ('3', self.toolsBox.onLADchangeIslandButtonClicked),
-#            ('4', self.toolsBox.onLCXchangeIslandButtonClicked),
-#            ('5', self.toolsBox.onRCAchangeIslandButtonClicked),
-#            )
-#        for key,callback in keysAndCallbacks:
-#            shortcut = qt.QShortcut(slicer.util.mainWindow())
-#            shortcut.setKey( qt.QKeySequence(key) )
-#            shortcut.connect( 'activated()', callback )
-#            self.shortcuts.append(shortcut)
+    def installShortcutKeys(self):
+        """Turn on editor-wide shortcuts.  These are active independent
+        of the currently selected effect."""
+        Key_Escape = 0x01000000 # not in PythonQt
+        Key_Space = 0x20 # not in PythonQt
+        self.shortcuts = []
+        keysAndCallbacks = (
+            ('z', self.toolsBox.undoRedo.undo),
+            ('y', self.toolsBox.undoRedo.redo),
+            ('h', self.editUtil.toggleCrosshair),
+            ('o', self.editUtil.toggleLabelOutline),
+            ('t', self.editUtil.toggleForegroundBackground),
+            (Key_Escape, self.toolsBox.defaultEffect),
+            ('p', lambda : self.toolsBox.selectEffect('PaintEffect')),
+            ('1', self.updateComboShortcut(0)),
+            ('2', self.updateComboShortcut(1)),
+            ('3', self.updateComboShortcut(2)),
+            ('4', self.updateComboShortcut(3)),
+            ('5', self.updateComboShortcut(4)),
+            )
+        for key,callback in keysAndCallbacks:
+            shortcut = qt.QShortcut(slicer.util.mainWindow())
+            shortcut.setKey( qt.QKeySequence(key) )
+            shortcut.connect( 'activated()', callback )
+            self.shortcuts.append(shortcut)
 
 class CardiacEditBox(EditorLib.EditBox):
     def __init__(self, settings, *args, **kwargs):
@@ -1052,7 +919,7 @@ class CardiacEditBox(EditorLib.EditBox):
         self.icons = {}
         self.callbacks = {}
 
-        if self.settings['MODE']=='CACSTREE_CUMULATIVE' or self.settings['MODE']=='CACSTREE':
+        if self.settings['MODE']=='CACSTREE_CUMULATIVE' or self.settings['MODE']=='CACSTREE' or self.settings['MODE']=='CACS_4':
             self.mainFrame = qt.QFrame(self.parent)
             self.mainFrame.objectName = 'TreeFrame'
             vbox = qt.QVBoxLayout()
@@ -1189,7 +1056,7 @@ class CardiacEditBox(EditorLib.EditBox):
                     k=0
                     while len(childrens) > 0:
                         k=k+1
-                        if self.settings['MODE']=='CACSTREE_CUMULATIVE':
+                        if self.settings['MODE']=='CACSTREE_CUMULATIVE'or self.settings['MODE']=='CACS_4':
                             items = [x.name for x in childrens]
                         else:
                             items = ['UNDEFINED'] + [x.name for x in childrens]
@@ -1216,14 +1083,18 @@ class CardiacEditBox(EditorLib.EditBox):
 #                        self.comboList[i].setVisible(False)
 
                 # Update label
-                if self.settings['MODE']=='CACSTREE_CUMULATIVE':
+                if self.settings['MODE']=='CACSTREE_CUMULATIVE' or self.settings['MODE']=='CACS_4':
                     if len(childrens) > 0:
                         value = childrens[0].name
-                        label = CACSTree.getIndexByName(value)
+                        #label = CACSTree.getIndexByName(value)
+                        label = CACSTree.getValueByName(value)
                     else:
-                        label = CACSTree.getIndexByName(value)
+                        #label = CACSTree.getIndexByName(value)
+                        label = CACSTree.getValueByName(value)
                 else:
-                    label = CACSTree.getIndexByName(value)
+                    #label = CACSTree.getIndexByName(value)
+                    label = CACSTree.getValueByName(value)
+                    
 
                 if label is not None:
                     # ChangeIsland
@@ -1233,7 +1104,8 @@ class CardiacEditBox(EditorLib.EditBox):
                     color = CACSTree.getColorByName(value)
                     color_str = 'background-color: rgb(' + str(color[0]) + ',' + str(color[1]) + ',' + str(color[2]) + ')'
                     combo.setStyleSheet(color_str)
-                    label = CACSTree.getIndexByName(value)
+                    #label = CACSTree.getIndexByName(value)
+                    label = CACSTree.getValueByName(value)
                     self.selectEffect("PaintEffect")
                     EditUtil.setLabel(label)
                 if value=='UNDEFINED':
@@ -1243,7 +1115,8 @@ class CardiacEditBox(EditorLib.EditBox):
                     color_str = 'background-color: rgb(' + str(color[0]) + ',' + str(color[1]) + ',' + str(color[2]) + ')'
                     combo.setStyleSheet(color_str)
                     self.selectEffect("PaintEffect")
-                    label = CACSTree.getIndexByName(valueUp)
+                    #label = CACSTree.getIndexByName(valueUp)
+                    label = CACSTree.getValueByName(value)
                     EditUtil.setLabel(label)
 
         return selectionChange
