@@ -89,6 +89,7 @@ class Settings:
                            'load_reference_if_exist': False,
                            'filter_reference_with': ['-label.'],
                            'filter_reference_without': ['label-lesion.'],
+                           'filter_reference': False,
                            'CACSTreeDict': treeList,
                            'columns_CACSTREE_CUMULATIVE': treeList['CACSTREE_CUMULATIVE'][1],
                            'columns_CACS': treeList['CACS'][1],

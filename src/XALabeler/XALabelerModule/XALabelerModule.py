@@ -27,19 +27,21 @@ from SimpleITK import ConnectedComponentImageFilter
 
 ALAction = dict({'ID': -1, 
                  'fp_image': '', 
-                  'fp_label_lesion': '',
-                  'fp_label': '',
-                  'fp_label_lesion_pred': '',
-                  'fp_label_pred': '',
-                  'IDX': [[]],
-                  'QUERY': (0,0),
-                  'SLICE': -1,
-                  'action': '', # 'LABEL_LESION', 'LABEL_REGION', 'LABEL_REGION_NEW', 'LABEL_LESION_NEW'
-                  'MSG': '',
-                  'AUTO': '',
-                  'COMMAND': '',
-                  'STATUS': 'OPEN',         # OPEN, CLOSED
-                  'UNCERTAINT': False}) 
+                 'fp_label': '',
+                 'fp_label_lesion': '',
+                 'fp_label_pred': '',
+                 'fp_label_lesion_pred': '',
+                 'fp_label_refine': '',
+                 'fp_label_lesion_refine': '',
+                 'IDX': [[]],
+                 'QUERY': (0,0),
+                 'SLICE': -1,
+                 'action': '', # 'LABEL_LESION', 'LABEL_REGION', 'LABEL_NEW' /   'LABEL_REGION_NEW', 'LABEL_LESION_NEW'
+                 'MSG': '',
+                 'AUTO': '',
+                 'COMMAND': '',
+                 'STATUS': 'OPEN',         # OPEN, CLOSED
+                 'UNCERTAINT': False})  
 
 def splitFilePath(filepath):
     """ Split filepath into folderpath, filename and file extension
@@ -401,7 +403,7 @@ class XALabelerModuleWidget:
         self.LABEL_LESION_BUTTON.enabled = True
         self.LABEL_REGION_BUTTON.enabled = False
         self.LABEL_NEW_BUTTON.enabled = True
-        self.refine_region(refAction)
+        self.refine_region(refAction, mask_SLICE=True)
         
     def onLABEL_NEW_BUTTONClicked(self):
         refAction = self.refAction
@@ -423,7 +425,7 @@ class XALabelerModuleWidget:
         self.continueLabeling = True
         self.CONTINUE_BUTTON.enabled = False
         self.editUtil.toggleLabelOutline
-        self.refine_lesion(self.refAction, use_pred=True, save=True, saveDiff=False)
+        self.refine_lesion(self.refAction, use_pred=True, save=True, saveDiff=True, mask_SLICE=True)
 
     def onLOADCTA_BUTTONClicked(self):
         pass
@@ -455,6 +457,11 @@ class XALabelerModuleWidget:
             print('Could not get next query. Please check the server!')
             server_error = True
         
+        # !!!
+        #refAction['folderpath_output'] = '/mnt/SSD2/cloud_data/Projects/DL/Code/src/datasets/DISCHARGE_XA/AL/predict'
+        print('fp_label_pred01', refAction['fp_label_pred'])
+        refAction['folderpath_output'],_ ,_ = splitFilePath(refAction['fp_label_pred'])
+        
         if not server_error:
             if self.refAction['action'] == '':
                 pass
@@ -467,7 +474,7 @@ class XALabelerModuleWidget:
                 self.LABEL_LESION_BUTTON.enabled = True
                 self.LABEL_REGION_BUTTON.enabled = False
                 self.LABEL_NEW_BUTTON.enabled = True
-                self.refine_region(refAction, save=True, saveDiff=True)
+                self.refine_region(refAction, save=True, saveDiff=True, mask_SLICE=True)
             elif self.refAction['action'] == 'LABEL_NEW':
                 self.LABEL_LESION_BUTTON.enabled = False
                 self.LABEL_REGION_BUTTON.enabled = False
@@ -496,6 +503,9 @@ class XALabelerModuleWidget:
         except:
             print('Could not get next query. Please check the server!')
             
+        # !!!
+        refAction['folderpath_output'] = '/mnt/SSD2/cloud_data/Projects/DL/Code/src/datasets/DISCHARGE_XA/AL/predict'
+            
         if self.refAction['action'] == '':
             pass
         elif self.refAction['action'] == 'LABEL_LESION':
@@ -507,7 +517,7 @@ class XALabelerModuleWidget:
             self.LABEL_LESION_BUTTON.enabled = True
             self.LABEL_REGION_BUTTON.enabled = False
             self.LABEL_NEW_BUTTON.enabled = True
-            self.refine_region(refAction, save=False, showREFValue=True, saveDiff=True)
+            self.refine_region(refAction, save=False, showREFValue=True, saveDiff=True, mask_SLICE=True)
         elif self.refAction['action'] == 'LABEL_NEW':
             self.LABEL_LESION_BUTTON.enabled = False
             self.LABEL_REGION_BUTTON.enabled = False
@@ -526,7 +536,7 @@ class XALabelerModuleWidget:
         self.saveQueryButton.enabled = False
         self.CONTINUE_BUTTON.enabled = True
         self.continueLabeling = False
-        self.refine_region(refAction, save=save, showREFValue=False, saveDiff=False)
+        self.refine_region(refAction, save=save, showREFValue=False, saveDiff=True, mask_SLICE=True)
         
     def load_label_list(self, filepath_label_list):
         label_list = filepath_label_list
@@ -544,17 +554,23 @@ class XALabelerModuleWidget:
         return label
 
  
-    def refine_region(self, refAction, use_pred=True, save=True, showREFValue=True, saveDiff=False):
+    def refine_region(self, refAction, use_pred=True, save=True, showREFValue=True, saveDiff=False, mask_SLICE=False):
         print('refine_region')
         # Save all existing nodes
         filepath = refAction['fp_image'].encode("utf-8")
         _, imagename,_ = splitFilePath(filepath)
         
+        self.fp_label_refine_prev = refAction['fp_label_refine'].encode("utf-8")
+        print('fp_label_refine_pev123', self.fp_label_refine_prev)
+        
+        print('save', save)
+        print('saveDiff', saveDiff)
         self.deleteNodesREFValue()
         if save:
             if saveDiff:
                 self.updateDiffOutput()
-            self.saveOutput(overwrite=False)
+            #self.saveOutput(overwrite=False, folderpath_output=refAction['folderpath_output'])
+            self.saveOutputRefine(filepath_refine=self.fp_label_refine_prev)
         self.deleteNodes(imagename)
  
         imageFound = self.nodeExist(imagename)
@@ -569,26 +585,29 @@ class XALabelerModuleWidget:
         
         
 
-        if use_pred:
-            filepath_label_org = refAction['fp_label_pred'].encode("utf-8")
-            print('filepath_label_org', filepath_label_org)
-            filepath_label, filepath_label_list = self.load_label_lesion_pred(filepath_label_org)
-            _, labelname,_ = splitFilePath(filepath_label)
-        else:
-            filepath_label_org = refAction['fp_label'].encode("utf-8")
-            if filepath_label_org=='':
-                filepath_label, filepath_label_list = self.load_label_lesion_pred(filepath_label_org)
-                _, labelname,_ = splitFilePath(filepath_label)
-            else:
-                filepath_label = filepath_label_org
-                _, labelname,_ = splitFilePath(filepath_label)
-                filepath_label_list = [filepath_label]
+#        if use_pred:
+#            filepath_label_org = refAction['fp_label_pred'].encode("utf-8")
+#            filepath_label, filepath_label_list = self.load_label_lesion_pred(filepath_label_org)
+#            _, labelname,_ = splitFilePath(filepath_label)
+#        else:
+#            filepath_label_org = refAction['fp_label'].encode("utf-8")
+#            if filepath_label_org=='':
+#                filepath_label, filepath_label_list = self.load_label_lesion_pred(filepath_label_org)
+#                _, labelname,_ = splitFilePath(filepath_label)
+#            else:
+#                filepath_label = filepath_label_org
+#                _, labelname,_ = splitFilePath(filepath_label)
+#                filepath_label_list = [filepath_label]
                 
         # Load image_org
         #self.label_org = sitk.ReadImage(filepath_label)
-        print('filepath_label_list', filepath_label_list)
-        self.label_org = self.load_label_list(filepath_label_list)
+        #self.label_org = self.load_label_list(filepath_label_list)
+        filepath_label = refAction['fp_label'].encode("utf-8")
+        #print('filepath_label123', filepath_label)
+        self.label_org = sitk.ReadImage(filepath_label)
         
+        _, labelname,_ = splitFilePath(filepath_label)
+        #print('labelname123', labelname)
         
 #        # Load label
 #        if use_pred
@@ -603,7 +622,8 @@ class XALabelerModuleWidget:
 #        else:
         
         #label_im = sitk.ReadImage(filepath_label)
-        label_im = self.load_label_list(filepath_label_list)
+        #label_im = self.load_label_list(filepath_label_list)
+        label_im = sitk.ReadImage(filepath_label)
         print('Loading: ' + filepath_label)
         label = sitk.GetArrayFromImage(label_im)
 
@@ -614,18 +634,31 @@ class XALabelerModuleWidget:
 
         # Create binary mask
         mask = np.zeros(label.shape)
+        print('mask123', mask.shape)
+        
+        
         IDX = refAction['IDX']
         SLICE = int(refAction['SLICE'])
-        NumPixel = len(IDX[0])
-        for p in range(NumPixel):
-            x=IDX[0][p]
-            y=IDX[1][p]
-            mask[SLICE, x, y] = 1
+        print('IDX123', IDX)
+        print('SLICE123', SLICE)
+        if mask_SLICE:
+            for p in range(len(IDX[0])):
+                x=IDX[0][p]
+                y=IDX[1][p]
+                mask[SLICE, x, y] = 1
+            mask_slice = np.zeros(label.shape)
+            mask_slice[SLICE,:,:] = np.ones((label.shape[1],label.shape[2]))
+        else:
+            mask_slice = np.ones(label.shape)
 
+#        print('labelFound', labelFound)
+#        print('showREFValue', showREFValue)
+#        print('mask_slice', mask_slice.shape)
         # Set label
         if not labelFound:
             if showREFValue:
                 label = label * (1-mask) + self.REFValue * mask
+            label = label * mask_slice
             labelSitk = sitk.GetImageFromArray(label)
             labelSitk.CopyInformation(label_im)
             node = su.PushVolumeToSlicer(labelSitk, name=labelname, className='vtkMRMLLabelMapVolumeNode')
@@ -636,8 +669,10 @@ class XALabelerModuleWidget:
             node = slicer.mrmlScene.GetFirstNodeByName(labelname)
             label_node = slicer.util.arrayFromVolume(node)
             label = label_node * (1-mask) + label * mask
+            label = label * mask_slice
             slicer.util.updateVolumeFromArray(node, label)
             self.assignLabelLUT(labelname)
+            print('updateVolumeFromArray')
             
         # Show action
         self.label.setText('ACTION: ' + refAction['action'])
@@ -673,31 +708,37 @@ class XALabelerModuleWidget:
             filepath_label = filepath_label_org
         return filepath_label, filepath_label_list
         
-    def refine_lesion(self, refAction, use_pred=False, save=True, saveDiff=False):
+    def refine_lesion(self, refAction, use_pred=False, save=True, saveDiff=False, mask_SLICE=False):
         print('refine_lesion')
         # Load label
-        if use_pred:
-            filepath_label_org = refAction['fp_label_lesion_pred'].encode("utf-8")
-            filepath_label, filepath_label_list = self.load_label_lesion_pred(filepath_label_org)
-            _, labelname,_ = splitFilePath(filepath_label)
-        else:
-            filepath_label_org = refAction['fp_label_lesion'].encode("utf-8")
-            if filepath_label_org=='':
-                filepath_label, filepath_label_list = self.load_label_lesion_pred(filepath_label_org)
-                _, labelname,_ = splitFilePath(filepath_label)
-            else:
-                filepath_label = filepath_label_org
-                _, labelname,_ = splitFilePath(filepath_label)
-                filepath_label_list = [filepath_label]
-            
+#        if use_pred:
+#            filepath_label_org = refAction['fp_label_lesion_pred'].encode("utf-8")
+#            filepath_label, filepath_label_list = self.load_label_lesion_pred(filepath_label_org)
+#            _, labelname,_ = splitFilePath(filepath_label)
+#        else:
+#            filepath_label_org = refAction['fp_label_lesion'].encode("utf-8")
+#            if filepath_label_org=='':
+#                filepath_label, filepath_label_list = self.load_label_lesion_pred(filepath_label_org)
+#                _, labelname,_ = splitFilePath(filepath_label)
+#            else:
+#                filepath_label = filepath_label_org
+#                _, labelname,_ = splitFilePath(filepath_label)
+#                filepath_label_list = [filepath_label]
+
+        #print('fp_image123', refAction['fp_image'])
         filepath = refAction['fp_image'].encode("utf-8")
         _, imagename,_ = splitFilePath(filepath)
+        
+        
+        self.fp_label_lesion_refine_pev = refAction['fp_label_lesion_refine'].encode("utf-8")
+        #print('fp_label_lesion_refine_pev123', self.fp_label_lesion_refine_pev)
         
         self.deleteNodesREFValue()
         if save:
             if saveDiff:
                 self.updateDiffOutput()
-            self.saveOutput(overwrite=False)
+            #self.saveOutput(overwrite=False, folderpath_output=refAction['folderpath_output'])
+            self.saveOutputRefine(filepath_refine=self.fp_label_lesion_refine_pev)
         self.deleteNodes(imagename)
 
         imageFound = self.nodeExist(imagename)
@@ -710,13 +751,17 @@ class XALabelerModuleWidget:
             node.SetName(imagename)        
             
         #label_im = sitk.ReadImage(filepath_label)
-        label_im = self.load_label_list(filepath_label_list)
+        #label_im = self.load_label_list(filepath_label_list)
+        
+        filepath_label = refAction['fp_label_lesion'].encode("utf-8")
+        label_im = sitk.ReadImage(filepath_label)
         print('Loading: ' + filepath_label)
         label = sitk.GetArrayFromImage(label_im)
         
         # Load image_org
         #self.label_org = sitk.ReadImage(filepath_label)
-        self.label_org = self.load_label_list(filepath_label_list)
+        #self.label_org = self.load_label_list(filepath_label_list)
+        self.label_org = sitk.ReadImage(filepath_label)
         
         # Create binary mask
         mask = np.zeros(label.shape)
@@ -727,13 +772,32 @@ class XALabelerModuleWidget:
             x=IDX[0][p]
             y=IDX[1][p]
             mask[SLICE, x, y] = 1
-
+        
+        # Create mask_slice
+        IDX = refAction['IDX']
+        SLICE = int(refAction['SLICE'])
+        if mask_SLICE:
+            for p in range(len(IDX[0])):
+                x=IDX[0][p]
+                y=IDX[1][p]
+                mask[SLICE, x, y] = 1
+            mask_slice = np.zeros(label.shape)
+            mask_slice[SLICE,:,:] = np.ones((label.shape[1],label.shape[2]))
+        else:
+            mask_slice = np.ones(label.shape)
+        
+        print('mask', mask.sum())
+        print('IDX', IDX)
+        print('SLICE', IDX)
+        
+        _, labelname,_ = splitFilePath(filepath_label)
         labelFound = self.nodeExist(labelname)
 
         # Set label
         if not labelFound:
             if not use_pred:
                 label = label * mask
+            label = label * mask_slice
             label = sitk.GetImageFromArray(label)
             label.CopyInformation(label_im)
             node = su.PushVolumeToSlicer(label, name=labelname, className='vtkMRMLLabelMapVolumeNode')
@@ -744,6 +808,7 @@ class XALabelerModuleWidget:
             node = slicer.mrmlScene.GetFirstNodeByName(labelname)
             label_node = slicer.util.arrayFromVolume(node)
             label = label_node * (1-mask) + label * mask
+            label = label * mask_slice
             slicer.util.updateVolumeFromArray(node, label)
             self.assignLabelLUT(labelname)
 
@@ -936,9 +1001,10 @@ class XALabelerModuleWidget:
         return filepathSave
             
  
-    def saveOutput(self, overwrite=True):
+    def saveOutput(self, overwrite=True, folderpath_output=None):
         # Save references
-        folderpath_output = self.settings['folderpath_references']
+        if folderpath_output is None:
+            folderpath_output = self.settings['folderpath_references']
         volumeNodes = slicer.util.getNodesByClass('vtkMRMLScalarVolumeNode')
         for node in volumeNodes:
             volume_name = node.GetName()
@@ -949,6 +1015,16 @@ class XALabelerModuleWidget:
                     filepath = self.outputFilepathSave(volume_name, folderpath_output)
                 slicer.util.saveNode(node, filepath)
                 print('Saveing reference to: ' + filepath)
+
+    def saveOutputRefine(self, filepath_refine=None):
+        # Save refinement
+        print('saveOutputRefine')
+        volumeNodes = slicer.util.getNodesByClass('vtkMRMLScalarVolumeNode')
+        for node in volumeNodes:
+            volume_name = node.GetName()
+            if 'label' in volume_name:
+                slicer.util.saveNode(node, filepath_refine)
+                print('Saveing refinement to: ' + filepath_refine)
                 
     def updateDiffOutput(self):
         volumeNodes = slicer.util.getNodesByClass('vtkMRMLScalarVolumeNode')

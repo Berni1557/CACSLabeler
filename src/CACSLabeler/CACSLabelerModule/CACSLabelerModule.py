@@ -564,6 +564,21 @@ class CACSLabelerModuleWidget:
                 filenames_filt.append(f)
         return filenames_filt
                     
+#    def filter_by_reference(self, filepaths_ref, filter_reference_with, filter_reference_without):
+#        filenames_filt=[]
+#        _,fname,_ = splitFilePath(f)
+#        ref_same = False
+#        ref_with = False
+#        ref_without = False
+#        for ref in filepaths_ref:
+#            _,refname,_ = splitFilePath(ref)
+#            ref_same = fname in refname
+#            if ref_same:
+#                ref_with = ref_with or all([x in ref for x in filter_reference_with])
+#                ref_without = ref_without or any([x in ref for x in filter_reference_without])
+#        if ref_with and not ref_without:
+#            filenames_filt.append(f)
+#        return filenames_filt
         
     def onLoadInputButtonClicked(self):
 
@@ -578,6 +593,15 @@ class CACSLabelerModuleWidget:
             files=[]
             for filt in filter_input_list:
                 files = files + glob(self.settings['folderpath_images'] + '/' + filt)
+            
+            # Filter files by reference
+            #if self.settings['filter_reference']:
+            if True:
+                filepaths_label_ref = glob(self.settings['folderpath_references'] + '/*.nrrd')
+                filter_reference_with = self.settings['filter_reference_with']
+                filter_reference_without = self.settings['filter_reference_without']
+                files = self.filter_by_reference(files, filepaths_label_ref, filter_reference_with, filter_reference_without)
+                
             filter_input_ref = ''
             for f in files:
                 _,fname,_ = splitFilePath(f)
@@ -586,10 +610,12 @@ class CACSLabelerModuleWidget:
                     filter_input_ref = filter_input_ref + fname + '.mhd '
                 if not ref_found and self.settings['show_input_if_ref_not_found']:
                     filter_input_ref = filter_input_ref + fname + '.mhd '
-
+                    
             filenames = qt.QFileDialog.getOpenFileNames(self.parent, 'Open files', self.settings['folderpath_images'],filter_input_ref)
         else:
             filenames = qt.QFileDialog.getOpenFileNames(self.parent, 'Open files', self.settings['folderpath_images'],self.settings['filter_input'])
+        
+        
         
         # Read images
         imagenames = []
@@ -601,6 +627,7 @@ class CACSLabelerModuleWidget:
             imagenames.append(name)
             image = Image(fip_image=filepath)
             self.imagelist.append(image)
+            print('name', name)
             
         # Enable radio button
         self.KEV80.enabled = True
@@ -608,6 +635,7 @@ class CACSLabelerModuleWidget:
 
         
     def onThresholdButtonClicked(self):
+        print('onThresholdButtonClicked')
         if not self.KEV120.checked and not self.KEV80.checked:
             qt.QMessageBox.warning(slicer.util.mainWindow(),
                 "Select KEV", "The KEV (80 or 120) must be selected to continue.")
@@ -1056,7 +1084,7 @@ class CardiacEditBox(EditorLib.EditBox):
                     k=0
                     while len(childrens) > 0:
                         k=k+1
-                        if self.settings['MODE']=='CACSTREE_CUMULATIVE'or self.settings['MODE']=='CACS_4':
+                        if self.settings['MODE']=='CACSTREE_CUMULATIVE' or self.settings['MODE']=='CACS_4':
                             items = [x.name for x in childrens]
                         else:
                             items = ['UNDEFINED'] + [x.name for x in childrens]
