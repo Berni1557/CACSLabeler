@@ -89,11 +89,14 @@ class XALabelerModuleWidget:
         self.settings=Settings()
         self.images=[]
         self.localXALEditorWidget = None
-        self.refAction = ALAction.copy()
+        #self.refAction = ALAction.copy()
+        self.refAction = None
         self.REFValue = 200
         self.UCValue = 201
         self.continueLabeling = False
         self.label_org = None
+        self.ActionList = None
+        self.fp_label_lesion_refine_pev = None
 
         if not parent:
             self.parent = slicer.qMRMLWidget()
@@ -425,43 +428,135 @@ class XALabelerModuleWidget:
         self.continueLabeling = True
         self.CONTINUE_BUTTON.enabled = False
         self.editUtil.toggleLabelOutline
+        self.saveAction(self.refAction, save_new='LABEL')
         self.refine_lesion(self.refAction, use_pred=True, save=True, saveDiff=True, mask_SLICE=True)
 
     def onLOADCTA_BUTTONClicked(self):
         pass
-                
-    
-    
+      
+    def updateActionPath(self, refAction):
+        print('refAction123', refAction)
+        
+        folderManagerAction = self.settings['folderManagerAction']
+        # Update image path
+        _, filename, ext = splitFilePath(refAction['fp_image'])
+        refAction['fp_image'] = os.path.join(self.settings['folderpath_images'], filename + ext)
+        # Update reference
+        folderpathRef = os.path.join(folderManagerAction, 'reference')
+        folderpathPredict = os.path.join(folderManagerAction, 'predict')
+        if refAction['action']=='LABEL_NEW':
+            # Update label path
+            print('fp_label_predX', refAction['fp_label_pred'])
+            _, filename, ext = splitFilePath(refAction['fp_label_pred'])
+            refAction['fp_label'] = os.path.join(folderpathPredict, filename + ext)
+            print('filepath_label1234', refAction['fp_label'])
+            # Update lesion path
+            _, filename, ext = splitFilePath(refAction['fp_label_lesion_pred'])
+            refAction['fp_label_lesion'] = os.path.join(folderpathPredict, filename + ext)
+        else:
+            # Update label path
+            _, filename, ext = splitFilePath(refAction['fp_label'])
+            refAction['fp_label'] = os.path.join(folderpathRef, filename + ext)
+            # Update lesion path
+            _, filename, ext = splitFilePath(refAction['fp_label_lesion'])
+            refAction['fp_label_lesion'] = os.path.join(folderpathRef, filename + ext)
+        # Update refine
+        folderpathRefine = os.path.join(folderManagerAction, 'refine')
+        # Update label_refine path
+        _, filename, ext = splitFilePath(refAction['fp_label_refine'])
+        refAction['fp_label_refine'] = os.path.join(folderpathRefine, filename + ext)
+        # Update lesion path
+        _, filename, ext = splitFilePath(refAction['fp_label_lesion_refine'])
+        refAction['fp_label_lesion_refine'] = os.path.join(folderpathRefine, filename + ext)
+        # Update prediction
+        folderpathPred = os.path.join(folderManagerAction, 'predict')
+        # Update label_refine path
+        if refAction['fp_label_pred']:
+            _, filename, ext = splitFilePath(refAction['fp_label_pred'])
+            refAction['fp_label_pred'] = os.path.join(folderpathPred, filename + ext)
+        # Update lesion path
+        if refAction['fp_label_lesion_pred']:
+            _, filename, ext = splitFilePath(refAction['fp_label_lesion_pred'])
+            refAction['fp_label_lesion_pred'] = os.path.join(folderpathPred, filename + ext)
+        return refAction
+        
+    def saveAction(self, refAction, save_new='LESION'):
+        print('refAction1234', refAction)
+        if refAction is not None and (refAction['STATUS']=='SOLVED' or save_new=='LABEL'):
+            self.deleteNodesREFValue()
+            filepath = refAction['fp_image'].encode("utf-8")
+            _, imagename,_ = splitFilePath(filepath)
+            if refAction['action'] == 'LABEL_LESION':
+                fp_save = refAction['fp_label_lesion_refine']
+            elif refAction['action'] == 'LABEL_REGION':
+                fp_save = refAction['fp_label_refine']
+            elif refAction['action'] == 'LABEL_NEW':
+                if save_new=='LESION':
+                    fp_save = refAction['fp_label_lesion_refine']
+                else:
+                    fp_save = refAction['fp_label_refine']
+            else:
+                raise ValueError('Action: ' + refAction['action'] + ' does not exist.')
+            self.updateDiffOutput()
+            self.saveOutputRefine(filepath_refine=fp_save)
+            self.deleteNodes(imagename)
+        
     def onNextButtonClicked(self):
-        # Start client
-        #msg = ("NEXT").encode('utf-8')
-        #msg = (refAction_str).encode('utf-8')
-        self.refAction['COMMAND'] = self.refAction['COMMAND'] + 'NEXT'
-        self.refAction['STATUS'] = 'SOLVED'
-        ALAction_str = json.dumps(self.refAction)
-        msg = (ALAction_str).encode('utf-8')
         
-        UDPClientSocket = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
-        UDPClientSocket.settimeout(30)
-        print('Sending NEXT command')
-        UDPClientSocket.sendto(msg, self.dest)
+        # Update action
+        if self.refAction is not None:
+            self.refAction['STATUS'] = 'SOLVED'
         
-        server_error = False
-        try:
-            msgFromServer = UDPClientSocket.recvfrom(self.bufferSize)
-            msg = msgFromServer[0]
-            refAction = json.loads(msg)
-            self.refAction = refAction
-            print('Processing query: ', refAction['QUERY'])
-        except:
-            print('Could not get next query. Please check the server!')
-            server_error = True
+        # Save current action and delete nodes
+        if self.refAction is not None:
+            self.saveAction(self.refAction)
         
-        # !!!
-        #refAction['folderpath_output'] = '/mnt/SSD2/cloud_data/Projects/DL/Code/src/datasets/DISCHARGE_XA/AL/predict'
-        print('fp_label_pred01', refAction['fp_label_pred'])
-        refAction['folderpath_output'],_ ,_ = splitFilePath(refAction['fp_label_pred'])
-        
+        # Check if server is used
+        if self.settings['ServerRefinement']:
+            # Start client
+            self.refAction['COMMAND'] = self.refAction['COMMAND'] + 'NEXT'
+            #self.refAction['STATUS'] = 'SOLVED'
+            ALAction_str = json.dumps(self.refAction)
+            msg = (ALAction_str).encode('utf-8')
+            
+            UDPClientSocket = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
+            UDPClientSocket.settimeout(30)
+            print('Sending NEXT command')
+            UDPClientSocket.sendto(msg, self.dest)
+
+            try:
+                msgFromServer = UDPClientSocket.recvfrom(self.bufferSize)
+                msg = msgFromServer[0]
+                refAction = json.loads(msg)
+                self.refAction = refAction
+                print('Processing query: ', refAction['QUERY'])
+                server_error = False
+            except:
+                print('Could not get next query. Please check the server!')
+                server_error = True
+            print('fp_label_pred01', refAction['fp_label_pred'])
+            refAction['folderpath_output'],_ ,_ = splitFilePath(refAction['fp_label_pred'])
+        else:
+            if self.ActionList is None:
+                # Read action list
+                self.ActionList = self.loadActionFile(folderManagerAction=self.settings['folderManagerAction'])
+            else:
+                # Save action list
+                self.ActionList[self.refAction_idx] = self.refAction
+                self.saveActionFile(self.ActionList, folderManagerAction=self.settings['folderManagerAction'])
+                
+            # Get next action
+            new_action=False
+            for idx,action in enumerate(self.ActionList):
+                if action['STATUS']=='OPEN':
+                    self.refAction = self.updateActionPath(action)
+                    self.refAction_idx = idx
+                    new_action = True
+                    break
+            if not new_action:
+                return
+            server_error = False
+
         if not server_error:
             if self.refAction['action'] == '':
                 pass
@@ -469,62 +564,82 @@ class XALabelerModuleWidget:
                 self.LABEL_LESION_BUTTON.enabled = False
                 self.LABEL_REGION_BUTTON.enabled = True
                 self.LABEL_NEW_BUTTON.enabled = True
-                self.refine_lesion(refAction, use_pred=False, save=True, saveDiff=True)
+                self.refine_lesion(self.refAction, use_pred=False, save=True, saveDiff=True)
             elif self.refAction['action'] == 'LABEL_REGION':
                 self.LABEL_LESION_BUTTON.enabled = True
                 self.LABEL_REGION_BUTTON.enabled = False
                 self.LABEL_NEW_BUTTON.enabled = True
-                self.refine_region(refAction, save=True, saveDiff=True, mask_SLICE=True)
+                self.refine_region(self.refAction, save=True, saveDiff=True, mask_SLICE=True)
             elif self.refAction['action'] == 'LABEL_NEW':
                 self.LABEL_LESION_BUTTON.enabled = False
                 self.LABEL_REGION_BUTTON.enabled = False
                 self.LABEL_NEW_BUTTON.enabled = False
-                self.refine_new(refAction, save=True)
+                self.refine_new(self.refAction, save=True)
             else:
                 raise ValueError('Action: ' + refAction['action'] + ' does not exist.')
             
     def onSkipButtonClicked(self):
-
-        self.refAction['COMMAND'] = self.refAction['COMMAND'] + 'NEXT'
-        self.refAction['STATUS'] = 'SKIPED'
-        ALAction_str = json.dumps(self.refAction)
-        msg = (ALAction_str).encode('utf-8')
         
-        UDPClientSocket = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
-        UDPClientSocket.settimeout(10)
-        print('Sending NEXT command')
-        UDPClientSocket.sendto(msg, self.dest)
-
-        try:
-            msgFromServer = UDPClientSocket.recvfrom(self.bufferSize)
-            msg = msgFromServer[0]
-            refAction = json.loads(msg)
-            self.refAction = refAction
-        except:
-            print('Could not get next query. Please check the server!')
+        if self.settings['ServerRefinement']:
+            self.refAction['COMMAND'] = self.refAction['COMMAND'] + 'NEXT'
+            self.refAction['STATUS'] = 'SKIPED'
+            ALAction_str = json.dumps(self.refAction)
+            msg = (ALAction_str).encode('utf-8')
             
-        # !!!
-        refAction['folderpath_output'] = '/mnt/SSD2/cloud_data/Projects/DL/Code/src/datasets/DISCHARGE_XA/AL/predict'
-            
-        if self.refAction['action'] == '':
-            pass
-        elif self.refAction['action'] == 'LABEL_LESION':
-            self.LABEL_LESION_BUTTON.enabled = False
-            self.LABEL_REGION_BUTTON.enabled = True
-            self.LABEL_NEW_BUTTON.enabled = True
-            self.refine_lesion(refAction, use_pred=False, save=False, saveDiff=True)
-        elif self.refAction['action'] == 'LABEL_REGION':
-            self.LABEL_LESION_BUTTON.enabled = True
-            self.LABEL_REGION_BUTTON.enabled = False
-            self.LABEL_NEW_BUTTON.enabled = True
-            self.refine_region(refAction, save=False, showREFValue=True, saveDiff=True, mask_SLICE=True)
-        elif self.refAction['action'] == 'LABEL_NEW':
-            self.LABEL_LESION_BUTTON.enabled = False
-            self.LABEL_REGION_BUTTON.enabled = False
-            self.LABEL_NEW_BUTTON.enabled = False
-            self.refine_new(refAction, save=False)
+            UDPClientSocket = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
+            UDPClientSocket.settimeout(10)
+            print('Sending NEXT command')
+            UDPClientSocket.sendto(msg, self.dest)
+    
+            try:
+                msgFromServer = UDPClientSocket.recvfrom(self.bufferSize)
+                msg = msgFromServer[0]
+                refAction = json.loads(msg)
+                self.refAction = refAction
+                server_error = False
+            except:
+                print('Could not get next query. Please check the server!')
+                server_error = True
+                
+            refAction['folderpath_output'],_ ,_ = splitFilePath(refAction['fp_label_pred'])
         else:
-            raise ValueError('Action: ' + refAction['action'] + ' does not exist.')
+            if self.ActionList is None:
+                # Read action list
+                self.ActionList = self.loadActionFile(folderManagerAction=self.settings['folderManagerAction'])
+            else:
+                # Save action list
+                self.refAction['STATUS'] = 'SKIPED'
+                self.ActionList[self.refAction_idx] = self.refAction
+                self.saveActionFile(self.ActionList, folderManagerAction=self.settings['folderManagerAction'])
+                
+            # Get next action
+            for idx,action in enumerate(self.ActionList):
+                if action['STATUS']=='OPEN':
+                    self.refAction = self.updateActionPath(action)
+                    self.refAction_idx = idx
+                    break
+            server_error = False
+            
+        if not server_error:
+            if self.refAction['action'] == '':
+                pass
+            elif self.refAction['action'] == 'LABEL_LESION':
+                self.LABEL_LESION_BUTTON.enabled = False
+                self.LABEL_REGION_BUTTON.enabled = True
+                self.LABEL_NEW_BUTTON.enabled = True
+                self.refine_lesion(refAction, use_pred=False, save=False, saveDiff=True)
+            elif self.refAction['action'] == 'LABEL_REGION':
+                self.LABEL_LESION_BUTTON.enabled = True
+                self.LABEL_REGION_BUTTON.enabled = False
+                self.LABEL_NEW_BUTTON.enabled = True
+                self.refine_region(refAction, save=False, showREFValue=True, saveDiff=True, mask_SLICE=True)
+            elif self.refAction['action'] == 'LABEL_NEW':
+                self.LABEL_LESION_BUTTON.enabled = False
+                self.LABEL_REGION_BUTTON.enabled = False
+                self.LABEL_NEW_BUTTON.enabled = False
+                self.refine_new(refAction, save=False)
+            else:
+                raise ValueError('Action: ' + refAction['action'] + ' does not exist.')
     
     def onSaveQueryButtonClicked(self):
         self.saveOutput(overwrite=False)
@@ -560,18 +675,18 @@ class XALabelerModuleWidget:
         filepath = refAction['fp_image'].encode("utf-8")
         _, imagename,_ = splitFilePath(filepath)
         
-        self.fp_label_refine_prev = refAction['fp_label_refine'].encode("utf-8")
-        print('fp_label_refine_pev123', self.fp_label_refine_prev)
+        #self.fp_label_refine_prev = refAction['fp_label_refine'].encode("utf-8")
+        #print('fp_label_refine_pev123', self.fp_label_refine_prev)
         
-        print('save', save)
-        print('saveDiff', saveDiff)
-        self.deleteNodesREFValue()
-        if save:
-            if saveDiff:
-                self.updateDiffOutput()
-            #self.saveOutput(overwrite=False, folderpath_output=refAction['folderpath_output'])
-            self.saveOutputRefine(filepath_refine=self.fp_label_refine_prev)
-        self.deleteNodes(imagename)
+        #print('save', save)
+        #print('saveDiff', saveDiff)
+        #self.deleteNodesREFValue()
+#        if save:
+#            if saveDiff:
+#                self.updateDiffOutput()
+#            #self.saveOutput(overwrite=False, folderpath_output=refAction['folderpath_output'])
+#            self.saveOutputRefine(filepath_refine=self.fp_label_refine_prev)
+#        self.deleteNodes(imagename)
  
         imageFound = self.nodeExist(imagename)
               
@@ -603,7 +718,7 @@ class XALabelerModuleWidget:
         #self.label_org = sitk.ReadImage(filepath_label)
         #self.label_org = self.load_label_list(filepath_label_list)
         filepath_label = refAction['fp_label'].encode("utf-8")
-        #print('filepath_label123', filepath_label)
+        print('filepath_label123', filepath_label)
         self.label_org = sitk.ReadImage(filepath_label)
         
         _, labelname,_ = splitFilePath(filepath_label)
@@ -708,6 +823,20 @@ class XALabelerModuleWidget:
             filepath_label = filepath_label_org
         return filepath_label, filepath_label_list
         
+    def loadActionFile(self, folderManagerAction='/mnt/SSD2/cloud_data/Projects/CACSLabeler/code/data/tmp'):
+        ActionFilePath = os.path.join(folderManagerAction, 'manager', 'action', 'data', 'ActionFile.json')
+        # Load ActionFile
+        with open(ActionFilePath) as json_file:
+            action_list = json.load(json_file)
+        return action_list
+
+    def saveActionFile(self, action_list, folderManagerAction='/mnt/SSD2/cloud_data/Projects/CACSLabeler/code/data/tmp'):
+        ActionFilePath = os.path.join(folderManagerAction, 'manager', 'action', 'data', 'ActionFile.json')  
+        # Save action list to json
+        with open(ActionFilePath, 'w') as file:
+            file.write(json.dumps(action_list, indent=4))
+            
+            
     def refine_lesion(self, refAction, use_pred=False, save=True, saveDiff=False, mask_SLICE=False):
         print('refine_lesion')
         # Load label
@@ -730,16 +859,16 @@ class XALabelerModuleWidget:
         _, imagename,_ = splitFilePath(filepath)
         
         
-        self.fp_label_lesion_refine_pev = refAction['fp_label_lesion_refine'].encode("utf-8")
-        #print('fp_label_lesion_refine_pev123', self.fp_label_lesion_refine_pev)
-        
-        self.deleteNodesREFValue()
-        if save:
-            if saveDiff:
-                self.updateDiffOutput()
-            #self.saveOutput(overwrite=False, folderpath_output=refAction['folderpath_output'])
-            self.saveOutputRefine(filepath_refine=self.fp_label_lesion_refine_pev)
-        self.deleteNodes(imagename)
+#        self.fp_label_lesion_refine_pev = refAction['fp_label_lesion_refine'].encode("utf-8")
+#        #print('fp_label_lesion_refine_pev123', self.fp_label_lesion_refine_pev)
+#        
+#        self.deleteNodesREFValue()
+#        if save:
+#            if saveDiff:
+#                self.updateDiffOutput()
+#            #self.saveOutput(overwrite=False, folderpath_output=refAction['folderpath_output'])
+#            self.saveOutputRefine(filepath_refine=self.fp_label_lesion_refine_pev)
+#        self.deleteNodes(imagename)
 
         imageFound = self.nodeExist(imagename)
 

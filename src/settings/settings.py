@@ -80,6 +80,8 @@ class Settings:
         settingsDefault = {'folderpath_images': 'H:/cloud/cloud_data/Projects/DL/Code/src/datasets/DISCHARGE/data_cacs/Images',
                            'folderpath_references': 'H:/cloud/cloud_data/Projects/DL/Code/src/datasets/DISCHARGE/data_cacs/References',
                            'folderpath_export': 'H:/cloud/cloud_data/Projects/CACSLabeler/code/data/export',
+                           'folderManagerAction': '/mnt/SSD2/cloud_data/Projects/CACSLabeler/code/data/tmp',
+                           'ServerRefinement': False,
                            'filter_input': "Files(*.mhd, *.txt)",
                            #'CalciumScores': ['AGATSTON_SCORE', 'VOLUME_SCORE', 'DENSITY_SCORE', 'NUMLESION_SCORE', 'LESIONVOLUME_SCORE'],
                            #'CalciumScores': ['AGATSTON_SCORE', 'VOLUME_SCORE', 'DENSITY_SCORE', 'NUMLESION_SCORE'],
