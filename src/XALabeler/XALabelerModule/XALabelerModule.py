@@ -435,7 +435,7 @@ class XALabelerModuleWidget:
         pass
       
     def updateActionPath(self, refAction):
-        print('refAction123', refAction)
+        #print('refAction123', refAction)
         
         folderManagerAction = self.settings['folderManagerAction']
         # Update image path
@@ -446,10 +446,10 @@ class XALabelerModuleWidget:
         folderpathPredict = os.path.join(folderManagerAction, 'predict')
         if refAction['action']=='LABEL_NEW':
             # Update label path
-            print('fp_label_predX', refAction['fp_label_pred'])
+            #print('fp_label_predX', refAction['fp_label_pred'])
             _, filename, ext = splitFilePath(refAction['fp_label_pred'])
             refAction['fp_label'] = os.path.join(folderpathPredict, filename + ext)
-            print('filepath_label1234', refAction['fp_label'])
+            #print('filepath_label1234', refAction['fp_label'])
             # Update lesion path
             _, filename, ext = splitFilePath(refAction['fp_label_lesion_pred'])
             refAction['fp_label_lesion'] = os.path.join(folderpathPredict, filename + ext)
@@ -470,18 +470,24 @@ class XALabelerModuleWidget:
         refAction['fp_label_lesion_refine'] = os.path.join(folderpathRefine, filename + ext)
         # Update prediction
         folderpathPred = os.path.join(folderManagerAction, 'predict')
+
         # Update label_refine path
         if refAction['fp_label_pred']:
             _, filename, ext = splitFilePath(refAction['fp_label_pred'])
             refAction['fp_label_pred'] = os.path.join(folderpathPred, filename + ext)
+        else:
+            _, filename, ext = splitFilePath(refAction['fp_label'])
+            refAction['fp_label_pred'] = os.path.join(folderpathPred, filename + '-pred' + ext)
         # Update lesion path
         if refAction['fp_label_lesion_pred']:
             _, filename, ext = splitFilePath(refAction['fp_label_lesion_pred'])
             refAction['fp_label_lesion_pred'] = os.path.join(folderpathPred, filename + ext)
+        else:
+            _, filename, ext = splitFilePath(refAction['fp_label_lesion'])
+            refAction['fp_label_lesion_pred'] = os.path.join(folderpathPred, filename + '-pred' + ext)
         return refAction
         
     def saveAction(self, refAction, save_new='LESION'):
-        print('refAction1234', refAction)
         if refAction is not None and (refAction['STATUS']=='SOLVED' or save_new=='LABEL'):
             self.deleteNodesREFValue()
             filepath = refAction['fp_image'].encode("utf-8")
@@ -544,11 +550,24 @@ class XALabelerModuleWidget:
                 # Save action list
                 self.ActionList[self.refAction_idx] = self.refAction
                 self.saveActionFile(self.ActionList, folderManagerAction=self.settings['folderManagerAction'])
-                
+            
+            # Collect action statistic
+            action_stat = dict({'LABEL_LESION':0, 'LABEL_REGION':0, 'LABEL_NEW':0})
+            for idx,action in enumerate(self.ActionList):
+                if action['action']=='LABEL_LESION':
+                    action_stat['LABEL_LESION'] += 1
+                if action['action']=='LABEL_REGION':
+                    action_stat['LABEL_REGION'] += 1
+                if action['action']=='LABEL_NEW':
+                    action_stat['LABEL_NEW'] += 1
+            print('Action statistics:', action_stat)
+            
             # Get next action
             new_action=False
             for idx,action in enumerate(self.ActionList):
                 if action['STATUS']=='OPEN':
+                #if action['STATUS']=='OPEN' and idx>250:
+                    print('Processing: ' + str(idx) + '/' + str(len(self.ActionList)))
                     self.refAction = self.updateActionPath(action)
                     self.refAction_idx = idx
                     new_action = True
@@ -717,8 +736,9 @@ class XALabelerModuleWidget:
         # Load image_org
         #self.label_org = sitk.ReadImage(filepath_label)
         #self.label_org = self.load_label_list(filepath_label_list)
-        filepath_label = refAction['fp_label'].encode("utf-8")
-        print('filepath_label123', filepath_label)
+        #filepath_label = refAction['fp_label'].encode("utf-8")
+        #print('filepath_label123', filepath_label)
+        filepath_label = refAction['fp_label_pred'].encode("utf-8")
         self.label_org = sitk.ReadImage(filepath_label)
         
         _, labelname,_ = splitFilePath(filepath_label)
@@ -749,13 +769,13 @@ class XALabelerModuleWidget:
 
         # Create binary mask
         mask = np.zeros(label.shape)
-        print('mask123', mask.shape)
+        #print('mask123', mask.shape)
         
         
         IDX = refAction['IDX']
         SLICE = int(refAction['SLICE'])
-        print('IDX123', IDX)
-        print('SLICE123', SLICE)
+        #print('IDX123', IDX)
+        #print('SLICE123', SLICE)
         if mask_SLICE:
             for p in range(len(IDX[0])):
                 x=IDX[0][p]
@@ -787,7 +807,7 @@ class XALabelerModuleWidget:
             label = label * mask_slice
             slicer.util.updateVolumeFromArray(node, label)
             self.assignLabelLUT(labelname)
-            print('updateVolumeFromArray')
+            #print('updateVolumeFromArray')
             
         # Show action
         self.label.setText('ACTION: ' + refAction['action'])
