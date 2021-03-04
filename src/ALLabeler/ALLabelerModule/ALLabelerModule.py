@@ -84,7 +84,7 @@ class ALLabelerModuleWidget:
         
         # Settings filepath
         currentFile = os.path.dirname(os.path.abspath(__file__))
-        self.filepath_settings = os.path.dirname(os.path.dirname(os.path.dirname(currentFile))) + '/data/settings.json'
+        self.filepath_settings = os.path.dirname(os.path.dirname(os.path.dirname(currentFile))) + '/data/settings_ALLabeler.json'
 
     def setup(self):
         # Instantiate and connect widgets ...

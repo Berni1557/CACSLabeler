@@ -111,7 +111,7 @@ class XALabelerModuleWidget:
         
         # Settings filepath
         currentFile = os.path.dirname(os.path.abspath(__file__))
-        self.filepath_settings = os.path.dirname(os.path.dirname(os.path.dirname(currentFile))) + '/data/settings.json'
+        self.filepath_settings = os.path.dirname(os.path.dirname(os.path.dirname(currentFile))) + '/data/settings_XALabeler.json'
         
     def nodeExist(self, name):
         nodes=slicer.util.getNodesByClass('vtkMRMLScalarVolumeNode')
