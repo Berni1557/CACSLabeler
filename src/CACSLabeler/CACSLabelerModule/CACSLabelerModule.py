@@ -759,7 +759,7 @@ class CACSLabelerModuleLogic:
     requiring an instance of the Widget
     """
     def __init__(self, KEV80=False, KEV120=False, inputVolumeName=None):
-        self.lowerThresholdValue = None
+        self.lowerThresholdValue = 130
         self.upperThresholdValue = 5000
         self.editUtil = EditorLib.EditUtil.EditUtil()
         self.KEV80 = KEV80
@@ -767,6 +767,7 @@ class CACSLabelerModuleLogic:
         self.inputVolumeName = inputVolumeName
         self.calciumLabelNode = None
         self.CardiacAgatstonMeasuresLUTNode = None
+        self.setLowerPaintThreshold()
 
     def runThreshold(self):
 
@@ -801,9 +802,10 @@ class CACSLabelerModuleLogic:
         parameterNode.SetParameter("LabelEffect,paintThreshold","1")
         parameterNode.SetParameter("LabelEffect,paintThresholdMin","{0}".format(self.lowerThresholdValue))
         parameterNode.SetParameter("LabelEffect,paintThresholdMax","{0}".format(self.upperThresholdValue))
+        print('setLowerPaintThreshold', self.lowerThresholdValue)
         
-        #parameterNode.GetParameter()
-        #print
+#        p = self.editUtil.threshold
+#        print('params', p)
 
     def assignLabelLUT(self, calciumName):
         # Set the color lookup table (LUT) to the custom CardiacAgatstonMeasuresLUT
