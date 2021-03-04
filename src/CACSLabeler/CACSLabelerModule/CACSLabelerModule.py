@@ -548,21 +548,31 @@ class CACSLabelerModuleWidget:
                 print('Saveing reference to: ', filepath)
 
     def filter_by_reference(self, filepaths, filepaths_ref, filter_reference_with, filter_reference_without):
-        filenames_filt=[]
+        filenames_filtX=[]
         for f in filepaths:
             _,fname,_ = splitFilePath(f)
             ref_same = False
             ref_with = False
             ref_without = False
             for ref in filepaths_ref:
+                
                 _,refname,_ = splitFilePath(ref)
                 ref_same = fname in refname
                 if ref_same:
+                    print('ref', ref)
+                    print('ref_same', ref_same)
                     ref_with = ref_with or all([x in ref for x in filter_reference_with])
                     ref_without = ref_without or any([x in ref for x in filter_reference_without])
-            if ref_with and not ref_without:
-                filenames_filt.append(f)
-        return filenames_filt
+                    print('ref_with', ref_with)
+                    print('ref_without', ref_without)
+                    
+                if ref_with and not ref_without:
+                    print('ref_both')
+                    filenames_filtX.append(f)
+                    break
+                    
+        print('filenames_filtX', filenames_filtX)
+        return filenames_filtX
                     
 #    def filter_by_reference(self, filepaths_ref, filter_reference_with, filter_reference_without):
 #        filenames_filt=[]
@@ -594,14 +604,23 @@ class CACSLabelerModuleWidget:
             for filt in filter_input_list:
                 files = files + glob(self.settings['folderpath_images'] + '/' + filt)
             
+            #print('files0', files)
+            
+            
             # Filter files by reference
             #if self.settings['filter_reference']:
             if True:
                 filepaths_label_ref = glob(self.settings['folderpath_references'] + '/*.nrrd')
+                print('filepaths_label_ref', filepaths_label_ref)
                 filter_reference_with = self.settings['filter_reference_with']
                 filter_reference_without = self.settings['filter_reference_without']
+                print('filter_reference_with', filter_reference_with)
+                print('filter_reference_without', filter_reference_without)
                 files = self.filter_by_reference(files, filepaths_label_ref, filter_reference_with, filter_reference_without)
-                
+            
+            print('files1', files)
+            
+            
             filter_input_ref = ''
             for f in files:
                 _,fname,_ = splitFilePath(f)
