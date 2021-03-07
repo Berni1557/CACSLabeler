@@ -567,7 +567,7 @@ class XALabelerModuleWidget:
             for idx,action in enumerate(self.ActionList):
                 #if action['STATUS']=='OPEN':
                 #if action['STATUS']=='OPEN' and idx>250:
-                if action['STATUS']=='OPEN' and action['action']=='LABEL_LESION':
+                if action['STATUS']=='OPEN' and action['action']=='LABEL_NEW':
                     print('Processing: ' + str(idx) + '/' + str(len(self.ActionList)))
                     self.refAction = self.updateActionPath(action)
                     self.refAction_idx = idx
