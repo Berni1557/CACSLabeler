@@ -97,6 +97,7 @@ class XALabelerModuleWidget:
         self.label_org = None
         self.ActionList = None
         self.fp_label_lesion_refine_pev = None
+        self.actionSelected = 'ALL'
 
         if not parent:
             self.parent = slicer.qMRMLWidget()
@@ -204,6 +205,16 @@ class XALabelerModuleWidget:
         self.measuresFormLayout.addRow(stopButton)
         stopButton.connect('clicked(bool)', self.onStopButtonClicked)
         self.stopButton = stopButton
+        
+        # Add action selector
+        actionSelector = qt.QComboBox()
+        actionSelector.addItems(['ALL', 'LABEL_LESION', 'LABEL_REGION', 'LABEL_NEW'])
+        actionSelector.setCurrentIndex(0)
+        actionSelector.toolTip = "Select refinement action"
+        actionSelector.setVisible(True)
+        actionSelector.currentIndexChanged.connect(self.onActionSelectorChanged)
+        self.measuresFormLayout.addRow(actionSelector)
+        self.actionSelector = actionSelector
         
         # Set albel
         label = qt.QLabel("Please solve action")
@@ -392,6 +403,9 @@ class XALabelerModuleWidget:
         #self.LABEL_LESION_NEW_BUTTON.enabled = False
         #self.LABEL_REGION_NEW_BUTTON.enabled = False
         
+    def onActionSelectorChanged(self):
+        self.actionSelected = self.actionSelector.currentText
+        
     def onLABEL_LESION_BUTTONClicked(self):
         refAction = self.refAction
         refAction['action'] = 'LABEL_LESION'
@@ -567,7 +581,7 @@ class XALabelerModuleWidget:
             for idx,action in enumerate(self.ActionList):
                 #if action['STATUS']=='OPEN':
                 #if action['STATUS']=='OPEN' and idx>250:
-                if action['STATUS']=='OPEN' and action['action']=='LABEL_NEW':
+                if action['STATUS']=='OPEN' and (action['action']==self.actionSelected or self.actionSelected=='ALL'):
                     print('Processing: ' + str(idx) + '/' + str(len(self.ActionList)))
                     self.refAction = self.updateActionPath(action)
                     self.refAction_idx = idx
@@ -936,9 +950,9 @@ class XALabelerModuleWidget:
         else:
             mask_slice = np.ones(label.shape)
         
-        print('mask', mask.sum())
-        print('IDX', IDX)
-        print('SLICE', IDX)
+        #print('mask', mask.sum())
+        #print('IDX', IDX)
+        #print('SLICE', IDX)
         
         _, labelname,_ = splitFilePath(filepath_label)
         labelFound = self.nodeExist(labelname)
