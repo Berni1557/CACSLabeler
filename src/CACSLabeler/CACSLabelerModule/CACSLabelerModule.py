@@ -39,6 +39,10 @@ import shutil
 
 ############## CACSLabelerModule ##############
 
+# Set parameter
+lowerThresholdValue = 130
+upperThresholdValue = 10000
+
 def splitFilePath(filepath):
     """ Split filepath into folderpath, filename and file extension
 
@@ -138,8 +142,12 @@ class Image:
                 return True
         return False
             
-            
-            
+    def deleteScore(self, scorename):
+        for i,s in enumerate(self.scores):
+            if s['NAME'] == scorename:
+                del self.scores[i]
+                return True
+        return False            
             
 class CACSLabelerModule(ScriptedLoadableModule):
   """Uses ScriptedLoadableModule base class, available at:
@@ -234,16 +242,6 @@ class CACSLabelerModuleWidget:
         self.loadInputButton = loadInputButton
         self.measuresFormLayout.addRow(self.loadInputButton)
 
-        # Export calcium scores all refereences
-        exportButtonRef = qt.QPushButton("Export Calcium Scores from references folder")
-        exportButtonRef.toolTip = "Export Calcium Scores from references folder"
-        exportButtonRef.setStyleSheet("background-color: rgb(230,241,255)")
-        exportButtonRef.enabled = True
-        exportButtonRef.connect('clicked(bool)', self.onExportScoreButtonRefClicked)
-        self.exportButtonRef = exportButtonRef
-        #self.parent.layout().addWidget(self.exportButtonRef)
-        self.measuresFormLayout.addRow(self.exportButtonRef)
-        
         # The Input Volume Selector
         self.inputFrame = qt.QFrame(self.measuresCollapsibleButton)
         self.inputFrame.setLayout(qt.QHBoxLayout())
@@ -329,6 +327,15 @@ class CACSLabelerModuleWidget:
         exportButton.connect('clicked(bool)', self.onExportScoreButtonClicked)
         self.exportButton = exportButton
         self.parent.layout().addWidget(self.exportButton)
+
+        # Export calcium scores all refereences
+        exportButtonRef = qt.QPushButton("Export Calcium Scores from references folder")
+        exportButtonRef.toolTip = "Export Calcium Scores from references folder"
+        exportButtonRef.setStyleSheet("background-color: rgb(230,241,255)")
+        exportButtonRef.enabled = True
+        exportButtonRef.connect('clicked(bool)', self.onExportScoreButtonRefClicked)
+        self.exportButtonRef = exportButtonRef
+        self.parent.layout().addWidget(self.exportButtonRef)
         
         # Read settings file
         if os.path.isfile(self.filepath_settings):
@@ -387,8 +394,8 @@ class CACSLabelerModuleWidget:
             value = self.settings['CACSTree'].getValueByName(key)
             if not value==0 and len(children)>0:
                 arteries_sum[key] = self.settings['CACSTree'].getChildrenNamesByName(key) 
-        print('arteries_dict', arteries_dict)
-        print('arteries_sum', arteries_sum)
+        #print('arteries_dict', arteries_dict)
+        #print('arteries_sum', arteries_sum)
         return arteries_dict, arteries_sum
         
     def onScoreButtonClicked(self):
@@ -468,6 +475,7 @@ class CACSLabelerModuleWidget:
         else:
             raise ValueError('Calcium score ' + scorename + ' does not exist.')
         
+        image.deleteScore(scorename)
         if not image.scoreExist(scorename):
             inputVolume = su.PullVolumeFromSlicer(image.image_name)
             inputVolumeLabel = su.PullVolumeFromSlicer(image.ref_name)
@@ -659,13 +667,14 @@ class CACSLabelerModuleWidget:
         self.CACSLabelerModuleLogic.runThreshold()
 
         # View thresholded image as label map and image as background image in red widget
-        node = slicer.util.getFirstNodeByName(self.CACSLabelerModuleLogic.calciumName[0:-13])
+        #node = slicer.util.getFirstNodeByName(self.CACSLabelerModuleLogic.calciumName[0:-13])
+        nodes=slicer.util.getNodesByClass('vtkMRMLScalarVolumeNode')
+        for n in nodes:
+            if n.GetName()==self.CACSLabelerModuleLogic.calciumName[0:-13]:
+                node=n
+                break
         slicer.util.setSliceViewerLayers(background=node)
-        
-        #self.CACSLabelerModuleLogic.inputSelector.setCurrentNode(self.inputImageNode)
-        #self.CACSLabelerModuleLogic.calciumName = calciumName
-        #self.CACSLabelerModuleLogic.assignLabelLUT(self.CACSLabelerModuleLogic.calciumName)
-        
+
         # Set ref_name
         name = self.CACSLabelerModuleLogic.calciumName[0:-13]
         for image in self.imagelist:
@@ -732,8 +741,8 @@ class CACSLabelerModuleLogic:
     requiring an instance of the Widget
     """
     def __init__(self, KEV80=False, KEV120=False, inputVolumeName=None):
-        self.lowerThresholdValue = 130
-        self.upperThresholdValue = 5000
+        self.lowerThresholdValue = lowerThresholdValue
+        self.upperThresholdValue = upperThresholdValue
         self.editUtil = EditorLib.EditUtil.EditUtil()
         self.KEV80 = KEV80
         self.KEV120 = KEV120
@@ -749,7 +758,8 @@ class CACSLabelerModuleLogic:
             print('!!! Method for KEV80 not implemented !!!')
             calciumName = "{0}-label-lesion".format(self.inputVolumeName)
         elif self.KEV120:
-            self.lowerThresholdValue = 130
+            self.lowerThresholdValue = lowerThresholdValue
+            self.upperThresholdValue = upperThresholdValue
             #calciumName = "{0}_120KEV_{1}HU_Calcium_Label".format(self.inputVolumeName, self.lowerThresholdValue)
             calciumName = "{0}-label-lesion".format(self.inputVolumeName)
         
@@ -775,7 +785,7 @@ class CACSLabelerModuleLogic:
         parameterNode.SetParameter("LabelEffect,paintThreshold","1")
         parameterNode.SetParameter("LabelEffect,paintThresholdMin","{0}".format(self.lowerThresholdValue))
         parameterNode.SetParameter("LabelEffect,paintThresholdMax","{0}".format(self.upperThresholdValue))
-        print('setLowerPaintThreshold', self.lowerThresholdValue)
+        #print('setLowerPaintThreshold', self.lowerThresholdValue)
         
 #        p = self.editUtil.threshold
 #        print('params', p)
@@ -892,6 +902,7 @@ class CardiacEditorWidget(Editor.EditorWidget):
         self.editBoxFrame.objectName = 'EditBoxFrame'
         self.editBoxFrame.setLayout(qt.QVBoxLayout())
         self.effectsToolsFrame.layout().addWidget(self.editBoxFrame)
+        self.settings['CardiacEditorWidget'] = self
         self.toolsBox = CardiacEditBox(self.settings, self.editBoxFrame, optionsFrame=self.effectOptionsFrame)
 
     def updateComboShortcut(self, idx):
@@ -1062,7 +1073,19 @@ class CardiacEditBox(EditorLib.EditBox):
 
         self.updateUndoRedoButtons()
         self._onParameterNodeModified(EditUtil.getParameterNode())
+        #self.addObserver(EditUtil.getParameterNode(), vtk.vtkCommand.ModifiedEvent, self.printX)
+        self.addObserver(EditUtil.getParameterNode(), vtk.vtkCommand.ModifiedEvent, self.settings['CardiacEditorWidget'].updateGUIFromMRML)
+        self._onParameterNodeModified(EditUtil.getParameterNode(), self.settings['CardiacEditorWidget'].updateGUIFromMRML)
+        #interactionNode = slicer.app.applicationLogic().GetInteractionNode()
+       # self.addObserver(interactionNode, interactionNode.InteractionModeChangedEvent, self.printX)
 
+#    def printX(self, caller, event=-1):
+#        parameterNode = self.settings['CardiacEditorWidget'].editUtil.getParameterNode()
+#        parameterNode.SetParameter("LabelEffect,paintOver","1")
+#        parameterNode.SetParameter("LabelEffect,paintThreshold","1")
+#        parameterNode.SetParameter("LabelEffect,paintThresholdMin","{0}".format(lowerThresholdValue))
+#        parameterNode.SetParameter("LabelEffect,paintThresholdMax","{0}".format(upperThresholdValue))
+#        
     def selectionChangeFunc(self, comboIdx):
         #print('currentTools123', self.currentTools)
         CACSTree = self.settings['CACSTree']
