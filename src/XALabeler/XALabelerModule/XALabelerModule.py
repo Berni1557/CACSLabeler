@@ -25,6 +25,9 @@ import time
 from sys import platform
 from SimpleITK import ConnectedComponentImageFilter
 
+# Temporal Settings
+LABEL_NEW_REGION = False
+
 ALAction = dict({'ID': -1, 
                  'fp_image': '', 
                  'fp_label': '',
@@ -503,7 +506,7 @@ class XALabelerModuleWidget:
         
     def saveAction(self, refAction, save_new='LESION'):
         if refAction is not None and (refAction['STATUS']=='SOLVED' or save_new=='LABEL'):
-            self.deleteNodesREFValue()
+            #self.deleteNodesREFValue()
             filepath = refAction['fp_image'].encode("utf-8")
             _, imagename,_ = splitFilePath(filepath)
             if refAction['action'] == 'LABEL_LESION':
@@ -568,13 +571,13 @@ class XALabelerModuleWidget:
             # Collect action statistic
             action_stat = dict({'LABEL_LESION':0, 'LABEL_REGION':0, 'LABEL_NEW':0})
             for idx,action in enumerate(self.ActionList):
-                if action['action']=='LABEL_LESION':
+                if action['action']=='LABEL_LESION' and action['STATUS']=='OPEN':
                     action_stat['LABEL_LESION'] += 1
-                if action['action']=='LABEL_REGION':
+                if action['action']=='LABEL_REGION' and action['STATUS']=='OPEN':
                     action_stat['LABEL_REGION'] += 1
-                if action['action']=='LABEL_NEW':
+                if action['action']=='LABEL_NEW' and action['STATUS']=='OPEN':
                     action_stat['LABEL_NEW'] += 1
-            print('Action statistics:', action_stat)
+            print('Action: ' + str(action_stat))
             
             # Get next action
             new_action=False
@@ -679,13 +682,21 @@ class XALabelerModuleWidget:
         self.saveOutput(overwrite=False)
 
     def refine_new(self, refAction, save=True):
-        print('refine_new')
-        self.nextButton.enabled = False
-        self.skipButton.enabled = False
-        self.saveQueryButton.enabled = False
-        self.CONTINUE_BUTTON.enabled = True
-        self.continueLabeling = False
-        self.refine_region(refAction, save=save, showREFValue=False, saveDiff=True, mask_SLICE=True)
+        #print('refine_new')
+        #print('LABEL_NEW_REGION', LABEL_NEW_REGION)
+        if LABEL_NEW_REGION:
+            self.nextButton.enabled = False
+            self.skipButton.enabled = False
+            self.saveQueryButton.enabled = False
+            self.CONTINUE_BUTTON.enabled = True
+            self.continueLabeling = False
+            self.refine_region(refAction, save=save, showREFValue=False, saveDiff=True, mask_SLICE=True)
+        else:
+            self.continueLabeling = True
+            self.CONTINUE_BUTTON.enabled = False
+            self.editUtil.toggleLabelOutline
+            self.saveAction(self.refAction, save_new='LABEL')
+            self.refine_lesion(self.refAction, use_pred=True, save=True, saveDiff=True, mask_SLICE=True)
         
     def load_label_list(self, filepath_label_list):
         label_list = filepath_label_list
@@ -837,7 +848,7 @@ class XALabelerModuleWidget:
         
         # Creates and adds the custom Editor Widget to the module
         if self.localXALEditorWidget is None:
-            self.localXALEditorWidget = XALEditorWidget(parent=self.parent, showVolumesFrame=False, settings=self.settings)
+            self.localXALEditorWidget = XALEditorWidget(parent=self.parent, showVolumesFrame=False, settings=self.settings, widget=self)
             self.localXALEditorWidget.setup()
             self.localXALEditorWidget.enter()
         self.localXALEditorWidget.toolsBox.UCchangeIslandButton.setEnabled(False)
@@ -873,7 +884,7 @@ class XALabelerModuleWidget:
             
             
     def refine_lesion(self, refAction, use_pred=False, save=True, saveDiff=False, mask_SLICE=False):
-        print('refine_lesion')
+        #print('refine_lesion')
         # Load label
 #        if use_pred:
 #            filepath_label_org = refAction['fp_label_lesion_pred'].encode("utf-8")
@@ -989,7 +1000,7 @@ class XALabelerModuleWidget:
         
         # Creates and adds the custom Editor Widget to the module
         if self.localXALEditorWidget is None:
-            self.localXALEditorWidget = XALEditorWidget(parent=self.parent, showVolumesFrame=False, settings=self.settings)
+            self.localXALEditorWidget = XALEditorWidget(parent=self.parent, showVolumesFrame=False, settings=self.settings, widget=self)
             self.localXALEditorWidget.setup()
             self.localXALEditorWidget.enter()
         self.localXALEditorWidget.toolsBox.UCchangeIslandButton.setEnabled(True)
@@ -1185,6 +1196,7 @@ class XALabelerModuleWidget:
         print('saveOutputRefine')
         volumeNodes = slicer.util.getNodesByClass('vtkMRMLScalarVolumeNode')
         for node in volumeNodes:
+            print('node', node)
             volume_name = node.GetName()
             if 'label' in volume_name:
                 slicer.util.saveNode(node, filepath_refine)
@@ -1239,8 +1251,9 @@ class XALabelerModuleWidget:
 # XALabelerModuleLogic
 #
 class XALEditorWidget(Editor.EditorWidget):
-    def __init__(self, parent=None, showVolumesFrame=None, settings=None):
+    def __init__(self, parent=None, showVolumesFrame=None, settings=None, widget=None):
         self.settings = settings
+        self.widget = widget
         super(XALEditorWidget, self).__init__(parent=parent, showVolumesFrame=showVolumesFrame)
         
     def createEditBox(self):
@@ -1250,8 +1263,12 @@ class XALEditorWidget(Editor.EditorWidget):
         self.editBoxFrame.setLayout(qt.QVBoxLayout())
         self.effectsToolsFrame.layout().addWidget(self.editBoxFrame)
         self.toolsBox = XALEditBox(self.settings, self.editBoxFrame, optionsFrame=self.effectOptionsFrame)
+        
+    def nextCase(self):
+        self.widget.onNextButtonClicked()
 
     def installShortcutKeys(self):
+        print('installShortcutKeys')
         """Turn on editor-wide shortcuts.  These are active independent
         of the currently selected effect."""
         Key_Escape = 0x01000000 # not in PythonQt
@@ -1263,6 +1280,7 @@ class XALEditorWidget(Editor.EditorWidget):
             ('h', self.editUtil.toggleCrosshair),
             ('o', self.editUtil.toggleLabelOutline),
             ('t', self.editUtil.toggleForegroundBackground),
+            ('n', self.nextCase),
             (Key_Escape, self.toolsBox.defaultEffect),
             ('p', lambda : self.toolsBox.selectEffect('PaintEffect')),
             ('1', self.toolsBox.onOTHERChangeIslandButtonClicked),

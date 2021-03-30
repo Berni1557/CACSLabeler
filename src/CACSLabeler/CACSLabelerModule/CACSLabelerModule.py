@@ -615,9 +615,7 @@ class CACSLabelerModuleWidget:
             filenames = qt.QFileDialog.getOpenFileNames(self.parent, 'Open files', self.settings['folderpath_images'],filter_input_ref)
         else:
             filenames = qt.QFileDialog.getOpenFileNames(self.parent, 'Open files', self.settings['folderpath_images'],self.settings['filter_input'])
-            
-        
-        
+
         # Read images
         imagenames = []
         for filepath in filenames:
@@ -911,6 +909,7 @@ class CardiacEditorWidget(Editor.EditorWidget):
         return updateIdx
         
     def installShortcutKeys(self):
+        print('installShortcutKeys')
         """Turn on editor-wide shortcuts.  These are active independent
         of the currently selected effect."""
         Key_Escape = 0x01000000 # not in PythonQt
