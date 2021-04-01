@@ -803,7 +803,8 @@ class XALabelerModuleWidget:
         #print('IDX123', IDX)
         #print('SLICE123', SLICE)
         if mask_SLICE:
-            for p in range(len(IDX[0])):
+            #for p in range(len(IDX[0])):
+            for p in range(0,len(IDX[0]),2):
                 x=IDX[0][p]
                 y=IDX[1][p]
                 mask[SLICE, x, y] = 1
@@ -818,7 +819,8 @@ class XALabelerModuleWidget:
         # Set label
         if not labelFound:
             if showREFValue:
-                label = label * (1-mask) + self.REFValue * mask
+                #label = label * (1-mask) + self.REFValue * mask
+                label = label * (1-mask) + 0 * mask
             label = label * mask_slice
             labelSitk = sitk.GetImageFromArray(label)
             labelSitk.CopyInformation(label_im)

@@ -327,7 +327,7 @@ class ALLabelerModuleWidget:
 
         if len(filenames)>0:
             self.bgGrowingButton.enabled = True
-            self.saveOutputButton.enabled = True
+            #self.saveOutputButton.enabled = True
             self.deleteButton.enabled = True
 
             # Creates and adds the custom Editor Widget to the module
@@ -383,6 +383,7 @@ class ALLabelerModuleWidget:
                 sitkImageOutput = sitk.GetImageFromArray(arr)
                 sitkImageOutput.CopyInformation(image_sitk)
                 _ = su.PushVolumeToSlicer(sitkImageOutput,node)
+        self.saveOutputButton.enabled = True
 
     def onSaveOutputButtonClicked(self):
         # Save references
