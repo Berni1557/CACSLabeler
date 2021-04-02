@@ -587,7 +587,8 @@ class CACSLabelerModuleWidget:
 
         # Deleta all old nodes
         if self.settings['show_input_if_ref_found'] or self.settings['show_input_if_ref_not_found']:
-            files_ref = glob(self.settings['folderpath_references'] + '/*label-lesion.nrrd')
+            #files_ref = glob(self.settings['folderpath_references'] + '/*label-lesion.nrrd')
+            files_ref = glob(self.settings['folderpath_references'] + '/*-label.nrrd')
             filter_input = self.settings['filter_input'].decode('utf-8')
             filter_input_list = filter_input.split('(')[1].split(')')[0].split(',')
             filter_input_list = [x.replace(" ", "") for x in filter_input_list]
