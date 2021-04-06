@@ -826,7 +826,7 @@ class XALabelerModuleWidget:
             labelSitk.CopyInformation(label_im)
             node = su.PushVolumeToSlicer(labelSitk, name=labelname, className='vtkMRMLLabelMapVolumeNode')
             node.SetName(labelname)
-            slicer.util.setSliceViewerLayers(label = node, foreground = node, foregroundOpacity = 0.3, labelOpacity = 0.0)
+            slicer.util.setSliceViewerLayers(label = node, foreground = node, foregroundOpacity = 0.1, labelOpacity = 0.0)
             self.assignLabelLUT(labelname)
         else:
             node = slicer.mrmlScene.GetFirstNodeByName(labelname)
