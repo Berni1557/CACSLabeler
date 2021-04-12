@@ -25,6 +25,32 @@ import time
 from sys import platform
 from SimpleITK import ConnectedComponentImageFilter
 
+from qt import QWidget, QVBoxLayout, QLabel, QPixmap, QGridLayout
+
+class PrototypeWindow(QWidget):
+    """
+    This "window" is a QWidget. If it has no parent,
+    it will appear as a free-floating window.
+    """
+
+    def __init__(self):
+        super(PrototypeWindow, self).__init__()
+
+        self.im = QPixmap("H:/cloud/cloud_data/Projects/CACSLabeler/code/data/image.png")
+        self.label = QLabel()
+        self.label.setPixmap(self.im)
+
+        self.grid = QGridLayout()
+        self.grid.addWidget(self.label,1,1)
+        self.setLayout(self.grid)
+
+        self.setGeometry(50,50,320,200)
+        self.setWindowTitle("Prototypes")
+        self.show()
+    
+    def updatePrototype(self, actionlist):
+        pass
+         
 # Temporal Settings
 LABEL_NEW_REGION = False
 
@@ -116,6 +142,8 @@ class XALabelerModuleWidget:
         # Settings filepath
         currentFile = os.path.dirname(os.path.abspath(__file__))
         self.filepath_settings = os.path.dirname(os.path.dirname(os.path.dirname(currentFile))) + '/data/settings_XALabeler.json'
+        
+        #self.prototypWindow = PrototypeWindow()
         
     def nodeExist(self, name):
         nodes=slicer.util.getNodesByClass('vtkMRMLScalarVolumeNode')
@@ -525,6 +553,8 @@ class XALabelerModuleWidget:
             self.deleteNodes(imagename)
         
     def onNextButtonClicked(self):
+        
+        #self.window1.show()
         
         # Update action
         if self.refAction is not None:
