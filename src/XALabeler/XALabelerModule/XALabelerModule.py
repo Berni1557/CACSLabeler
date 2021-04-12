@@ -25,7 +25,7 @@ import time
 from sys import platform
 from SimpleITK import ConnectedComponentImageFilter
 
-from qt import QWidget, QVBoxLayout, QLabel, QPixmap, QGridLayout
+from qt import QWidget, QVBoxLayout, QLabel, QPixmap, QGridLayout, QImage
 
 class PrototypeWindow(QWidget):
     """
@@ -36,7 +36,7 @@ class PrototypeWindow(QWidget):
     def __init__(self):
         super(PrototypeWindow, self).__init__()
 
-        self.im = QPixmap("H:/cloud/cloud_data/Projects/CACSLabeler/code/data/image.png")
+        self.im = QPixmap("/mnt/SSD2/cloud_data/Projects/CACSLabeler/code/data/tmp/image.png")
         self.label = QLabel()
         self.label.setPixmap(self.im)
 
@@ -46,11 +46,49 @@ class PrototypeWindow(QWidget):
 
         self.setGeometry(50,50,320,200)
         self.setWindowTitle("Prototypes")
-        self.show()
+        #self.show()
     
-    def updatePrototype(self, actionlist):
-        pass
-         
+    def updatePrototype(self, actionlist, action):
+        fip_tmp = "/mnt/SSD2/cloud_data/Projects/CACSLabeler/code/data/tmp/image.png"
+        image_proto = np.zeros((3,512,512*3), dtype=np.uint16)
+        k=0
+        for act in actionlist:
+            if act['MSG']==action['MSG'] and not(act['fp_image']==action['fp_image'] and act['SLICE']==action['SLICE']):
+                print('found')
+                filepath_image = act['fp_image'].encode("utf-8")
+                imageSitk = sitk.ReadImage(filepath_image)
+                image = sitk.GetArrayFromImage(imageSitk)
+                image_slice= image[act['SLICE']]
+                #image_slice = image_slice + 32767
+                s0 = 30900
+                s1 = 34500
+                b = s0
+                a = 65535/(s1-s0)
+                image_slice_norm = a * ((image_slice+32767) - b)
+                image_slice_norm = image_slice_norm.astype(np.uint16)
+                
+                # Insert image
+                image_proto[0,0:512,k*512:(k+1)*512] = image_slice_norm
+                image_proto[1,0:512,k*512:(k+1)*512] = image_slice_norm
+                image_proto[2,0:512,k*512:(k+1)*512] = image_slice_norm
+                # Visualize pixel
+                IDX = act['IDX']
+                IDX0 = IDX[0]
+                IDX1 = IDX[1]
+                IDX1 = [k*512+x for x in IDX1]
+                image_proto[0,IDX0,IDX1] = 65535         
+                k=k+1
+
+        image_proto_im = sitk.GetImageFromArray(image_proto)
+        print('image_proto_im', image_proto_im.GetSize())
+        sitk.WriteImage(image_proto_im, fip_tmp)             
+
+        self.im = QPixmap(fip_tmp)
+        
+        self.label.setPixmap(self.im)
+        self.show()
+                
+                         
 # Temporal Settings
 LABEL_NEW_REGION = False
 
@@ -143,7 +181,7 @@ class XALabelerModuleWidget:
         currentFile = os.path.dirname(os.path.abspath(__file__))
         self.filepath_settings = os.path.dirname(os.path.dirname(os.path.dirname(currentFile))) + '/data/settings_XALabeler.json'
         
-        #self.prototypWindow = PrototypeWindow()
+        self.prototypWindow = PrototypeWindow()
         
     def nodeExist(self, name):
         nodes=slicer.util.getNodesByClass('vtkMRMLScalarVolumeNode')
@@ -749,6 +787,9 @@ class XALabelerModuleWidget:
         # Save all existing nodes
         filepath = refAction['fp_image'].encode("utf-8")
         _, imagename,_ = splitFilePath(filepath)
+        
+        # Visualize prototypWindow
+        self.prototypWindow.updatePrototype(self.ActionList, refAction)
         
         #self.fp_label_refine_prev = refAction['fp_label_refine'].encode("utf-8")
         #print('fp_label_refine_pev123', self.fp_label_refine_prev)
