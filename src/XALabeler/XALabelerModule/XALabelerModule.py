@@ -25,7 +25,7 @@ import time
 from sys import platform
 from SimpleITK import ConnectedComponentImageFilter
 
-from qt import QWidget, QVBoxLayout, QLabel, QPixmap, QGridLayout, QImage
+from qt import QWidget, QVBoxLayout, QLabel, QPixmap, QGridLayout, QImage, QColor
 
 class PrototypeWindow(QWidget):
     """
@@ -50,7 +50,7 @@ class PrototypeWindow(QWidget):
     
     def updatePrototype(self, actionlist, action):
         fip_tmp = "/mnt/SSD2/cloud_data/Projects/CACSLabeler/code/data/tmp/image.png"
-        image_proto = np.zeros((3,512,512*3), dtype=np.uint16)
+        image_proto = np.zeros((512,512*3), dtype=np.uint16)
         k=0
         for act in actionlist:
             if act['MSG']==action['MSG'] and not(act['fp_image']==action['fp_image'] and act['SLICE']==action['SLICE']):
@@ -59,32 +59,36 @@ class PrototypeWindow(QWidget):
                 imageSitk = sitk.ReadImage(filepath_image)
                 image = sitk.GetArrayFromImage(imageSitk)
                 image_slice= image[act['SLICE']]
-                #image_slice = image_slice + 32767
                 s0 = 30900
                 s1 = 34500
                 b = s0
                 a = 65535/(s1-s0)
                 image_slice_norm = a * ((image_slice+32767) - b)
                 image_slice_norm = image_slice_norm.astype(np.uint16)
-                
                 # Insert image
-                image_proto[0,0:512,k*512:(k+1)*512] = image_slice_norm
-                image_proto[1,0:512,k*512:(k+1)*512] = image_slice_norm
-                image_proto[2,0:512,k*512:(k+1)*512] = image_slice_norm
-                # Visualize pixel
+                image_proto[0:512,k*512:(k+1)*512] = image_slice_norm
                 IDX = act['IDX']
                 IDX0 = IDX[0]
                 IDX1 = IDX[1]
                 IDX1 = [k*512+x for x in IDX1]
-                image_proto[0,IDX0,IDX1] = 65535         
+                image_proto[IDX0,IDX1] = 65535         
                 k=k+1
-
-        image_proto_im = sitk.GetImageFromArray(image_proto)
-        print('image_proto_im', image_proto_im.GetSize())
-        sitk.WriteImage(image_proto_im, fip_tmp)             
-
-        self.im = QPixmap(fip_tmp)
         
+        # Write image to temporal png image
+        image_proto_im = sitk.GetImageFromArray(image_proto)
+        sitk.WriteImage(image_proto_im, fip_tmp)             
+        # Read temporal image as QPixmap 
+        self.im = QPixmap(fip_tmp)
+        # Set color
+        imageq = QPixmap.toImage(self.im)
+        colorim = imageq.convertToFormat(QImage.Format_RGB30)
+        for x in range(512):
+            for y in range(512*3):
+                if image_proto[x,y] == 65535:
+                    colorim.setPixel(y, x, QColor(255, 0, 0, 255).rgb())
+        pixmap = QPixmap.fromImage(colorim)
+        self.im = pixmap
+        # update color image
         self.label.setPixmap(self.im)
         self.show()
                 
