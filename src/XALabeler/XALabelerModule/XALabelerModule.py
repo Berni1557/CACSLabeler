@@ -52,6 +52,7 @@ class PrototypeWindow(QWidget):
         if action['action']=='LABEL_REGION':
             fip_tmp = "/mnt/SSD2/cloud_data/Projects/CACSLabeler/code/data/tmp/image.png"
             image_proto = np.zeros((512,512*3), dtype=np.uint16)
+            image_proto_overlay = np.zeros((512,512*3), dtype=np.uint16)
             k=0
             for act in actionlist:
                 if act['MSG']==action['MSG'] and not(act['fp_image']==action['fp_image'] and act['SLICE']==action['SLICE']):
@@ -73,6 +74,18 @@ class PrototypeWindow(QWidget):
                     IDX1 = IDX[1]
                     IDX1 = [k*512+x for x in IDX1]
                     image_proto[IDX0,IDX1] = 65535         
+                    # Import label
+                    filepath_label = act['fp_label_pred'].encode("utf-8")
+                    print('filepath_label', filepath_label)
+                    labelSitk = sitk.ReadImage(filepath_label)
+                    label = sitk.GetArrayFromImage(labelSitk)
+                    for c in range(1,4):
+                        labelC = label[act['SLICE'],:,:]==c
+                        IDXL = np.where(labelC)
+                        IDX0L = IDXL[0]
+                        IDX1L = IDXL[1]
+                        IDX1L = [k*512+x for x in IDX1L]
+                        image_proto_overlay[IDX0L,IDX1L] = c 
                     k=k+1
             
             # Write image to temporal png image
@@ -86,74 +99,32 @@ class PrototypeWindow(QWidget):
             for x in range(512):
                 for y in range(512*3):
                     if image_proto[x,y] == 65535:
-                        colorim.setPixel(y, x, QColor(255, 0, 0, 120).rgba())
+                        colorim.setPixel(y, x, QColor(255, 0, 0, 255).rgba())
                         
-            # Set overlay
-            
-            #myTransform = QTransform()
-            #myTransform.rotate(180);
-            #colorimR = colorim.transformed(myTransform)
-            
-            overlay = colorim.copy()
+            # Set color overlay
+            overlayIm = imageq.copy()
+            overlay = overlayIm.convertToFormat(QImage.Format_ARGB32)
+            transparency = 15
             for x in range(512):
                 for y in range(512*3):
-                    overlay.setPixel(y, x, QColor(255, 0, 0, 70).rgba())
+                    if image_proto_overlay[x,y] == 1:
+                        overlay.setPixel(y, x, QColor(0, 255, 0, transparency).rgba())
+                    elif image_proto_overlay[x,y] == 2:
+                        overlay.setPixel(y, x, QColor(255, 204, 0, transparency).rgba())
+                    elif image_proto_overlay[x,y] == 3:
+                        overlay.setPixel(y, x, QColor(204, 0, 204, transparency).rgba())
+                    elif image_proto_overlay[x,y] == 4:
+                        overlay.setPixel(y, x, QColor(165, 0, 33, transparency).rgba())
+                    else:
+                        overlay.setPixel(y, x, QColor(0, 0, 0, 0).rgba())
 
             painter = QPainter()
-            
-            #painter.begin(colorim)
-            #col = QColor(255, 0, 0, 128).rgba()
-            #col.setNamedColor('#d4d4d4')
-            #painter.setPen(col)
-            #painter.drawRect(100, 100, 100, 100)
-            #painter.end()
             painter.begin(colorim)
-            rect = QRect(100,100,300,300)
-            
-            #col = QColor(255, 0, 0, 120)
-            #painter.setBrush(QBrush(col))
-            #painter.fillRect(rect, QBrush(col))
+            rect = QRect(0,0,512*3,512)
             painter.drawImage(rect, overlay)
-            #painter.drawRect(rect)
-            
-            points = QPolygon([QPoint(10,20),QPoint(10,100),QPoint(100,40),QPoint(100,100)])
-            #painter.fillPolygon(points, QBrush(col))
-            painter.drawPolygon(points)
-            
             painter.end()
             pixmap = QPixmap.fromImage(colorim)
-
-#            pixmap = QPixmap.fromImage(colorim)
-#            
-#            
-#            # create painter instance with pixmap
-#            painterInstance = QPainter(pixmap)
-#            
-#            # set rectangle color and thickness
-#            col = QColor(255, 0, 0, 128).rgb()
-#            penRectangle = QPen(col)
-#            #penRectangle.setWidth(3)
-#            
-#            # draw rectangle on painter
-#            painterInstance.setPen(penRectangle)
-#            painterInstance.drawRect(100,100,200,200)
-#           
-#            p1 = colorim
-#            p2 = overlay
-#            s = p1.size().expandedTo(p2.size())
-#            mode=QPainter.CompositionMode_SourceOver
-#            result =  QPixmap(s)
-#            #result.fill(qt.transparent)
-#            painter = QPainter(result)
-#            painter.setRenderHint(QPainter.Antialiasing)
-#            painter.drawPixmap(QPoint(), p1)
-#            painter.setCompositionMode(mode)
-#            painter.drawPixmap(result.rect(), p2, p2.rect())
-#            painter.end()
-            
             self.im = pixmap
-            #self.im = pixmap
-            # update color image
             self.label.setPixmap(self.im)
             self.show()
                 
