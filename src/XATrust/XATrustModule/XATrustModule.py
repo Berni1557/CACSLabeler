@@ -24,142 +24,11 @@ from settings.settings import Settings
 import time
 from sys import platform
 from SimpleITK import ConnectedComponentImageFilter
-import qt
-from qt import QWidget, QVBoxLayout, QLabel, QPixmap, QGridLayout, QImage, QColor, QPainter, QTransform, QPen, QPoint, QRect, QBrush, QPolygon
 
-class PrototypeWindow(QWidget):
-    """
-    This "window" is a QWidget. If it has no parent,
-    it will appear as a free-floating window.
-    """
-
-    def __init__(self):
-        super(PrototypeWindow, self).__init__()
-
-        self.im = QPixmap("/mnt/SSD2/cloud_data/Projects/CACSLabeler/code/data/tmp/image.png")
-        self.label = QLabel()
-        self.label.setPixmap(self.im)
-
-        self.grid = QGridLayout()
-        self.grid.addWidget(self.label,1,1)
-        self.setLayout(self.grid)
-
-        self.setGeometry(50,50,320,200)
-        self.setWindowTitle("Prototypes")
-        #self.show()
-    
-    def updatePrototype(self, actionlist, action):
-        if action['action']=='LABEL_REGION':
-            fip_tmp = "/mnt/SSD2/cloud_data/Projects/CACSLabeler/code/data/tmp/image.png"
-            image_proto = np.zeros((512,512*3), dtype=np.uint16)
-            k=0
-            for act in actionlist:
-                if act['MSG']==action['MSG'] and not(act['fp_image']==action['fp_image'] and act['SLICE']==action['SLICE']):
-                    print('found')
-                    filepath_image = act['fp_image'].encode("utf-8")
-                    imageSitk = sitk.ReadImage(filepath_image)
-                    image = sitk.GetArrayFromImage(imageSitk)
-                    image_slice= image[act['SLICE']]
-                    s0 = 30900
-                    s1 = 34500
-                    b = s0
-                    a = 65535/(s1-s0)
-                    image_slice_norm = a * ((image_slice+32767) - b)
-                    image_slice_norm = image_slice_norm.astype(np.uint16)
-                    # Insert image
-                    image_proto[0:512,k*512:(k+1)*512] = image_slice_norm
-                    IDX = act['IDX']
-                    IDX0 = IDX[0]
-                    IDX1 = IDX[1]
-                    IDX1 = [k*512+x for x in IDX1]
-                    image_proto[IDX0,IDX1] = 65535         
-                    k=k+1
-            
-            # Write image to temporal png image
-            image_proto_im = sitk.GetImageFromArray(image_proto)
-            sitk.WriteImage(image_proto_im, fip_tmp)             
-            # Read temporal image as QPixmap 
-            self.im = QPixmap(fip_tmp)
-            # Set color
-            imageq = QPixmap.toImage(self.im)
-            colorim = imageq.convertToFormat(QImage.Format_ARGB32)
-            for x in range(512):
-                for y in range(512*3):
-                    if image_proto[x,y] == 65535:
-                        colorim.setPixel(y, x, QColor(255, 0, 0, 120).rgba())
-                        
-            # Set overlay
-            
-            #myTransform = QTransform()
-            #myTransform.rotate(180);
-            #colorimR = colorim.transformed(myTransform)
-            
-            overlay = colorim.copy()
-            for x in range(512):
-                for y in range(512*3):
-                    overlay.setPixel(y, x, QColor(255, 0, 0, 70).rgba())
-
-            painter = QPainter()
-            
-            #painter.begin(colorim)
-            #col = QColor(255, 0, 0, 128).rgba()
-            #col.setNamedColor('#d4d4d4')
-            #painter.setPen(col)
-            #painter.drawRect(100, 100, 100, 100)
-            #painter.end()
-            painter.begin(colorim)
-            rect = QRect(100,100,300,300)
-            
-            #col = QColor(255, 0, 0, 120)
-            #painter.setBrush(QBrush(col))
-            #painter.fillRect(rect, QBrush(col))
-            painter.drawImage(rect, overlay)
-            #painter.drawRect(rect)
-            
-            points = QPolygon([QPoint(10,20),QPoint(10,100),QPoint(100,40),QPoint(100,100)])
-            #painter.fillPolygon(points, QBrush(col))
-            painter.drawPolygon(points)
-            
-            painter.end()
-            pixmap = QPixmap.fromImage(colorim)
-
-#            pixmap = QPixmap.fromImage(colorim)
-#            
-#            
-#            # create painter instance with pixmap
-#            painterInstance = QPainter(pixmap)
-#            
-#            # set rectangle color and thickness
-#            col = QColor(255, 0, 0, 128).rgb()
-#            penRectangle = QPen(col)
-#            #penRectangle.setWidth(3)
-#            
-#            # draw rectangle on painter
-#            painterInstance.setPen(penRectangle)
-#            painterInstance.drawRect(100,100,200,200)
-#           
-#            p1 = colorim
-#            p2 = overlay
-#            s = p1.size().expandedTo(p2.size())
-#            mode=QPainter.CompositionMode_SourceOver
-#            result =  QPixmap(s)
-#            #result.fill(qt.transparent)
-#            painter = QPainter(result)
-#            painter.setRenderHint(QPainter.Antialiasing)
-#            painter.drawPixmap(QPoint(), p1)
-#            painter.setCompositionMode(mode)
-#            painter.drawPixmap(result.rect(), p2, p2.rect())
-#            painter.end()
-            
-            self.im = pixmap
-            #self.im = pixmap
-            # update color image
-            self.label.setPixmap(self.im)
-            self.show()
-                
+from qt import QWidget, QVBoxLayout, QLabel, QPixmap, QGridLayout, QImage, QColor
                          
 # Temporal Settings
-LABEL_NEW_REGION_FLAG = False
+LABEL_NEW_REGION = False
 
 ALAction = dict({'ID': -1, 
                  'fp_image': '', 
@@ -191,14 +60,14 @@ def splitFilePath(filepath):
     filename = os.path.basename(head)
     return folderpath, filename, file_extension
     
-class XALabelerModule(ScriptedLoadableModule):
+class XATrustModule(ScriptedLoadableModule):
   """Uses ScriptedLoadableModule base class, available at:
   https://github.com/Slicer/Slicer/blob/master/Base/Python/slicer/ScriptedLoadableModule.py
   """
 
   def __init__(self, parent):
     ScriptedLoadableModule.__init__(self, parent)
-    self.parent.title = "XALabelerModule" # TODO make this more human readable by adding spaces
+    self.parent.title = "XATrustModule" # TODO make this more human readable by adding spaces
     self.parent.categories = ["Examples"]
     self.parent.dependencies = []
     self.parent.contributors = ["John Doe (AnyWare Corp.)"] # replace with "Firstname Lastname (Organization)"
@@ -213,9 +82,9 @@ and Steve Pieper, Isomics, Inc. and was partially funded by NIH grant 3P41RR0132
 """ # replace with organization, grant and thanks.
 
 #
-# XALabelerModuleWidget
+# XATrustModuleWidget
 #
-class XALabelerModuleWidget:
+class XATrustModuleWidget:
     def __init__(self, parent = None):
         self.currentRegistrationInterface = None
         self.changeIslandTool = None
@@ -248,9 +117,9 @@ class XALabelerModuleWidget:
         
         # Settings filepath
         currentFile = os.path.dirname(os.path.abspath(__file__))
-        self.filepath_settings = os.path.dirname(os.path.dirname(os.path.dirname(currentFile))) + '/data/settings_XALabeler.json'
+        self.filepath_settings = os.path.dirname(os.path.dirname(os.path.dirname(currentFile))) + '/data/settings_XATrust.json'
         
-        self.prototypWindow = PrototypeWindow()
+        #self.prototypWindow = PrototypeWindow()
         
     def nodeExist(self, name):
         nodes=slicer.util.getNodesByClass('vtkMRMLScalarVolumeNode')
@@ -275,7 +144,7 @@ class XALabelerModuleWidget:
             #  your module to users)
             self.reloadButton = qt.QPushButton("Reload")
             self.reloadButton.toolTip = "Reload this module."
-            self.reloadButton.name = "XALabelerModule Reload"
+            self.reloadButton.name = "XATrustModule Reload"
             reloadFormLayout.addWidget(self.reloadButton)
             self.reloadButton.connect('clicked()', self.onReload)
 
@@ -301,102 +170,102 @@ class XALabelerModuleWidget:
         self.measuresFormLayout = qt.QFormLayout(self.measuresCollapsibleButton)
 
         # Start client
-        startButton = qt.QPushButton("START REFINEMENT")
-        startButton.toolTip = "Start refinement"
+        startButton = qt.QPushButton("START TRUST EXPERIMENT")
+        startButton.toolTip = "Start trust experiment"
         startButton.setStyleSheet("background-color: rgb(230,241,255)")
         self.measuresFormLayout.addRow(startButton)
         startButton.connect('clicked(bool)', self.onStartButtonClicked)
         self.startButton = startButton
         
         # Next button
-        nextButton = qt.QPushButton("NEXT QUERY")
-        nextButton.toolTip = "Get next query"
-        nextButton.setStyleSheet("background-color: rgb(230,241,255)")
-        nextButton.enabled = False
-        self.measuresFormLayout.addRow(nextButton)
-        nextButton.connect('clicked(bool)', self.onNextButtonClicked)
-        self.nextButton = nextButton
+        correctButton = qt.QPushButton("CORRECT")
+        correctButton.toolTip = "Get next query"
+        correctButton.setStyleSheet("background-color: rgb(230,241,255)")
+        correctButton.enabled = False
+        self.measuresFormLayout.addRow(correctButton)
+        correctButton.connect('clicked(bool)', self.onCorrectButtonClicked)
+        self.correctButton = correctButton
 
         # SKIP button
-        skipButton = qt.QPushButton("SKIP QUERY")
-        skipButton.toolTip = "Skip query"
-        skipButton.setStyleSheet("background-color: rgb(230,241,255)")
-        skipButton.enabled = False
-        self.measuresFormLayout.addRow(skipButton)
-        skipButton.connect('clicked(bool)', self.onSkipButtonClicked)
-        self.skipButton = skipButton
+        incorrectButton = qt.QPushButton("INCORRECT")
+        incorrectButton.toolTip = "Skip query"
+        incorrectButton.setStyleSheet("background-color: rgb(230,241,255)")
+        incorrectButton.enabled = False
+        self.measuresFormLayout.addRow(incorrectButton)
+        incorrectButton.connect('clicked(bool)', self.onIncorrectButtonClicked)
+        self.incorrectButton = incorrectButton
         
         # Save query button
-        saveQueryButton = qt.QPushButton("SAVE QUERY")
-        saveQueryButton.toolTip = "Save query"
-        saveQueryButton.setStyleSheet("background-color: rgb(230,241,255)")
-        saveQueryButton.enabled = False
-        self.measuresFormLayout.addRow(saveQueryButton)
-        saveQueryButton.connect('clicked(bool)', self.onSaveQueryButtonClicked)
-        self.saveQueryButton = saveQueryButton
+#        saveQueryButton = qt.QPushButton("SAVE QUERY")
+#        saveQueryButton.toolTip = "Save query"
+#        saveQueryButton.setStyleSheet("background-color: rgb(230,241,255)")
+#        saveQueryButton.enabled = False
+#        self.measuresFormLayout.addRow(saveQueryButton)
+#        saveQueryButton.connect('clicked(bool)', self.onSaveQueryButtonClicked)
+#        self.saveQueryButton = saveQueryButton
         
         # Stop client
-        stopButton = qt.QPushButton("STOP REFINEMENT")
-        stopButton.toolTip = "Stop refinement"
-        stopButton.setStyleSheet("background-color: rgb(230,241,255)")
-        stopButton.enabled = False
-        self.measuresFormLayout.addRow(stopButton)
-        stopButton.connect('clicked(bool)', self.onStopButtonClicked)
-        self.stopButton = stopButton
+#        stopButton = qt.QPushButton("STOP REFINEMENT")
+#        stopButton.toolTip = "Stop refinement"
+#        stopButton.setStyleSheet("background-color: rgb(230,241,255)")
+#        stopButton.enabled = False
+#        self.measuresFormLayout.addRow(stopButton)
+#        stopButton.connect('clicked(bool)', self.onStopButtonClicked)
+#        self.stopButton = stopButton
         
         # Add action selector
-        actionSelector = qt.QComboBox()
-        actionSelector.addItems(['ALL', 'LABEL_LESION', 'LABEL_REGION', 'LABEL_NEW_REGION', 'LABEL_NEW'])
-        actionSelector.setCurrentIndex(0)
-        actionSelector.toolTip = "Select refinement action"
-        actionSelector.setVisible(True)
-        actionSelector.currentIndexChanged.connect(self.onActionSelectorChanged)
-        self.measuresFormLayout.addRow(actionSelector)
-        self.actionSelector = actionSelector
+#        actionSelector = qt.QComboBox()
+#        actionSelector.addItems(['ALL', 'LABEL_LESION', 'LABEL_REGION', 'LABEL_NEW'])
+#        actionSelector.setCurrentIndex(0)
+#        actionSelector.toolTip = "Select refinement action"
+#        actionSelector.setVisible(True)
+#        actionSelector.currentIndexChanged.connect(self.onActionSelectorChanged)
+#        self.measuresFormLayout.addRow(actionSelector)
+#        self.actionSelector = actionSelector
         
         # Set albel
-        label = qt.QLabel("Please solve action")
-        self.measuresFormLayout.addRow(label)
-        self.label = label
+#        label = qt.QLabel("Please solve action")
+#        self.measuresFormLayout.addRow(label)
+#        self.label = label
         
         
         
         
-        # Collapsible button for Input Parameters
-        self.measuresCollapsibleButton2 = ctk.ctkCollapsibleButton()
-        self.measuresCollapsibleButton2.text = "Select additional refinement action"
-        self.layout.addWidget(self.measuresCollapsibleButton2)
-        
-        # Layout within the sample collapsible button
-        self.measuresFormLayoutH = qt.QFormLayout(self.measuresCollapsibleButton2)
-
-        # LABEL_LESION_BUTTON
-        LABEL_LESION_BUTTON = qt.QPushButton("Verify lesion label")
-        LABEL_LESION_BUTTON.toolTip = "Stop refinement2"
-        LABEL_LESION_BUTTON.setStyleSheet("background-color: rgb(230,241,255)")
-        LABEL_LESION_BUTTON.enabled = False
-        self.measuresFormLayoutH.addRow(LABEL_LESION_BUTTON)
-        LABEL_LESION_BUTTON.connect('clicked(bool)', self.onLABEL_LESION_BUTTONClicked)
-        self.LABEL_LESION_BUTTON = LABEL_LESION_BUTTON
-        
-        # LABEL_REGION_BUTTON
-        LABEL_REGION_BUTTON = qt.QPushButton("Refine coronary artery region")
-        LABEL_REGION_BUTTON.toolTip = "Refine coronary artery region"
-        LABEL_REGION_BUTTON.setStyleSheet("background-color: rgb(230,241,255)")
-        LABEL_REGION_BUTTON.enabled = False
-        self.measuresFormLayoutH.addRow(LABEL_REGION_BUTTON)
-        LABEL_REGION_BUTTON.connect('clicked(bool)', self.onLABEL_REGION_BUTTONClicked)
-        self.LABEL_REGION_BUTTON = LABEL_REGION_BUTTON
-
-        # LABEL_REGION_BUTTON
-        LABEL_NEW_BUTTON = qt.QPushButton("Label new coronary artery region")
-        LABEL_NEW_BUTTON.toolTip = "Stop refinement2"
-        LABEL_NEW_BUTTON.setStyleSheet("background-color: rgb(230,241,255)")
-        LABEL_NEW_BUTTON.enabled = False
-        self.measuresFormLayoutH.addRow(LABEL_NEW_BUTTON)
-        LABEL_NEW_BUTTON.connect('clicked(bool)', self.onLABEL_NEW_BUTTONClicked)
-        self.LABEL_NEW_BUTTON = LABEL_NEW_BUTTON 
-        
+#        # Collapsible button for Input Parameters
+#        self.measuresCollapsibleButton2 = ctk.ctkCollapsibleButton()
+#        self.measuresCollapsibleButton2.text = "Select additional refinement action"
+#        self.layout.addWidget(self.measuresCollapsibleButton2)
+#        
+#        # Layout within the sample collapsible button
+#        self.measuresFormLayoutH = qt.QFormLayout(self.measuresCollapsibleButton2)
+#
+#        # LABEL_LESION_BUTTON
+#        LABEL_LESION_BUTTON = qt.QPushButton("Verify lesion label")
+#        LABEL_LESION_BUTTON.toolTip = "Stop refinement2"
+#        LABEL_LESION_BUTTON.setStyleSheet("background-color: rgb(230,241,255)")
+#        LABEL_LESION_BUTTON.enabled = False
+#        self.measuresFormLayoutH.addRow(LABEL_LESION_BUTTON)
+#        LABEL_LESION_BUTTON.connect('clicked(bool)', self.onLABEL_LESION_BUTTONClicked)
+#        self.LABEL_LESION_BUTTON = LABEL_LESION_BUTTON
+#        
+#        # LABEL_REGION_BUTTON
+#        LABEL_REGION_BUTTON = qt.QPushButton("Refine coronary artery region")
+#        LABEL_REGION_BUTTON.toolTip = "Refine coronary artery region"
+#        LABEL_REGION_BUTTON.setStyleSheet("background-color: rgb(230,241,255)")
+#        LABEL_REGION_BUTTON.enabled = False
+#        self.measuresFormLayoutH.addRow(LABEL_REGION_BUTTON)
+#        LABEL_REGION_BUTTON.connect('clicked(bool)', self.onLABEL_REGION_BUTTONClicked)
+#        self.LABEL_REGION_BUTTON = LABEL_REGION_BUTTON
+#
+#        # LABEL_REGION_BUTTON
+#        LABEL_NEW_BUTTON = qt.QPushButton("Label new coronary artery region")
+#        LABEL_NEW_BUTTON.toolTip = "Stop refinement2"
+#        LABEL_NEW_BUTTON.setStyleSheet("background-color: rgb(230,241,255)")
+#        LABEL_NEW_BUTTON.enabled = False
+#        self.measuresFormLayoutH.addRow(LABEL_NEW_BUTTON)
+#        LABEL_NEW_BUTTON.connect('clicked(bool)', self.onLABEL_NEW_BUTTONClicked)
+#        self.LABEL_NEW_BUTTON = LABEL_NEW_BUTTON 
+#        
 #        # LABEL_REGION_BUTTON
 #        LABEL_REGION_NEW_BUTTON = qt.QPushButton("Label new coronary artery region")
 #        LABEL_REGION_NEW_BUTTON.toolTip = "Stop refinement2"
@@ -416,22 +285,22 @@ class XALabelerModuleWidget:
 #        self.LABEL_LESION_NEW_BUTTON = LABEL_LESION_NEW_BUTTON 
 
         # LABEL_LESION_NEW_BUTTON
-        CONTINUE_BUTTON = qt.QPushButton("CONTINUE")
-        CONTINUE_BUTTON.toolTip = "Continue labeling"
-        CONTINUE_BUTTON.setStyleSheet("background-color: rgb(230,241,255)")
-        CONTINUE_BUTTON.enabled = False
-        self.measuresFormLayoutH.addRow(CONTINUE_BUTTON)
-        CONTINUE_BUTTON.connect('clicked(bool)', self.onLABEL_CONTINUE_BUTTONClicked)
-        self.CONTINUE_BUTTON = CONTINUE_BUTTON 
- 
-        # LABEL_LESION_NEW_BUTTON
-        LOADCTA_BUTTON = qt.QPushButton("LOAD CTA")
-        LOADCTA_BUTTON.toolTip = "Load CTA"
-        LOADCTA_BUTTON.setStyleSheet("background-color: rgb(230,241,255)")
-        LOADCTA_BUTTON.enabled = False
-        self.measuresFormLayoutH.addRow(LOADCTA_BUTTON)
-        LOADCTA_BUTTON.connect('clicked(bool)', self.onLOADCTA_BUTTONClicked)
-        self.LOADCTA_BUTTON = LOADCTA_BUTTON 
+#        CONTINUE_BUTTON = qt.QPushButton("CONTINUE")
+#        CONTINUE_BUTTON.toolTip = "Continue labeling"
+#        CONTINUE_BUTTON.setStyleSheet("background-color: rgb(230,241,255)")
+#        CONTINUE_BUTTON.enabled = False
+#        self.measuresFormLayoutH.addRow(CONTINUE_BUTTON)
+#        CONTINUE_BUTTON.connect('clicked(bool)', self.onLABEL_CONTINUE_BUTTONClicked)
+#        self.CONTINUE_BUTTON = CONTINUE_BUTTON 
+# 
+#        # LABEL_LESION_NEW_BUTTON
+#        LOADCTA_BUTTON = qt.QPushButton("LOAD CTA")
+#        LOADCTA_BUTTON.toolTip = "Load CTA"
+#        LOADCTA_BUTTON.setStyleSheet("background-color: rgb(230,241,255)")
+#        LOADCTA_BUTTON.enabled = False
+#        self.measuresFormLayoutH.addRow(LOADCTA_BUTTON)
+#        LOADCTA_BUTTON.connect('clicked(bool)', self.onLOADCTA_BUTTONClicked)
+#        self.LOADCTA_BUTTON = LOADCTA_BUTTON 
         
         # Add vertical spacer
         self.layout.addStretch(1)
@@ -518,31 +387,33 @@ class XALabelerModuleWidget:
     def onStartButtonClicked(self):
         # Start client
         self.startClient()
-        self.nextButton.enabled = True
-        self.skipButton.enabled = True
-        self.saveQueryButton.enabled = True
-        self.stopButton.enabled = True
+        self.correctButton.enabled = True
+        self.incorrectButton.enabled = True
+        self.nextAction()
+        self.startButton.enabled=False
+        #self.saveQueryButton.enabled = True
+        #self.stopButton.enabled = True
         #self.LABEL_LESION_BUTTON.enabled = True
         #self.LABEL_REGION_BUTTON.enabled = True
         #self.LABEL_NEW_BUTTON.enabled = True
         #self.UNCERTAINTY_BUTTON.enabled = True
 
-    def onStopButtonClicked(self):
-        # Save output
-        #self.saveOutput(overwrite=False)
-        self.nextButton.enabled = False
-        self.skipButton.enabled = False
-        self.saveQueryButton.enabled = False
-        self.stopButton.enabled = False
-        self.LABEL_LESION_BUTTON.enabled = False
-        self.LABEL_REGION_BUTTON.enabled = False
-        self.LABEL_NEW_BUTTON.enabled = False
-        #self.UNCERTAINTY_BUTTON.enabled = False
-        #self.LABEL_LESION_NEW_BUTTON.enabled = False
-        #self.LABEL_REGION_NEW_BUTTON.enabled = False
+#    def onStopButtonClicked(self):
+#        # Save output
+#        #self.saveOutput(overwrite=False)
+#        self.correctButton.enabled = False
+#        self.incorrectButton.enabled = False
+#        self.saveQueryButton.enabled = False
+#        self.stopButton.enabled = False
+#        self.LABEL_LESION_BUTTON.enabled = False
+#        self.LABEL_REGION_BUTTON.enabled = False
+#        self.LABEL_NEW_BUTTON.enabled = False
+#        #self.UNCERTAINTY_BUTTON.enabled = False
+#        #self.LABEL_LESION_NEW_BUTTON.enabled = False
+#        #self.LABEL_REGION_NEW_BUTTON.enabled = False
         
-    def onActionSelectorChanged(self):
-        self.actionSelected = self.actionSelector.currentText
+#    def onActionSelectorChanged(self):
+#        self.actionSelected = self.actionSelector.currentText
         
     def onLABEL_LESION_BUTTONClicked(self):
         refAction = self.refAction
@@ -644,27 +515,23 @@ class XALabelerModuleWidget:
             #self.deleteNodesREFValue()
             filepath = refAction['fp_image'].encode("utf-8")
             _, imagename,_ = splitFilePath(filepath)
-            if refAction['action'] == 'LABEL_LESION':
+            if refAction['action'] == 'LABEL_TRUST':
                 fp_save = refAction['fp_label_lesion_refine']
-            elif refAction['action'] == 'LABEL_REGION':
-                fp_save = refAction['fp_label_refine']
-            elif refAction['action'] == 'LABEL_NEW_REGION':
-                fp_save = refAction['fp_label_refine']
-            elif refAction['action'] == 'LABEL_NEW':
-                if save_new=='LESION':
-                    fp_save = refAction['fp_label_lesion_refine']
-                else:
-                    fp_save = refAction['fp_label_refine']
             else:
                 raise ValueError('Action: ' + refAction['action'] + ' does not exist.')
             self.updateDiffOutput()
             self.saveOutputRefine(filepath_refine=fp_save)
             self.deleteNodes(imagename)
         
-    def onNextButtonClicked(self):
+    def onCorrectButtonClicked(self):
+        self.refAction['MSG'] = 'CORRECT'
+        self.nextAction()
         
-        #self.window1.show()
+    def onIncorrectButtonClicked(self):
+        self.refAction['MSG'] = 'INCORRECT'
+        self.nextAction()
         
+    def nextAction(self):
         # Update action
         if self.refAction is not None:
             self.refAction['STATUS'] = 'SOLVED'
@@ -696,7 +563,6 @@ class XALabelerModuleWidget:
             except:
                 print('Could not get next query. Please check the server!')
                 server_error = True
-            print('fp_label_pred01', refAction['fp_label_pred'])
             refAction['folderpath_output'],_ ,_ = splitFilePath(refAction['fp_label_pred'])
         else:
             if self.ActionList is None:
@@ -708,23 +574,15 @@ class XALabelerModuleWidget:
                 self.saveActionFile(self.ActionList, folderManagerAction=self.settings['folderManagerAction'])
             
             # Collect action statistic
-            action_stat = dict({'LABEL_LESION':0, 'LABEL_REGION':0, 'LABEL_NEW_REGION':0, 'LABEL_NEW':0})
+            action_stat = dict({'LABEL_TRUST':0,})
             for idx,action in enumerate(self.ActionList):
-                if action['action']=='LABEL_LESION' and action['STATUS']=='OPEN':
-                    action_stat['LABEL_LESION'] += 1
-                if action['action']=='LABEL_REGION' and action['STATUS']=='OPEN':
-                    action_stat['LABEL_REGION'] += 1
-                if action['action']=='LABEL_NEW_REGION' and action['STATUS']=='OPEN':
-                    action_stat['LABEL_NEW_REGION'] += 1
-                if action['action']=='LABEL_NEW' and action['STATUS']=='OPEN':
-                    action_stat['LABEL_NEW'] += 1
+                if action['action']=='LABEL_TRUST' and action['STATUS']=='OPEN':
+                    action_stat['LABEL_TRUST'] += 1
             print('Action: ' + str(action_stat))
             
             # Get next action
             new_action=False
             for idx,action in enumerate(self.ActionList):
-                #if action['STATUS']=='OPEN':
-                #if action['STATUS']=='OPEN' and idx>250:
                 if action['STATUS']=='OPEN' and (action['action']==self.actionSelected or self.actionSelected=='ALL'):
                     print('Processing: ' + str(idx) + '/' + str(len(self.ActionList)))
                     self.refAction = self.updateActionPath(action)
@@ -738,107 +596,18 @@ class XALabelerModuleWidget:
         if not server_error:
             if self.refAction['action'] == '':
                 pass
-            elif self.refAction['action'] == 'LABEL_LESION':
-                self.LABEL_LESION_BUTTON.enabled = False
-                self.LABEL_REGION_BUTTON.enabled = True
-                self.LABEL_NEW_BUTTON.enabled = True
-                self.refine_lesion(self.refAction, use_pred=False, save=True, saveDiff=True)
-            elif self.refAction['action'] == 'LABEL_REGION':
-                self.LABEL_LESION_BUTTON.enabled = True
-                self.LABEL_REGION_BUTTON.enabled = False
-                self.LABEL_NEW_BUTTON.enabled = True
-                self.refine_region(self.refAction, save=True, saveDiff=True, mask_SLICE=True)
-            elif self.refAction['action'] == 'LABEL_NEW_REGION':
-                self.LABEL_LESION_BUTTON.enabled = True
-                self.LABEL_REGION_BUTTON.enabled = False
-                self.LABEL_NEW_BUTTON.enabled = True
-                self.refine_region(self.refAction, save=True, saveDiff=True, mask_SLICE=True)
-            elif self.refAction['action'] == 'LABEL_NEW':
-                self.LABEL_LESION_BUTTON.enabled = False
-                self.LABEL_REGION_BUTTON.enabled = False
-                self.LABEL_NEW_BUTTON.enabled = False
-                self.refine_new(self.refAction, save=True)
+            elif self.refAction['action'] == 'LABEL_TRUST':
+                self.refine_trust(self.refAction, use_pred=False, save=True, saveDiff=True)
             else:
                 raise ValueError('Action: ' + refAction['action'] + ' does not exist.')
-            
-    def onSkipButtonClicked(self):
-        
-        if self.settings['ServerRefinement']:
-            self.refAction['COMMAND'] = self.refAction['COMMAND'] + 'NEXT'
-            self.refAction['STATUS'] = 'SKIPED'
-            ALAction_str = json.dumps(self.refAction)
-            msg = (ALAction_str).encode('utf-8')
-            
-            UDPClientSocket = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
-            UDPClientSocket.settimeout(10)
-            print('Sending NEXT command')
-            UDPClientSocket.sendto(msg, self.dest)
-    
-            try:
-                msgFromServer = UDPClientSocket.recvfrom(self.bufferSize)
-                msg = msgFromServer[0]
-                refAction = json.loads(msg)
-                self.refAction = refAction
-                server_error = False
-            except:
-                print('Could not get next query. Please check the server!')
-                server_error = True
-                
-            refAction['folderpath_output'],_ ,_ = splitFilePath(refAction['fp_label_pred'])
-        else:
-            if self.ActionList is None:
-                # Read action list
-                self.ActionList = self.loadActionFile(folderManagerAction=self.settings['folderManagerAction'])
-            else:
-                # Save action list
-                self.refAction['STATUS'] = 'SKIPED'
-                self.ActionList[self.refAction_idx] = self.refAction
-                self.saveActionFile(self.ActionList, folderManagerAction=self.settings['folderManagerAction'])
-                
-            # Get next action
-            for idx,action in enumerate(self.ActionList):
-                if action['STATUS']=='OPEN':
-                    self.refAction = self.updateActionPath(action)
-                    self.refAction_idx = idx
-                    break
-            server_error = False
-            
-        if not server_error:
-            if self.refAction['action'] == '':
-                pass
-            elif self.refAction['action'] == 'LABEL_LESION':
-                self.LABEL_LESION_BUTTON.enabled = False
-                self.LABEL_REGION_BUTTON.enabled = True
-                self.LABEL_NEW_BUTTON.enabled = True
-                self.refine_lesion(refAction, use_pred=False, save=False, saveDiff=True)
-            elif self.refAction['action'] == 'LABEL_REGION':
-                self.LABEL_LESION_BUTTON.enabled = True
-                self.LABEL_REGION_BUTTON.enabled = False
-                self.LABEL_NEW_BUTTON.enabled = True
-                self.refine_region(refAction, save=False, showREFValue=True, saveDiff=True, mask_SLICE=True)
-            elif self.refAction['action'] == 'LABEL_NEW_REGION':
-                self.LABEL_LESION_BUTTON.enabled = True
-                self.LABEL_REGION_BUTTON.enabled = False
-                self.LABEL_NEW_BUTTON.enabled = True
-                self.refine_region(refAction, save=False, showREFValue=True, saveDiff=True, mask_SLICE=True)
-            elif self.refAction['action'] == 'LABEL_NEW':
-                self.LABEL_LESION_BUTTON.enabled = False
-                self.LABEL_REGION_BUTTON.enabled = False
-                self.LABEL_NEW_BUTTON.enabled = False
-                self.refine_new(refAction, save=False)
-            else:
-                raise ValueError('Action: ' + refAction['action'] + ' does not exist.')
-    
-    def onSaveQueryButtonClicked(self):
-        self.saveOutput(overwrite=False)
 
     def refine_new(self, refAction, save=True):
         #print('refine_new')
         #print('LABEL_NEW_REGION', LABEL_NEW_REGION)
-        if LABEL_NEW_REGION_FLAG:
-            self.nextButton.enabled = False
-            self.skipButton.enabled = False
-            self.saveQueryButton.enabled = False
+        if LABEL_NEW_REGION:
+            self.correctButton.enabled = False
+            self.incorrectButton.enabled = False
+            #self.saveQueryButton.enabled = False
             self.CONTINUE_BUTTON.enabled = True
             self.continueLabeling = False
             self.refine_region(refAction, save=save, showREFValue=False, saveDiff=True, mask_SLICE=True)
@@ -865,122 +634,62 @@ class XALabelerModuleWidget:
         return label
 
  
-    def refine_region(self, refAction, use_pred=True, save=True, showREFValue=True, saveDiff=False, mask_SLICE=False):
-        print('refine_region')
-        # Save all existing nodes
+    def refine_trust(self, refAction, use_pred=True, save=True, showREFValue=True, saveDiff=False, mask_SLICE=False):
+        print('refine_trust')
+
         filepath = refAction['fp_image'].encode("utf-8")
         _, imagename,_ = splitFilePath(filepath)
-        
-        # Visualize prototypWindow
-        self.prototypWindow.updatePrototype(self.ActionList, refAction)
-        
-        #self.fp_label_refine_prev = refAction['fp_label_refine'].encode("utf-8")
-        #print('fp_label_refine_pev123', self.fp_label_refine_prev)
-        
-        #print('save', save)
-        #print('saveDiff', saveDiff)
-        #self.deleteNodesREFValue()
-#        if save:
-#            if saveDiff:
-#                self.updateDiffOutput()
-#            #self.saveOutput(overwrite=False, folderpath_output=refAction['folderpath_output'])
-#            self.saveOutputRefine(filepath_refine=self.fp_label_refine_prev)
-#        self.deleteNodes(imagename)
- 
         imageFound = self.nodeExist(imagename)
-              
+
         # Load image
         if not imageFound:
-            #self.saveOutput(overwrite=False)  
             print('Loading: ' + filepath)
             properties={'name': imagename}
             node = slicer.util.loadVolume(filepath, returnNode=True, properties=properties)[1]
-            node.SetName(imagename)  
-        
-        
+            node.SetName(imagename)        
 
-#        if use_pred:
-#            filepath_label_org = refAction['fp_label_pred'].encode("utf-8")
-#            filepath_label, filepath_label_list = self.load_label_lesion_pred(filepath_label_org)
-#            _, labelname,_ = splitFilePath(filepath_label)
-#        else:
-#            filepath_label_org = refAction['fp_label'].encode("utf-8")
-#            if filepath_label_org=='':
-#                filepath_label, filepath_label_list = self.load_label_lesion_pred(filepath_label_org)
-#                _, labelname,_ = splitFilePath(filepath_label)
-#            else:
-#                filepath_label = filepath_label_org
-#                _, labelname,_ = splitFilePath(filepath_label)
-#                filepath_label_list = [filepath_label]
-                
-        # Load image_org
-        #self.label_org = sitk.ReadImage(filepath_label)
-        #self.label_org = self.load_label_list(filepath_label_list)
-        #filepath_label = refAction['fp_label'].encode("utf-8")
-        #print('filepath_label123', filepath_label)
-        filepath_label = refAction['fp_label_pred'].encode("utf-8")
-        self.label_org = sitk.ReadImage(filepath_label)
-        
-        _, labelname,_ = splitFilePath(filepath_label)
-        #print('labelname123', labelname)
-        
-#        # Load label
-#        if use_pred
-#            filepath_label_org = refAction['fp_label_pred'].encode("utf-8")
-#            _, labelname,_ = splitFilePath(filepath_label_org)
-#            folder, labelname,_ = splitFilePath(filepath_label_org)
-#            filepath_label_list = sorted(glob(os.path.join(folder, labelname + '-*.nrrd')))
-#            if len(filepath_label_list)>0:
-#                filepath_label = filepath_label_list[-1]
-#            else:
-#                filepath_label = filepath_label_org
-#        else:
-        
-        #label_im = sitk.ReadImage(filepath_label)
-        #label_im = self.load_label_list(filepath_label_list)
+        filepath_label = refAction['fp_label_lesion'].encode("utf-8")
         label_im = sitk.ReadImage(filepath_label)
         print('Loading: ' + filepath_label)
         label = sitk.GetArrayFromImage(label_im)
-
-        IDX = refAction['IDX']
-        sliceNumber = refAction['SLICE']
-
-        labelFound = self.nodeExist(labelname)
-
+        self.label_org = sitk.ReadImage(filepath_label)
+        
         # Create binary mask
         mask = np.zeros(label.shape)
-        #print('mask123', mask.shape)
-        
-        
         IDX = refAction['IDX']
         SLICE = int(refAction['SLICE'])
-        #print('IDX123', IDX)
-        #print('SLICE123', SLICE)
+        NumPixel = len(IDX[0])
+        for p in range(NumPixel):
+            x=IDX[0][p]
+            y=IDX[1][p]
+            mask[SLICE, x, y] = 1
+        
+        # Create mask_slice
+        IDX = refAction['IDX']
+        SLICE = int(refAction['SLICE'])
         if mask_SLICE:
-            #for p in range(len(IDX[0])):
-            for p in range(0,len(IDX[0]),2):
-                x=IDX[0][p]
-                y=IDX[1][p]
-                mask[SLICE, x, y] = 1
             mask_slice = np.zeros(label.shape)
             mask_slice[SLICE,:,:] = np.ones((label.shape[1],label.shape[2]))
         else:
             mask_slice = np.ones(label.shape)
+        
+        print('mask', mask.sum())
+        print('IDX', IDX)
+        print('SLICE', SLICE)
+        
+        _, labelname,_ = splitFilePath(filepath_label)
+        labelFound = self.nodeExist(labelname)
 
-#        print('labelFound', labelFound)
-#        print('showREFValue', showREFValue)
-#        print('mask_slice', mask_slice.shape)
         # Set label
         if not labelFound:
-            if showREFValue:
-                #label = label * (1-mask) + self.REFValue * mask
-                label = label * (1-mask) + 0 * mask
+            if not use_pred:
+                label = label * mask
             label = label * mask_slice
-            labelSitk = sitk.GetImageFromArray(label)
-            labelSitk.CopyInformation(label_im)
-            node = su.PushVolumeToSlicer(labelSitk, name=labelname, className='vtkMRMLLabelMapVolumeNode')
+            label = sitk.GetImageFromArray(label)
+            label.CopyInformation(label_im)
+            node = su.PushVolumeToSlicer(label, name=labelname, className='vtkMRMLLabelMapVolumeNode')
             node.SetName(labelname)
-            slicer.util.setSliceViewerLayers(label = node, foreground = node, foregroundOpacity = 0.1, labelOpacity = 0.0)
+            slicer.util.setSliceViewerLayers(label = node, foreground = node, foregroundOpacity = 0.0, labelOpacity = 1.0)
             self.assignLabelLUT(labelname)
         else:
             node = slicer.mrmlScene.GetFirstNodeByName(labelname)
@@ -989,31 +698,31 @@ class XALabelerModuleWidget:
             label = label * mask_slice
             slicer.util.updateVolumeFromArray(node, label)
             self.assignLabelLUT(labelname)
-            #print('updateVolumeFromArray')
-            
-        # Show action
-        self.label.setText('ACTION: ' + refAction['action'])
 
+        # Show action
+        #self.label.setText('ACTION: ' + refAction['action'])
+        
+        
         # Change view
         red = self.layoutManager.sliceWidget('Red')
         redLogic = red.sliceLogic()
         offset = redLogic.GetSliceOffset()
         origen = label_im.GetOrigin()
-        offset = origen[2] + sliceNumber * 3.0
+        offset = origen[2] + SLICE * 3.0
         redLogic.SetSliceOffset(offset)
         
         # Creates and adds the custom Editor Widget to the module
-        if self.localXALEditorWidget is None:
-            self.localXALEditorWidget = XALEditorWidget(parent=self.parent, showVolumesFrame=False, settings=self.settings, widget=self)
-            self.localXALEditorWidget.setup()
-            self.localXALEditorWidget.enter()
-        self.localXALEditorWidget.toolsBox.UCchangeIslandButton.setEnabled(False)
-        
-        # Set LowerPaintThreshold
-        self.lowerThresholdValue = -5000
-        self.upperThresholdValue = 5000
-        self.setLowerPaintThreshold()
-        
+#        if self.localXALEditorWidget is None:
+#            self.localXALEditorWidget = XALEditorWidget(parent=self.parent, showVolumesFrame=False, settings=self.settings, widget=self)
+#            self.localXALEditorWidget.setup()
+#            self.localXALEditorWidget.enter()
+#        self.localXALEditorWidget.toolsBox.UCchangeIslandButton.setEnabled(True)
+#
+#        # Set LowerPaintThreshold
+#        self.lowerThresholdValue = 130
+#        self.upperThresholdValue = 100000
+#        self.setLowerPaintThreshold()
+
     def load_label_lesion_pred(self, filepath_label_org):
         folder, labelname,_ = splitFilePath(filepath_label_org)
         filepath_label_list = glob(os.path.join(folder, labelname + '*.nrrd'))
@@ -1026,14 +735,14 @@ class XALabelerModuleWidget:
         return filepath_label, filepath_label_list
         
     def loadActionFile(self, folderManagerAction='/mnt/SSD2/cloud_data/Projects/CACSLabeler/code/data/tmp'):
-        ActionFilePath = os.path.join(folderManagerAction, 'manager', 'action', 'data', 'ActionFile.json')
+        ActionFilePath = os.path.join(folderManagerAction, 'TrustFile.json')
         # Load ActionFile
         with open(ActionFilePath) as json_file:
             action_list = json.load(json_file)
         return action_list
 
     def saveActionFile(self, action_list, folderManagerAction='/mnt/SSD2/cloud_data/Projects/CACSLabeler/code/data/tmp'):
-        ActionFilePath = os.path.join(folderManagerAction, 'manager', 'action', 'data', 'ActionFile.json')  
+        ActionFilePath = os.path.join(folderManagerAction, 'TrustFile.json')
         # Save action list to json
         with open(ActionFilePath, 'w') as file:
             file.write(json.dumps(action_list, indent=4))
@@ -1155,20 +864,20 @@ class XALabelerModuleWidget:
         redLogic.SetSliceOffset(offset)
         
         # Creates and adds the custom Editor Widget to the module
-        if self.localXALEditorWidget is None:
-            self.localXALEditorWidget = XALEditorWidget(parent=self.parent, showVolumesFrame=False, settings=self.settings, widget=self)
-            self.localXALEditorWidget.setup()
-            self.localXALEditorWidget.enter()
-        self.localXALEditorWidget.toolsBox.UCchangeIslandButton.setEnabled(True)
-        
-    
+#        if self.localXALEditorWidget is None:
+#            self.localXALEditorWidget = XALEditorWidget(parent=self.parent, showVolumesFrame=False, settings=self.settings, widget=self)
+#            self.localXALEditorWidget.setup()
+#            self.localXALEditorWidget.enter()
+#        self.localXALEditorWidget.toolsBox.UCchangeIslandButton.setEnabled(True)
+#        
+#    
         # Set LowerPaintThreshold
-        self.lowerThresholdValue = 130
-        self.upperThresholdValue = 100000
-        self.setLowerPaintThreshold()
+#        self.lowerThresholdValue = 130
+#        self.upperThresholdValue = 100000
+#        self.setLowerPaintThreshold()
         
-        self.nextButton.enabled = True
-        self.skipButton.enabled = True
+        self.correctButton.enabled = True
+        self.incorrectButton.enabled = True
         self.saveQueryButton.enabled = True
         
     def refine_lesion_close(self):
@@ -1370,7 +1079,7 @@ class XALabelerModuleWidget:
                 slicer.util.updateVolumeFromArray(node, arr_diff)
         
 
-    def onReload(self,moduleName="XALabelerModule"):
+    def onReload(self,moduleName="XATrustModule"):
         """Generic reload method for any scripted module.
             ModuleWizard will subsitute correct default moduleName.
             Note: customized for use in CardiacAgatstonModule
@@ -1387,7 +1096,7 @@ class XALabelerModuleWidget:
 
         globals()[moduleName] = slicer.util.reloadScriptedModule(moduleName)
 
-    def onReloadAndTest(self,moduleName="XALabelerModule"):
+    def onReloadAndTest(self,moduleName="XATrustModule"):
         try:
             self.onReload()
             evalString = 'globals()["%s"].%sTest()' % (moduleName, moduleName)
@@ -1404,7 +1113,7 @@ class XALabelerModuleWidget:
         pass
 
 #
-# XALabelerModuleLogic
+# XATrustModuleLogic
 #
 class XALEditorWidget(Editor.EditorWidget):
     def __init__(self, parent=None, showVolumesFrame=None, settings=None, widget=None):
@@ -1421,7 +1130,7 @@ class XALEditorWidget(Editor.EditorWidget):
         self.toolsBox = XALEditBox(self.settings, self.editBoxFrame, optionsFrame=self.effectOptionsFrame)
         
     def nextCase(self):
-        self.widget.onNextButtonClicked()
+        self.widget.onCorrectButtonClicked()
 
     def installShortcutKeys(self):
         print('installShortcutKeys')
