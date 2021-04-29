@@ -673,6 +673,7 @@ class XALabelerModuleWidget:
             if self.ActionList is None:
                 # Read action list
                 self.ActionList = self.loadActionFile(folderManagerAction=self.settings['folderManagerAction'])
+                print('self.ActionList', len(self.ActionList))
             else:
                 # Save action list
                 self.ActionList[self.refAction_idx] = self.refAction
@@ -703,6 +704,7 @@ class XALabelerModuleWidget:
                     new_action = True
                     break
             if not new_action:
+                self.prototypWindow.close()
                 return
             server_error = False
 
@@ -1381,6 +1383,7 @@ class XALEditorWidget(Editor.EditorWidget):
     def __init__(self, parent=None, showVolumesFrame=None, settings=None, widget=None):
         self.settings = settings
         self.widget = widget
+        self.foregroundDisabled = False
         super(XALEditorWidget, self).__init__(parent=parent, showVolumesFrame=showVolumesFrame)
         
     def createEditBox(self):
@@ -1393,6 +1396,18 @@ class XALEditorWidget(Editor.EditorWidget):
         
     def nextCase(self):
         self.widget.onNextButtonClicked()
+    
+    def updateOpacity(self):
+        if not self.foregroundDisabled:
+            slicer.util.setSliceViewerLayers(label = 'keep-current', foreground = 'keep-current', foregroundOpacity = 0.0, labelOpacity = 0.0)
+            self.foregroundDisabled = True
+        else:
+            if self.widget.refAction['action']=='LABEL_LESION':
+                foregroundOpacity=1.0
+            else:
+                foregroundOpacity=0.1
+            slicer.util.setSliceViewerLayers(label = 'keep-current', foreground = 'keep-current', foregroundOpacity = foregroundOpacity, labelOpacity = 0.0)
+            self.foregroundDisabled = False
 
     def installShortcutKeys(self):
         print('installShortcutKeys')
@@ -1405,7 +1420,8 @@ class XALEditorWidget(Editor.EditorWidget):
             ('z', self.toolsBox.undoRedo.undo),
             ('y', self.toolsBox.undoRedo.redo),
             ('h', self.editUtil.toggleCrosshair),
-            ('o', self.editUtil.toggleLabelOutline),
+            #('o', self.editUtil.toggleLabelOutline),
+            ('o', self.updateOpacity),
             ('t', self.editUtil.toggleForegroundBackground),
             ('n', self.nextCase),
             (Key_Escape, self.toolsBox.defaultEffect),

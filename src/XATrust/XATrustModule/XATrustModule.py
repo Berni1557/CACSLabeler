@@ -635,7 +635,6 @@ class XATrustModuleWidget:
 
  
     def refine_trust(self, refAction, use_pred=True, save=True, showREFValue=True, saveDiff=False, mask_SLICE=False):
-        print('refine_trust')
 
         filepath = refAction['fp_image'].encode("utf-8")
         _, imagename,_ = splitFilePath(filepath)
@@ -663,6 +662,7 @@ class XATrustModuleWidget:
             x=IDX[0][p]
             y=IDX[1][p]
             mask[SLICE, x, y] = 1
+    
         
         # Create mask_slice
         IDX = refAction['IDX']
@@ -673,9 +673,13 @@ class XATrustModuleWidget:
         else:
             mask_slice = np.ones(label.shape)
         
-        print('mask', mask.sum())
-        print('IDX', IDX)
-        print('SLICE', SLICE)
+        #print('IDX0', IDX[0])
+        #print('IDX1', IDX[1])
+        y_median = np.median(refAction['IDX'][0])
+        x_median = np.median(refAction['IDX'][1])
+        print('COMMAND', refAction['COMMAND'])
+        print('POSITION', x_median, y_median)
+        print('SLICE', refAction['SLICE'])
         
         _, labelname,_ = splitFilePath(filepath_label)
         labelFound = self.nodeExist(labelname)
@@ -785,7 +789,7 @@ class XATrustModuleWidget:
 
         # Load image
         if not imageFound:
-            print('Loading: ' + filepath)
+            #print('Loading: ' + filepath)
             properties={'name': imagename}
             node = slicer.util.loadVolume(filepath, returnNode=True, properties=properties)[1]
             node.SetName(imagename)        
@@ -795,7 +799,7 @@ class XATrustModuleWidget:
         
         filepath_label = refAction['fp_label_lesion'].encode("utf-8")
         label_im = sitk.ReadImage(filepath_label)
-        print('Loading: ' + filepath_label)
+        #print('Loading: ' + filepath_label)
         label = sitk.GetArrayFromImage(label_im)
         
         # Load image_org
