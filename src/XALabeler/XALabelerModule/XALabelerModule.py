@@ -48,16 +48,24 @@ class PrototypeWindow(QWidget):
         self.setWindowTitle("Prototypes")
         #self.show()
     
-    def updatePrototype(self, actionlist, action):
+    def updatePrototype(self, actionlist, action, settings):
+        folderManagerAction = settings['folderManagerAction']
         if action['action']=='LABEL_REGION':
-            fip_tmp = "/mnt/SSD2/cloud_data/Projects/CACSLabeler/code/data/tmp/image.png"
+            #fip_tmp = "/mnt/SSD2/cloud_data/Projects/CACSLabeler/code/data/tmp/image.png"
+            fip_tmp = "C:/Users/CACS/projects/CACSLabeler/data/tmp/image.png"
+            
             image_proto = np.zeros((512,512*3), dtype=np.uint16)
             image_proto_overlay = np.zeros((512,512*3), dtype=np.uint16)
             k=0
             for act in actionlist:
                 if act['MSG']==action['MSG'] and not(act['fp_image']==action['fp_image'] and act['SLICE']==action['SLICE']):
                     print('found')
+                    
+                    _, filename, ext = splitFilePath(act['fp_image'].encode("utf-8"))
+                    act['fp_image'] = os.path.join(settings['folderpath_images'], filename + ext)
                     filepath_image = act['fp_image'].encode("utf-8")
+                    
+                    
                     imageSitk = sitk.ReadImage(filepath_image)
                     image = sitk.GetArrayFromImage(imageSitk)
                     image_slice= image[act['SLICE']]
@@ -75,7 +83,12 @@ class PrototypeWindow(QWidget):
                     IDX1 = [k*512+x for x in IDX1]
                     image_proto[IDX0,IDX1] = 65535         
                     # Import label
+                    _, filename, ext = splitFilePath(act['fp_label_pred'].encode("utf-8"))
+                    folderpathPred = os.path.join(folderManagerAction, 'predict')
+                    act['fp_label_pred'] = os.path.join(folderpathPred, filename + ext)
+                    
                     filepath_label = act['fp_label_pred'].encode("utf-8")
+                    
                     print('filepath_label', filepath_label)
                     labelSitk = sitk.ReadImage(filepath_label)
                     label = sitk.GetArrayFromImage(labelSitk)
@@ -564,6 +577,7 @@ class XALabelerModuleWidget:
         # Update image path
         _, filename, ext = splitFilePath(refAction['fp_image'])
         refAction['fp_image'] = os.path.join(self.settings['folderpath_images'], filename + ext)
+        print('folderpath_images123', self.settings['folderpath_images'])
         # Update reference
         folderpathRef = os.path.join(folderManagerAction, 'reference')
         folderpathPredict = os.path.join(folderManagerAction, 'predict')
@@ -845,7 +859,7 @@ class XALabelerModuleWidget:
         _, imagename,_ = splitFilePath(filepath)
         
         # Visualize prototypWindow
-        self.prototypWindow.updatePrototype(self.ActionList, refAction)
+        self.prototypWindow.updatePrototype(self.ActionList, refAction, self.settings)
         
         #self.fp_label_refine_prev = refAction['fp_label_refine'].encode("utf-8")
         #print('fp_label_refine_pev123', self.fp_label_refine_prev)
