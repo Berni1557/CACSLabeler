@@ -60,9 +60,6 @@ class PrototypeWindow(QWidget):
             for act in actionlist:
                 if act['MSG']==action['MSG'] and not(act['fp_image']==action['fp_image'] and act['SLICE']==action['SLICE']):
                     print('found')
-                    
-                    _, filename, ext = splitFilePath(act['fp_image'].encode("utf-8"))
-                    act['fp_image'] = os.path.join(settings['folderpath_images'], filename + ext)
                     filepath_image = act['fp_image'].encode("utf-8")
                     
                     
@@ -909,22 +906,6 @@ class XALabelerModuleWidget:
         self.label_org = sitk.ReadImage(filepath_label)
         
         _, labelname,_ = splitFilePath(filepath_label)
-        #print('labelname123', labelname)
-        
-#        # Load label
-#        if use_pred
-#            filepath_label_org = refAction['fp_label_pred'].encode("utf-8")
-#            _, labelname,_ = splitFilePath(filepath_label_org)
-#            folder, labelname,_ = splitFilePath(filepath_label_org)
-#            filepath_label_list = sorted(glob(os.path.join(folder, labelname + '-*.nrrd')))
-#            if len(filepath_label_list)>0:
-#                filepath_label = filepath_label_list[-1]
-#            else:
-#                filepath_label = filepath_label_org
-#        else:
-        
-        #label_im = sitk.ReadImage(filepath_label)
-        #label_im = self.load_label_list(filepath_label_list)
         label_im = sitk.ReadImage(filepath_label)
         print('Loading: ' + filepath_label)
         label = sitk.GetArrayFromImage(label_im)
@@ -936,15 +917,9 @@ class XALabelerModuleWidget:
 
         # Create binary mask
         mask = np.zeros(label.shape)
-        #print('mask123', mask.shape)
-        
-        
         IDX = refAction['IDX']
         SLICE = int(refAction['SLICE'])
-        #print('IDX123', IDX)
-        #print('SLICE123', SLICE)
         if mask_SLICE:
-            #for p in range(len(IDX[0])):
             for p in range(0,len(IDX[0]),2):
                 x=IDX[0][p]
                 y=IDX[1][p]
@@ -953,10 +928,12 @@ class XALabelerModuleWidget:
             mask_slice[SLICE,:,:] = np.ones((label.shape[1],label.shape[2]))
         else:
             mask_slice = np.ones(label.shape)
+            
+        if refAction['COMMAND']=='NOLABEL':
+            print('NOLABEL')
+            mask_slice = np.zeros(label.shape)
+            #slicer.util.setSliceViewerLayers(label = 'keep-current', foreground = 'keep-current', foregroundOpacity = 0.0, labelOpacity = 1.0)
 
-#        print('labelFound', labelFound)
-#        print('showREFValue', showREFValue)
-#        print('mask_slice', mask_slice.shape)
         # Set label
         if not labelFound:
             if showREFValue:
@@ -988,7 +965,10 @@ class XALabelerModuleWidget:
         origen = label_im.GetOrigin()
         offset = origen[2] + sliceNumber * 3.0
         redLogic.SetSliceOffset(offset)
-        
+        if refAction['COMMAND']=='NOLABEL':
+            print('NOLABELX')
+            slicer.util.setSliceViewerLayers(label = 'keep-current', foreground = 'keep-current', foregroundOpacity = 0.0, labelOpacity = 1.0)
+
         # Creates and adds the custom Editor Widget to the module
         if self.localXALEditorWidget is None:
             self.localXALEditorWidget = XALEditorWidget(parent=self.parent, showVolumesFrame=False, settings=self.settings, widget=self)
