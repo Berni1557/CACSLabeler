@@ -52,17 +52,13 @@ class PrototypeWindow(QWidget):
         folderManagerAction = settings['folderManagerAction']
         if action['action']=='LABEL_REGION':
             #fip_tmp = "/mnt/SSD2/cloud_data/Projects/CACSLabeler/code/data/tmp/image.png"
-            fip_tmp = "C:/Users/CACS/projects/CACSLabeler/data/tmp/image.png"
-            
+            fip_tmp = os.path.join(settings['folderManagerTmp'], "image.png").encode('utf8')
             image_proto = np.zeros((512,512*3), dtype=np.uint16)
             image_proto_overlay = np.zeros((512,512*3), dtype=np.uint16)
             k=0
             for act in actionlist:
                 if act['MSG']==action['MSG'] and not(act['fp_image']==action['fp_image'] and act['SLICE']==action['SLICE']):
-                    print('found')
                     filepath_image = act['fp_image'].encode("utf-8")
-                    
-                    
                     imageSitk = sitk.ReadImage(filepath_image)
                     image = sitk.GetArrayFromImage(imageSitk)
                     image_slice= image[act['SLICE']]
@@ -85,8 +81,6 @@ class PrototypeWindow(QWidget):
                     act['fp_label_pred'] = os.path.join(folderpathPred, filename + ext)
                     
                     filepath_label = act['fp_label_pred'].encode("utf-8")
-                    
-                    print('filepath_label', filepath_label)
                     labelSitk = sitk.ReadImage(filepath_label)
                     label = sitk.GetArrayFromImage(labelSitk)
                     for c in range(1,4):
@@ -167,6 +161,7 @@ def splitFilePath(filepath):
     :type filepath: str
     """
     #folderpath, _ = ntpath.split(filepath)
+    filepath = filepath.replace("\\","/")
     folderpath = os.path.dirname(filepath)
     head, file_extension = os.path.splitext(filepath)
     filename = os.path.basename(head)
@@ -566,7 +561,14 @@ class XALabelerModuleWidget:
 
     def onLOADCTA_BUTTONClicked(self):
         pass
-      
+
+    def updateActionPathList(self, refActionList):
+        refActionListNew=[]
+        for refAction in refActionList:
+            refAction = self.updateActionPath(refAction)
+            refActionListNew.append(refAction)
+        return refActionListNew
+        
     def updateActionPath(self, refAction):
         #print('refAction123', refAction)
         
@@ -574,7 +576,6 @@ class XALabelerModuleWidget:
         # Update image path
         _, filename, ext = splitFilePath(refAction['fp_image'])
         refAction['fp_image'] = os.path.join(self.settings['folderpath_images'], filename + ext)
-        print('folderpath_images123', self.settings['folderpath_images'])
         # Update reference
         folderpathRef = os.path.join(folderManagerAction, 'reference')
         folderpathPredict = os.path.join(folderManagerAction, 'predict')
@@ -647,6 +648,7 @@ class XALabelerModuleWidget:
         
         #self.window1.show()
         
+        
         # Update action
         if self.refAction is not None:
             self.refAction['STATUS'] = 'SOLVED'
@@ -684,6 +686,7 @@ class XALabelerModuleWidget:
             if self.ActionList is None:
                 # Read action list
                 self.ActionList = self.loadActionFile(folderManagerAction=self.settings['folderManagerAction'])
+                self.ActionList = self.updateActionPathList(self.ActionList)
                 print('self.ActionList', len(self.ActionList))
             else:
                 # Save action list
@@ -1396,7 +1399,7 @@ class XALEditorWidget(Editor.EditorWidget):
             slicer.util.setSliceViewerLayers(label = 'keep-current', foreground = 'keep-current', foregroundOpacity = 0.0, labelOpacity = 0.0)
             self.foregroundDisabled = True
         else:
-            if self.widget.refAction['action']=='LABEL_LESION':
+            if self.widget.refAction['action']=='LABEL_LESION' or self.widget.refAction['action']=='LABEL_NEW':
                 foregroundOpacity=1.0
             else:
                 foregroundOpacity=0.1
