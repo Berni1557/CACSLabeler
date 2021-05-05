@@ -55,6 +55,7 @@ def splitFilePath(filepath):
     :type filepath: str
     """
     #folderpath, _ = ntpath.split(filepath)
+    filepath = filepath.replace("\\","/")
     folderpath = os.path.dirname(filepath)
     head, file_extension = os.path.splitext(filepath)
     filename = os.path.basename(head)
@@ -103,6 +104,7 @@ class XATrustModuleWidget:
         self.ActionList = None
         self.fp_label_lesion_refine_pev = None
         self.actionSelected = 'ALL'
+        self.refAction_idx = None
 
         if not parent:
             self.parent = slicer.qMRMLWidget()
@@ -194,6 +196,15 @@ class XATrustModuleWidget:
         self.measuresFormLayout.addRow(incorrectButton)
         incorrectButton.connect('clicked(bool)', self.onIncorrectButtonClicked)
         self.incorrectButton = incorrectButton
+
+        # BACK button
+        backButton = qt.QPushButton("BACK")
+        backButton.toolTip = "BACK"
+        backButton.setStyleSheet("background-color: rgb(230,241,255)")
+        backButton.enabled = False
+        self.measuresFormLayout.addRow(backButton)
+        backButton.connect('clicked(bool)', self.onBackButtonClicked)
+        self.backButton = backButton
         
         # Save query button
 #        saveQueryButton = qt.QPushButton("SAVE QUERY")
@@ -389,6 +400,7 @@ class XATrustModuleWidget:
         self.startClient()
         self.correctButton.enabled = True
         self.incorrectButton.enabled = True
+        self.backButton.enabled = True
         self.nextAction()
         self.startButton.enabled=False
         #self.saveQueryButton.enabled = True
@@ -530,8 +542,46 @@ class XATrustModuleWidget:
     def onIncorrectButtonClicked(self):
         self.refAction['MSG'] = 'INCORRECT'
         self.nextAction()
+
+    def onBackButtonClicked(self):
+        #self.refAction['MSG'] = 'INCORRECT'
+        self.backAction()
         
+    def backAction(self):
+        # Delete nodes
+        filepath = self.refAction['fp_image'].encode("utf-8")
+        _, imagename,_ = splitFilePath(filepath)
+        self.deleteNodes(imagename)
+        
+        # Get previous action
+        for idx in range(len(self.ActionList)):
+            action = self.ActionList[idx]
+            if action['STATUS']=='OPEN' and (action['action']==self.actionSelected or self.actionSelected=='ALL'):
+                idx=idx-1
+                print('idx123', idx)
+                self.refAction = self.ActionList[idx]
+                self.refAction['STATUS']='OPEN'
+                print('Processing123: ' + str(idx) + '/' + str(len(self.ActionList)))
+                self.refAction = self.updateActionPath(self.refAction)
+                #self.ActionList[idx] = self.refAction
+                self.refAction_idx = idx
+                break
+        self.ActionList[self.refAction_idx] = self.refAction
+        self.saveActionFile(self.ActionList, folderManagerAction=self.settings['folderManagerAction'])
+        
+        # Get next action
+        for idx,action in enumerate(self.ActionList):
+            if action['STATUS']=='OPEN' and (action['action']==self.actionSelected or self.actionSelected=='ALL'):
+                print('Processing: ' + str(idx) + '/' + str(len(self.ActionList)))
+                self.refAction = self.updateActionPath(action)
+                self.refAction_idx = idx
+                break
+        
+        self.refine_trust(self.refAction, use_pred=False, save=True, saveDiff=True)
+
     def nextAction(self):
+        if self.refAction_idx is not None:
+            print('self.refAction_idx123', self.refAction_idx)
         # Update action
         if self.refAction is not None:
             self.refAction['STATUS'] = 'SOLVED'
@@ -570,6 +620,7 @@ class XATrustModuleWidget:
                 self.ActionList = self.loadActionFile(folderManagerAction=self.settings['folderManagerAction'])
             else:
                 # Save action list
+                #print('save123', self.refAction_idx, self.refAction)
                 self.ActionList[self.refAction_idx] = self.refAction
                 self.saveActionFile(self.ActionList, folderManagerAction=self.settings['folderManagerAction'])
             
