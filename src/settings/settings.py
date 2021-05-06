@@ -83,6 +83,7 @@ class Settings:
                            'folderManagerAction': 'H:/cloud/cloud_data/Projects/CACSLabeler/code/data/XALabeler',
                            'folderManagerTmp': 'H:/cloud/cloud_data/Projects/CACSLabeler/code/data/tmp',
                            'ServerRefinement': False,
+                           'TIME_MAX': 60*60,
                            'filter_input': "Files(*.mhd, *.txt)",
                            #'CalciumScores': ['AGATSTON_SCORE', 'VOLUME_SCORE', 'DENSITY_SCORE', 'NUMLESION_SCORE', 'LESIONVOLUME_SCORE'],
                            #'CalciumScores': ['AGATSTON_SCORE', 'VOLUME_SCORE', 'DENSITY_SCORE', 'NUMLESION_SCORE'],

@@ -206,6 +206,11 @@ class XATrustModuleWidget:
         backButton.connect('clicked(bool)', self.onBackButtonClicked)
         self.backButton = backButton
         
+        # Set albel
+        label = qt.QLabel(" ")
+        self.measuresFormLayout.addRow(label)
+        self.label = label
+        
         # Save query button
 #        saveQueryButton = qt.QPushButton("SAVE QUERY")
 #        saveQueryButton.toolTip = "Save query"
@@ -629,7 +634,8 @@ class XATrustModuleWidget:
             for idx,action in enumerate(self.ActionList):
                 if action['action']=='LABEL_TRUST' and action['STATUS']=='OPEN':
                     action_stat['LABEL_TRUST'] += 1
-            print('Action: ' + str(action_stat))
+            self.action_stat = action_stat
+            #print('Action: ' + str(action_stat))
             
             # Get next action
             new_action=False
@@ -728,9 +734,9 @@ class XATrustModuleWidget:
         #print('IDX1', IDX[1])
         y_median = np.median(refAction['IDX'][0])
         x_median = np.median(refAction['IDX'][1])
-        print('COMMAND', refAction['COMMAND'])
-        print('POSITION', x_median, y_median)
-        print('SLICE', refAction['SLICE'])
+#        print('COMMAND', refAction['COMMAND'])
+#        print('POSITION', x_median, y_median)
+#        print('SLICE', refAction['SLICE'])
         
         _, labelname,_ = splitFilePath(filepath_label)
         labelFound = self.nodeExist(labelname)
@@ -756,6 +762,7 @@ class XATrustModuleWidget:
 
         # Show action
         #self.label.setText('ACTION: ' + refAction['action'])
+        self.label.setText('LABEL_TRUST: ' + str(self.action_stat['LABEL_TRUST']))
         
         
         # Change view
@@ -767,10 +774,10 @@ class XATrustModuleWidget:
         redLogic.SetSliceOffset(offset)
         
         # Creates and adds the custom Editor Widget to the module
-#        if self.localXALEditorWidget is None:
-#            self.localXALEditorWidget = XALEditorWidget(parent=self.parent, showVolumesFrame=False, settings=self.settings, widget=self)
-#            self.localXALEditorWidget.setup()
-#            self.localXALEditorWidget.enter()
+        if self.localXALEditorWidget is None:
+            self.localXALEditorWidget = XALEditorWidget(parent=self.parent, showVolumesFrame=False, settings=self.settings, widget=self)
+            self.localXALEditorWidget.setup()
+            self.localXALEditorWidget.enter()
 #        self.localXALEditorWidget.toolsBox.UCchangeIslandButton.setEnabled(True)
 #
 #        # Set LowerPaintThreshold
@@ -919,6 +926,7 @@ class XATrustModuleWidget:
         redLogic.SetSliceOffset(offset)
         
         # Creates and adds the custom Editor Widget to the module
+#        print('localXALEditorWidget')
 #        if self.localXALEditorWidget is None:
 #            self.localXALEditorWidget = XALEditorWidget(parent=self.parent, showVolumesFrame=False, settings=self.settings, widget=self)
 #            self.localXALEditorWidget.setup()
@@ -1174,6 +1182,7 @@ class XALEditorWidget(Editor.EditorWidget):
     def __init__(self, parent=None, showVolumesFrame=None, settings=None, widget=None):
         self.settings = settings
         self.widget = widget
+        self.foregroundDisabled = False
         super(XALEditorWidget, self).__init__(parent=parent, showVolumesFrame=showVolumesFrame)
         
     def createEditBox(self):
@@ -1187,6 +1196,19 @@ class XALEditorWidget(Editor.EditorWidget):
     def nextCase(self):
         self.widget.onCorrectButtonClicked()
 
+    def backCase(self):
+        self.widget.onBackButtonClicked()
+
+    def updateOpacity(self):
+        if not self.foregroundDisabled:
+            slicer.util.setSliceViewerLayers(label = 'keep-current', foreground = 'keep-current', foregroundOpacity = 0.0, labelOpacity = 0.0)
+            self.foregroundDisabled = True
+        else:
+            foregroundOpacity=1.0
+            slicer.util.setSliceViewerLayers(label = 'keep-current', foreground = 'keep-current', foregroundOpacity = foregroundOpacity, labelOpacity = 0.0)
+            self.foregroundDisabled = False
+
+            
     def installShortcutKeys(self):
         print('installShortcutKeys')
         """Turn on editor-wide shortcuts.  These are active independent
@@ -1198,9 +1220,11 @@ class XALEditorWidget(Editor.EditorWidget):
             ('z', self.toolsBox.undoRedo.undo),
             ('y', self.toolsBox.undoRedo.redo),
             ('h', self.editUtil.toggleCrosshair),
-            ('o', self.editUtil.toggleLabelOutline),
+            #('o', self.editUtil.toggleLabelOutline),
+            ('o', self.updateOpacity),
             ('t', self.editUtil.toggleForegroundBackground),
             ('n', self.nextCase),
+            ('b', self.backCase),
             (Key_Escape, self.toolsBox.defaultEffect),
             ('p', lambda : self.toolsBox.selectEffect('PaintEffect')),
             ('1', self.toolsBox.onOTHERChangeIslandButtonClicked),
@@ -1246,11 +1270,11 @@ class XALEditBox(EditorLib.EditBox):
         # The Default Label Selector
         color = CACSTreeDict['OTHER']['COLOR']
         color_str = 'background-color: rgb(' + str(color[0]) + ',' + str(color[1]) + ',' + str(color[2]) + ')'
-        OTHERChangeIslandButton = qt.QPushButton("OTEHR")
-        OTHERChangeIslandButton.toolTip = "Label - OTEHR"
+        OTHERChangeIslandButton = qt.QPushButton("OTHER")
+        OTHERChangeIslandButton.toolTip = "Label - OTHER"
         OTHERChangeIslandButton.setStyleSheet(color_str)
         self.mainFrame.layout().addWidget(OTHERChangeIslandButton)
-        OTHERChangeIslandButton.connect('clicked(bool)', self.onOTHERChangeIslandButtonClicked)
+        #OTHERChangeIslandButton.connect('clicked(bool)', self.onOTHERChangeIslandButtonClicked)
 
         # The Input Left Arterial Descending (LAD) Label Selector
         color = CACSTreeDict['CC']['LAD']['COLOR']
@@ -1259,7 +1283,7 @@ class XALEditBox(EditorLib.EditBox):
         LADchangeIslandButton.toolTip = "Label - Left Arterial Descending (LAD)"
         LADchangeIslandButton.setStyleSheet(color_str)
         self.mainFrame.layout().addWidget(LADchangeIslandButton)
-        LADchangeIslandButton.connect('clicked(bool)', self.onLADchangeIslandButtonClicked)
+        #LADchangeIslandButton.connect('clicked(bool)', self.onLADchangeIslandButtonClicked)
 
         # The Input Left Circumflex (LCX) Label Selector
         color = CACSTreeDict['CC']['LCX']['COLOR']
@@ -1268,7 +1292,7 @@ class XALEditBox(EditorLib.EditBox):
         LCXchangeIslandButton.toolTip = "Label - Left Circumflex (LCX)"
         LCXchangeIslandButton.setStyleSheet(color_str)
         self.mainFrame.layout().addWidget(LCXchangeIslandButton)
-        LCXchangeIslandButton.connect('clicked(bool)', self.onLCXchangeIslandButtonClicked)
+        #LCXchangeIslandButton.connect('clicked(bool)', self.onLCXchangeIslandButtonClicked)
 
         # The Input Right Coronary Artery (RCA) Label Selector
         color = CACSTreeDict['CC']['RCA']['COLOR']
@@ -1277,16 +1301,16 @@ class XALEditBox(EditorLib.EditBox):
         RCAchangeIslandButton.toolTip = "Label - Right Coronary Artery (RCA)"
         RCAchangeIslandButton.setStyleSheet(color_str)
         self.mainFrame.layout().addWidget(RCAchangeIslandButton)
-        RCAchangeIslandButton.connect('clicked(bool)', self.onRCAchangeIslandButtonClicked)
+        #RCAchangeIslandButton.connect('clicked(bool)', self.onRCAchangeIslandButtonClicked)
 
         # The UNCERTAINTY (UC) Label Selector
-        color = CACSTreeDict['CC']['UC']['COLOR']
-        color_str = 'background-color: rgb(' + str(color[0]) + ',' + str(color[1]) + ',' + str(color[2]) + ')'
-        UCchangeIslandButton = qt.QPushButton("UNCERTAINTY")
-        UCchangeIslandButton.toolTip = "Label - UNCERTAINTY (UC)"
-        UCchangeIslandButton.setStyleSheet(color_str)
-        self.mainFrame.layout().addWidget(UCchangeIslandButton)
-        UCchangeIslandButton.connect('clicked(bool)', self.onUCchangeIslandButtonClicked)
+#        color = CACSTreeDict['CC']['UC']['COLOR']
+#        color_str = 'background-color: rgb(' + str(color[0]) + ',' + str(color[1]) + ',' + str(color[2]) + ')'
+#        UCchangeIslandButton = qt.QPushButton("UNCERTAINTY")
+#        UCchangeIslandButton.toolTip = "Label - UNCERTAINTY (UC)"
+#        UCchangeIslandButton.setStyleSheet(color_str)
+#        self.mainFrame.layout().addWidget(UCchangeIslandButton)
+#        UCchangeIslandButton.connect('clicked(bool)', self.onUCchangeIslandButtonClicked)
 
         
         # create all of the buttons
@@ -1319,7 +1343,7 @@ class XALEditBox(EditorLib.EditBox):
         self.LCXchangeIslandButton = LCXchangeIslandButton
         self.RCAchangeIslandButton = RCAchangeIslandButton
         self.OTHERChangeIslandButton = OTHERChangeIslandButton
-        self.UCchangeIslandButton = UCchangeIslandButton
+        #self.UCchangeIslandButton = UCchangeIslandButton
 
         vbox.addStretch(1)
 
