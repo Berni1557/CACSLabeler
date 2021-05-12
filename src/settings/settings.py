@@ -80,13 +80,9 @@ class Settings:
         settingsDefault = {'folderpath_images': 'H:/cloud/cloud_data/Projects/DL/Code/src/datasets/DISCHARGE/data_cacs/Images',
                            'folderpath_references': 'H:/cloud/cloud_data/Projects/DL/Code/src/datasets/DISCHARGE/data_cacs/References',
                            'folderpath_export': 'H:/cloud/cloud_data/Projects/CACSLabeler/code/data/export',
-<<<<<<< Updated upstream
                            'folderManagerAction': 'H:/cloud/cloud_data/Projects/CACSLabeler/code/data/XALabeler',
                            'folderManagerTmp': 'H:/cloud/cloud_data/Projects/CACSLabeler/code/data/tmp',
-=======
-                           'folderManagerAction': '/mnt/SSD2/cloud_data/Projects/CACSLabeler/code/data/tmp',
                            'filepath_slice_step': '/mnt/SSD2/cloud_data/Projects/CACSLabeler/code/data/slice_step.csv',
->>>>>>> Stashed changes
                            'ServerRefinement': False,
                            'TIME_MAX': 60*60,
                            'filter_input': "Files(*.mhd, *.txt)",

@@ -53,23 +53,14 @@ class PrototypeWindow(QWidget):
     def updatePrototype(self, actionlist, action, settings):
         folderManagerAction = settings['folderManagerAction']
         if action['action']=='LABEL_REGION':
-<<<<<<< Updated upstream
-            #fip_tmp = "/mnt/SSD2/cloud_data/Projects/CACSLabeler/code/data/tmp/image.png"
             fip_tmp = os.path.join(settings['folderManagerTmp'], "image.png").encode('utf8')
-=======
-            #fip_tmp = "H:/cloud/cloud_data/Projects/CACSLabeler/code/data/tmp/image.png"
-            fip_tmp = self.widget.settings['fip_tmp'].encode("ascii")
->>>>>>> Stashed changes
             image_proto = np.zeros((512,512*3), dtype=np.uint16)
             image_proto_overlay = np.zeros((512,512*3), dtype=np.uint16)
             k=0
             for act in actionlist:
                 if act['MSG']==action['MSG'] and not(act['fp_image']==action['fp_image'] and act['SLICE']==action['SLICE']):
-<<<<<<< Updated upstream
-=======
                     print('found')
                     act = self.widget.updateActionPath(act)
->>>>>>> Stashed changes
                     filepath_image = act['fp_image'].encode("utf-8")
                     imageSitk = sitk.ReadImage(filepath_image)
                     image = sitk.GetArrayFromImage(imageSitk)

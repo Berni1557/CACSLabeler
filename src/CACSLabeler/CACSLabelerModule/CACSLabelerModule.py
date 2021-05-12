@@ -37,6 +37,8 @@ from CACSTree.CACSTree import CACSTree, Lesion
 from settings.settings import Settings
 import shutil
 import csv
+from csv import reader
+import io
 
 ############## CACSLabelerModule ##############
 
@@ -61,7 +63,6 @@ class Image:
     def __init__(self, fip_image=None, fip_ref=None, settings=None):
         if fip_image is None and fip_ref is not None:
             _,ref_name,_ = splitFilePath(fip_ref)
-            print('ref_nameD123', ref_name)
             if len(ref_name.split('_'))==1:
                 if settings['MODE']=='CACS_ORCASCORE':
                     PatientID = ''
@@ -403,15 +404,20 @@ class CACSLabelerModuleWidget:
         
     def extract_slice_step(self, inputVolumeName):
         filepath_slice_step = self.settings['filepath_slice_step']
-        with open(filepath_slice_step, newline='\n') as csvfile:
-            slice_step_reader = csv.reader(csvfile, delimiter=';', quotechar='|')
-            for row in slice_step_reader:
-                if row[0]==inputVolumeName:
-                    slice_step = row[1]
-                    print('slice_step', slice_step)
+        with io.open(filepath_slice_step, 'r', encoding='utf-8-sig') as read_obj:
+            csv_reader = reader(read_obj)
+            for row in csv_reader:
+                patient = row[0]
+                series = row[2]
+                name = patient + '_' + series
+                if name==inputVolumeName:
+                    try:
+                        slice_step = int(row[5])
+                    except ValueError:
+                        print('Type of slice_step is not integer!')
                     return slice_step
-        return None
-        
+        return 1
+            
     def onScoreButtonClicked(self):
         # Get image and imageLabel
         inputVolumeName = self.inputImageNode.GetName()
@@ -419,6 +425,8 @@ class CACSLabelerModuleWidget:
         inputVolume = su.PullVolumeFromSlicer(inputVolumeName)
         inputVolumeLabel = su.PullVolumeFromSlicer(inputVolumeNameLabel)
         slice_step = self.extract_slice_step(inputVolumeName)
+        #if slice_step is None:
+        #    raise ValueError('Imagename is not in slice_step csv file!')
         
         start = time.time()
 
@@ -447,10 +455,12 @@ class CACSLabelerModuleWidget:
         self.calciumScoresResult=[]
         for score in self.calciumScores:
             for scorename in self.settings['CalciumScores']:
-                if score.name in scorename:
-                    s = score.compute(inputVolume, inputVolumeLabel, arteries_dict=arteries_dict, arteries_sum=arteries_sum, slice_step=slice_step)
-                    score.show()
-                    self.calciumScoresResult.append(s)
+                appendCSV=False
+                CalciumScoreBase.export_csv(self.settings, self.imagelist, appendCSV, scorename=scorename)
+#                if score.name in scorename:
+#                    s = score.compute(inputVolume, inputVolumeLabel, arteries_dict=arteries_dict, arteries_sum=arteries_sum, slice_step=slice_step)
+#                    score.show()
+#                    self.calciumScoresResult.append(s)
         print('Computation time', time.time() - start)
     
     def export_csv(self, appendCSV=False):
@@ -495,7 +505,8 @@ class CACSLabelerModuleWidget:
             inputVolume = su.PullVolumeFromSlicer(image.image_name)
             inputVolumeLabel = su.PullVolumeFromSlicer(image.ref_name)
             arteries_dict, arteries_sum = self.get_arteries_dict()
-            s = score.compute(inputVolume, inputVolumeLabel, arteries_dict, arteries_sum)
+            slice_step = self.extract_slice_step(image.image_name)
+            s = score.compute(inputVolume, inputVolumeLabel, arteries_dict, arteries_sum, slice_step)
             image.scores.append(s)
         return image
         
@@ -968,6 +979,9 @@ class CardiacEditBox(EditorLib.EditBox):
         self.icons = {}
         self.callbacks = {}
 
+        print('MODE123', self.settings['MODE'])
+        
+
         if self.settings['MODE']=='CACSTREE_CUMULATIVE' or self.settings['MODE']=='CACSTREE' or self.settings['MODE']=='CACS_4':
             self.mainFrame = qt.QFrame(self.parent)
             self.mainFrame.objectName = 'TreeFrame'
@@ -976,6 +990,7 @@ class CardiacEditBox(EditorLib.EditBox):
             self.parent.layout().addWidget(self.mainFrame)
             
             def addCombo(CACSTreeDict, NumCombos):
+                print('CACSTreeDict123', CACSTreeDict)
                 for i in range(NumCombos):
                     combo = qt.QComboBox()
                     if i==0:
@@ -1003,6 +1018,8 @@ class CardiacEditBox(EditorLib.EditBox):
 
             # Create combo boxes
             CACSTreeDict = self.settings['CACSTreeDict'][self.settings['MODE']][0]
+            print('CACSTreeDict456', CACSTreeDict)
+            print('MODE456', self.settings['MODE'])
             self.comboList = []
             addCombo(CACSTreeDict, NumCombos=5)
         
