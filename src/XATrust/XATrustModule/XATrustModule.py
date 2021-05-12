@@ -701,6 +701,7 @@ class XATrustModuleWidget:
         if not imageFound:
             print('Loading: ' + filepath)
             properties={'name': imagename}
+            print('filepath123', filepath)
             node = slicer.util.loadVolume(filepath, returnNode=True, properties=properties)[1]
             node.SetName(imagename)        
 

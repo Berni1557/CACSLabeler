@@ -36,6 +36,7 @@ sys.path.append(dir_src)
 from CACSTree.CACSTree import CACSTree, Lesion
 from settings.settings import Settings
 import shutil
+import csv
 
 ############## CACSLabelerModule ##############
 
@@ -353,11 +354,13 @@ class CACSLabelerModuleWidget:
         if self.settings['MODE']=='CACSTREE_CUMULATIVE':
             self.settings['CACSTree'].createColorTable(filepath_colorTable)
         elif self.settings['MODE']=='CACS_4':
-            self.settings['CACSTree'].createColorTable(filepath_colorTable)
+            #self.settings['CACSTree'].createColorTable(filepath_colorTable)
+            self.settings['CACSTree'].createColorTable_CACS(filepath_colorTable)
         else:
             self.settings['CACSTree'].createColorTable_CACS(filepath_colorTable)
         
         # Load color table
+        print('filepath_colorTable123', filepath_colorTable)
         slicer.util.loadColorTable(filepath_colorTable)
         
     def writeSettings(self, filepath_settings):
@@ -398,12 +401,24 @@ class CACSLabelerModuleWidget:
         #print('arteries_sum', arteries_sum)
         return arteries_dict, arteries_sum
         
+    def extract_slice_step(self, inputVolumeName):
+        filepath_slice_step = self.settings['filepath_slice_step']
+        with open(filepath_slice_step, newline='\n') as csvfile:
+            slice_step_reader = csv.reader(csvfile, delimiter=';', quotechar='|')
+            for row in slice_step_reader:
+                if row[0]==inputVolumeName:
+                    slice_step = row[1]
+                    print('slice_step', slice_step)
+                    return slice_step
+        return None
+        
     def onScoreButtonClicked(self):
         # Get image and imageLabel
         inputVolumeName = self.inputImageNode.GetName()
         inputVolumeNameLabel = inputVolumeName + '-label-lesion'
         inputVolume = su.PullVolumeFromSlicer(inputVolumeName)
         inputVolumeLabel = su.PullVolumeFromSlicer(inputVolumeNameLabel)
+        slice_step = self.extract_slice_step(inputVolumeName)
         
         start = time.time()
 
@@ -433,7 +448,7 @@ class CACSLabelerModuleWidget:
         for score in self.calciumScores:
             for scorename in self.settings['CalciumScores']:
                 if score.name in scorename:
-                    s = score.compute(inputVolume, inputVolumeLabel, arteries_dict=arteries_dict, arteries_sum=arteries_sum)
+                    s = score.compute(inputVolume, inputVolumeLabel, arteries_dict=arteries_dict, arteries_sum=arteries_sum, slice_step=slice_step)
                     score.show()
                     self.calciumScoresResult.append(s)
         print('Computation time', time.time() - start)
@@ -620,6 +635,7 @@ class CACSLabelerModuleWidget:
         # Read images
         imagenames = []
         for filepath in filenames:
+            print('filepath123', filepath)
             _, name,_ = splitFilePath(filepath)
             properties={'Name': name}
             node = slicer.util.loadVolume(filepath, returnNode=True, properties=properties)[1]

@@ -70,7 +70,7 @@ class Agatston(CalciumScoreBase):
             grading='zero'
         return grading
         
-    def compute(self, inputVolume, inputVolumeLabel, arteries_dict={}, arteries_sum={}):
+    def compute(self, inputVolume, inputVolumeLabel, arteries_dict={}, arteries_sum={}, slice_step=1):
         """ Compute agatston score from image and image label
 
         :param image: Image
@@ -109,7 +109,7 @@ class Agatston(CalciumScoreBase):
                     labeledc = labeled==c
                     image_mask = image * labeledc
                     # Iterate over slices
-                    for s in range(0,labeled.shape[0]):
+                    for s in range(0,labeled.shape[0], slice_step):
                         image_mask_slice = image_mask[s,:,:]
                         labeledc_slice = labeledc[s,:,:]
                         # Extract maximum HU of a lesion
