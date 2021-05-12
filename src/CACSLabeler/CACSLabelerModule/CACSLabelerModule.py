@@ -361,7 +361,6 @@ class CACSLabelerModuleWidget:
             self.settings['CACSTree'].createColorTable_CACS(filepath_colorTable)
         
         # Load color table
-        print('filepath_colorTable123', filepath_colorTable)
         slicer.util.loadColorTable(filepath_colorTable)
         
     def writeSettings(self, filepath_settings):
@@ -415,6 +414,8 @@ class CACSLabelerModuleWidget:
                         slice_step = int(row[5])
                     except ValueError:
                         print('Type of slice_step is not integer!')
+                    print('row', row)
+                    print('slice_stepXXX', slice_step)
                     return slice_step
         return 1
             
@@ -425,6 +426,7 @@ class CACSLabelerModuleWidget:
         inputVolume = su.PullVolumeFromSlicer(inputVolumeName)
         inputVolumeLabel = su.PullVolumeFromSlicer(inputVolumeNameLabel)
         slice_step = self.extract_slice_step(inputVolumeName)
+       
         #if slice_step is None:
         #    raise ValueError('Imagename is not in slice_step csv file!')
         
