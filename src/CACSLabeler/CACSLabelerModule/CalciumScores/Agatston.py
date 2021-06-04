@@ -70,7 +70,7 @@ class Agatston(CalciumScoreBase):
             grading='zero'
         return grading
         
-    def compute(self, inputVolume, inputVolumeLabel, arteries_dict={}, arteries_sum={}, slice_step=1):
+    def compute(self, inputVolume, inputVolumeLabel, arteries_dict={}, arteries_sum={}, slice_step=1, slice_thickness=3.0):
         """ Compute agatston score from image and image label
 
         :param image: Image
@@ -119,6 +119,10 @@ class Agatston(CalciumScoreBase):
                         densfactor = self.densityFactor(attenuation)
                         # Calculate agatston score for a lesion
                         agatstonLesionSlice = area * densfactor
+                        # Scale agatston score based on slice_thickness
+                        ratio = 3.0/slice_thickness
+                        agatstonLesionSlice = agatstonLesionSlice * ratio
+                        # Sum agatston score over slices
                         agatstonArtery = agatstonArtery + agatstonLesionSlice
                 
                 agatston[key] = agatstonArtery

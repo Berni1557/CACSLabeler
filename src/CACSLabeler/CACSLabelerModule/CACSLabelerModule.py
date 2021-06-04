@@ -411,12 +411,15 @@ class CACSLabelerModuleWidget:
                 name = patient + '_' + series
                 if name==inputVolumeName:
                     try:
+                        print('row123', row)
                         slice_step = int(row[5])
+                        slice_thickness = float(row[4])
                     except ValueError:
                         print('Type of slice_step is not integer!')
                     print('row', row)
                     print('slice_stepXXX', slice_step)
-                    return slice_step
+                    print('slice_thicknessXXX', slice_thickness)
+                    return slice_step, slice_thickness
         return 1
             
     def onScoreButtonClicked(self):
@@ -507,8 +510,8 @@ class CACSLabelerModuleWidget:
             inputVolume = su.PullVolumeFromSlicer(image.image_name)
             inputVolumeLabel = su.PullVolumeFromSlicer(image.ref_name)
             arteries_dict, arteries_sum = self.get_arteries_dict()
-            slice_step = self.extract_slice_step(image.image_name)
-            s = score.compute(inputVolume, inputVolumeLabel, arteries_dict, arteries_sum, slice_step)
+            slice_step, slice_thickness = self.extract_slice_step(image.image_name)
+            s = score.compute(inputVolume, inputVolumeLabel, arteries_dict, arteries_sum, slice_step, slice_thickness)
             image.scores.append(s)
         return image
         
