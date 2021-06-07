@@ -542,7 +542,7 @@ class CACSLabelerModuleWidget:
         fip_images = glob(self.settings['folderpath_images'] + '/*CTI.mhd') + glob(self.settings['folderpath_images'] + '/*.mhd')
         imagelist = []
         
-        fip_references = fip_references[0:10]
+        #fip_references = fip_references[0:10]
         
         for fip_ref in fip_references:
             image = Image(fip_ref=fip_ref, settings=self.settings)
