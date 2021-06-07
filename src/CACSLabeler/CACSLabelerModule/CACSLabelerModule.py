@@ -410,17 +410,20 @@ class CACSLabelerModuleWidget:
                 series = row[2]
                 name = patient + '_' + series
                 if name==inputVolumeName:
+                    print('inputVolumeName123', inputVolumeName)
                     try:
                         print('row123', row)
                         slice_step = int(row[5])
                         slice_thickness = float(row[4])
                     except ValueError:
                         print('Type of slice_step is not integer!')
-                    print('row', row)
-                    print('slice_stepXXX', slice_step)
-                    print('slice_thicknessXXX', slice_thickness)
+                        slice_step=1
+                        slice_thickness=3
+                    #print('row', row)
+                    #print('slice_stepXXX', slice_step)
+                    #print('slice_thicknessXXX', slice_thickness)
                     return slice_step, slice_thickness
-        return 1
+        return None, None
             
     def onScoreButtonClicked(self):
         # Get image and imageLabel
@@ -428,7 +431,7 @@ class CACSLabelerModuleWidget:
         inputVolumeNameLabel = inputVolumeName + '-label-lesion'
         inputVolume = su.PullVolumeFromSlicer(inputVolumeName)
         inputVolumeLabel = su.PullVolumeFromSlicer(inputVolumeNameLabel)
-        slice_step = self.extract_slice_step(inputVolumeName)
+        slice_step, slice_thickness = self.extract_slice_step(inputVolumeName)
        
         #if slice_step is None:
         #    raise ValueError('Imagename is not in slice_step csv file!')
@@ -538,6 +541,9 @@ class CACSLabelerModuleWidget:
         fip_references = glob(folderpath_references + '/*lesion.nrrd') + glob(folderpath_references + '/*lesion-pred.nrrd') + glob(folderpath_references + '/*.mhd')
         fip_images = glob(self.settings['folderpath_images'] + '/*CTI.mhd') + glob(self.settings['folderpath_images'] + '/*.mhd')
         imagelist = []
+        
+        fip_references = fip_references[0:10]
+        
         for fip_ref in fip_references:
             image = Image(fip_ref=fip_ref, settings=self.settings)
             image.fip_ref = fip_ref
@@ -545,10 +551,40 @@ class CACSLabelerModuleWidget:
             imagelist.append(image)
         return imagelist
 
+    def filterSliceThickness(self, imagelistExp):
+
+        filepath_slice_step = self.settings['filepath_slice_step']
+        imagelistExp_filt=[]
+        for image in imagelistExp:
+            fip_ref = image.fip_ref
+            _,fname,_ = splitFilePath(fip_ref)
+            series_image = fname.split('_')[1].split('-')[0]
+            #print('series_image123', series_image)
+            slice_thickness = None
+            with io.open(filepath_slice_step, 'r', encoding='utf-8-sig') as read_obj:
+                csv_reader = reader(read_obj)
+                for row in csv_reader:
+                    series = row[2]
+                    if series_image==series:
+                        try:
+                            slice_thickness = float(row[4])
+                            if slice_thickness>3.0 or slice_thickness<2.4:
+                                slice_thickness=None
+                        except ValueError:
+                            slice_thickness=None
+                if slice_thickness is not None:
+                    imagelistExp_filt.append(image)
+                #print('slice_thickness123', slice_thickness)
+        #print('imagelistExp_filt123', len(imagelistExp_filt))
+        return imagelistExp_filt
         
+
     def onExportScoreButtonRefClicked(self):
 
         imagelistExp = self.loadImages()
+        
+        # filter images by slice thickness
+        imagelistExp = self.filterSliceThickness(imagelistExp)
 
         # Delete folderpath_export if exist
         folderpath_export = self.settings['folderpath_export']
@@ -556,8 +592,9 @@ class CACSLabelerModuleWidget:
             shutil.rmtree(folderpath_export)
             os.mkdir(folderpath_export)
 
-        for image in imagelistExp:
+        for i,image in enumerate(imagelistExp):
             self.imagelist = [image]
+            print('fip_image123', image.fip_image)
             # Read image
             properties={'Name': image.image_name}
             node = slicer.util.loadVolume(image.fip_image, returnNode=True, properties=properties)[1]
