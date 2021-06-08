@@ -120,7 +120,7 @@ class Agatston(CalciumScoreBase):
                         # Calculate agatston score for a lesion
                         agatstonLesionSlice = area * densfactor
                         # Scale agatston score based on slice_thickness
-                        ratio = 3.0/slice_thickness
+                        ratio = slice_thickness/3.0
                         agatstonLesionSlice = agatstonLesionSlice * ratio
                         # Sum agatston score over slices
                         agatstonArtery = agatstonArtery + agatstonLesionSlice
