@@ -43,7 +43,8 @@ import io
 ############## CACSLabelerModule ##############
 
 # Set parameter
-lowerThresholdValue = 130
+#lowerThresholdValue = 130
+lowerThresholdValue = 131 # Set to 131 since sitk threshold also includes boundary 131
 upperThresholdValue = 10000
 
 def splitFilePath(filepath):
