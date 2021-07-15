@@ -89,7 +89,6 @@ class CACSTree():
         f.write('# Color\n')
         f.close()
         for idx, lesion in enumerate(self.lesionList):
-            print('lesion123', lesion)
             f = open(filepath_colorTable, 'a')
             color_str = str(lesion.color[0]) + ' ' + str(lesion.color[1]) + ' ' + str(lesion.color[2]) + ' ' + str(lesion.color[3])
             #f.write(str(idx) + ' ' + lesion.name + ' ' + color_str + '\n')

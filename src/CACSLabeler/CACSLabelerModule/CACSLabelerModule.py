@@ -689,7 +689,7 @@ class CACSLabelerModuleWidget:
         # Read images
         imagenames = []
         for filepath in filenames:
-            print('filepath123', filepath)
+            #print('filepath123', filepath)
             _, name,_ = splitFilePath(filepath)
             properties={'Name': name}
             node = slicer.util.loadVolume(filepath, returnNode=True, properties=properties)[1]
@@ -1022,7 +1022,7 @@ class CardiacEditBox(EditorLib.EditBox):
         self.icons = {}
         self.callbacks = {}
 
-        print('MODE123', self.settings['MODE'])
+        #print('MODE123', self.settings['MODE'])
         
 
         if self.settings['MODE']=='CACSTREE_CUMULATIVE' or self.settings['MODE']=='CACSTREE' or self.settings['MODE']=='CACS_4':
@@ -1033,7 +1033,7 @@ class CardiacEditBox(EditorLib.EditBox):
             self.parent.layout().addWidget(self.mainFrame)
             
             def addCombo(CACSTreeDict, NumCombos):
-                print('CACSTreeDict123', CACSTreeDict)
+                #print('CACSTreeDict123', CACSTreeDict)
                 for i in range(NumCombos):
                     combo = qt.QComboBox()
                     if i==0:
@@ -1061,8 +1061,8 @@ class CardiacEditBox(EditorLib.EditBox):
 
             # Create combo boxes
             CACSTreeDict = self.settings['CACSTreeDict'][self.settings['MODE']][0]
-            print('CACSTreeDict456', CACSTreeDict)
-            print('MODE456', self.settings['MODE'])
+            #print('CACSTreeDict456', CACSTreeDict)
+            #print('MODE456', self.settings['MODE'])
             self.comboList = []
             addCombo(CACSTreeDict, NumCombos=5)
         
