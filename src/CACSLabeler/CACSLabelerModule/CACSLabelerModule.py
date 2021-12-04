@@ -68,7 +68,6 @@ class Image:
                 if settings['MODE']=='CACS_ORCASCORE':
                     PatientID = ''
                     SeriesInstanceUID = ref_name.split('-')[0][0:-1]
-                    print('SeriesInstanceUID123', SeriesInstanceUID)
                     image_name = SeriesInstanceUID
                 else:
                     PatientID = ''
@@ -117,7 +116,6 @@ class Image:
                 _,name,_ = splitFilePath(image)
                 if self.image_name == name[0:-3]:
                     self.fip_image = image
-                    print('image567', image)
         else:
             for image in images:
                 _,name,_ = splitFilePath(image)
@@ -411,9 +409,7 @@ class CACSLabelerModuleWidget:
                 series = row[2]
                 name = patient + '_' + series
                 if name==inputVolumeName:
-                    print('inputVolumeName123', inputVolumeName)
                     try:
-                        print('row123', row)
                         slice_step = int(row[5])
                         slice_thickness = float(row[4])
                     except ValueError:
@@ -560,7 +556,6 @@ class CACSLabelerModuleWidget:
             fip_ref = image.fip_ref
             _,fname,_ = splitFilePath(fip_ref)
             series_image = fname.split('_')[1].split('-')[0]
-            #print('series_image123', series_image)
             slice_thickness = None
             with io.open(filepath_slice_step, 'r', encoding='utf-8-sig') as read_obj:
                 csv_reader = reader(read_obj)
@@ -575,8 +570,6 @@ class CACSLabelerModuleWidget:
                             slice_thickness=None
                 if slice_thickness is not None:
                     imagelistExp_filt.append(image)
-                #print('slice_thickness123', slice_thickness)
-        #print('imagelistExp_filt123', len(imagelistExp_filt))
         return imagelistExp_filt
         
 
@@ -595,7 +588,6 @@ class CACSLabelerModuleWidget:
 
         for i,image in enumerate(imagelistExp):
             self.imagelist = [image]
-            print('fip_image123', image.fip_image)
             # Read image
             properties={'Name': image.image_name}
             node = slicer.util.loadVolume(image.fip_image, returnNode=True, properties=properties)[1]
@@ -689,7 +681,6 @@ class CACSLabelerModuleWidget:
         # Read images
         imagenames = []
         for filepath in filenames:
-            #print('filepath123', filepath)
             _, name,_ = splitFilePath(filepath)
             properties={'Name': name}
             node = slicer.util.loadVolume(filepath, returnNode=True, properties=properties)[1]
@@ -1022,8 +1013,6 @@ class CardiacEditBox(EditorLib.EditBox):
         self.icons = {}
         self.callbacks = {}
 
-        #print('MODE123', self.settings['MODE'])
-        
 
         if self.settings['MODE']=='CACSTREE_CUMULATIVE' or self.settings['MODE']=='CACSTREE' or self.settings['MODE']=='CACS_4':
             self.mainFrame = qt.QFrame(self.parent)
@@ -1033,7 +1022,6 @@ class CardiacEditBox(EditorLib.EditBox):
             self.parent.layout().addWidget(self.mainFrame)
             
             def addCombo(CACSTreeDict, NumCombos):
-                #print('CACSTreeDict123', CACSTreeDict)
                 for i in range(NumCombos):
                     combo = qt.QComboBox()
                     if i==0:
@@ -1061,8 +1049,6 @@ class CardiacEditBox(EditorLib.EditBox):
 
             # Create combo boxes
             CACSTreeDict = self.settings['CACSTreeDict'][self.settings['MODE']][0]
-            #print('CACSTreeDict456', CACSTreeDict)
-            #print('MODE456', self.settings['MODE'])
             self.comboList = []
             addCombo(CACSTreeDict, NumCombos=5)
         
@@ -1149,21 +1135,10 @@ class CardiacEditBox(EditorLib.EditBox):
 
         self.updateUndoRedoButtons()
         self._onParameterNodeModified(EditUtil.getParameterNode())
-        #self.addObserver(EditUtil.getParameterNode(), vtk.vtkCommand.ModifiedEvent, self.printX)
         self.addObserver(EditUtil.getParameterNode(), vtk.vtkCommand.ModifiedEvent, self.settings['CardiacEditorWidget'].updateGUIFromMRML)
         self._onParameterNodeModified(EditUtil.getParameterNode(), self.settings['CardiacEditorWidget'].updateGUIFromMRML)
-        #interactionNode = slicer.app.applicationLogic().GetInteractionNode()
-       # self.addObserver(interactionNode, interactionNode.InteractionModeChangedEvent, self.printX)
 
-#    def printX(self, caller, event=-1):
-#        parameterNode = self.settings['CardiacEditorWidget'].editUtil.getParameterNode()
-#        parameterNode.SetParameter("LabelEffect,paintOver","1")
-#        parameterNode.SetParameter("LabelEffect,paintThreshold","1")
-#        parameterNode.SetParameter("LabelEffect,paintThresholdMin","{0}".format(lowerThresholdValue))
-#        parameterNode.SetParameter("LabelEffect,paintThresholdMax","{0}".format(upperThresholdValue))
-#        
     def selectionChangeFunc(self, comboIdx):
-        #print('currentTools123', self.currentTools)
         CACSTree = self.settings['CACSTree']
         comboIdx = comboIdx
         def selectionChange(idx):

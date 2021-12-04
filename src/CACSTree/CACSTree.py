@@ -239,8 +239,9 @@ class CACSTree():
                  'LM', 'LM_BIF_LAD_LCX', 'LM_BIF_LAD', 'LM_BIF_LCX', 'LM_BRANCH',
                  'LAD', 'LAD_PROXIMAL', 'LAD_MID', 'LAD_DISTAL', 'LAD_SIDE_BRANCH',
                  'LCX', 'LCX_PROXIMAL', 'LCX_MID', 'LCX_DISTAL', 'LCX_SIDE_BRANCH',
+                 'RIM',
                  'NCC',
-                 'AORTA', 'AORTA_ASC', 'AORTA_DSC', 'AORTA_ARC', 'AORTA',
+                 'AORTA', 'AORTA_ASC', 'AORTA_DSC', 'AORTA_ARC',
                  'VALVES', 'VALVE_AORTIC', 'VALVE_PULMONIC', 'VALVE_TRICUSPID', 'VALVE_MITRAL',
                  'PAPILLAR_MUSCLE', 'NFS_CACS'
                  ]
