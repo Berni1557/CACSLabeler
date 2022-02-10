@@ -98,7 +98,7 @@ class CACSTree():
             f.close()
     
     def createColorTable_CACS(self, filepath_colorTable):
-        CACS_dict = OrderedDict([('CACSTreeDict', 0), ('OTHER', 1), ('LAD', 2), ('LCX', 3), ('RCA', 4)])
+        CACS_dict = OrderedDict([('CACSTreeDict', 0), ('OTHER', 1), ('LAD', 2), ('LCX', 3), ('RCA', 4), ('LM', 5)])
         f = open(filepath_colorTable, 'w')
         f.write('# Color\n')
         f.close()
