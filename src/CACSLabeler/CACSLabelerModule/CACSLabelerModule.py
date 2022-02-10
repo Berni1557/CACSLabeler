@@ -512,8 +512,6 @@ class CACSLabelerModuleWidget:
             inputVolumeLabel = su.PullVolumeFromSlicer(image.ref_name)
             arteries_dict, arteries_sum = self.get_arteries_dict()
             slice_step, slice_thickness = self.extract_slice_step(image.image_name)
-            print('image_name123', image.image_name)
-            print('slice_step123', slice_step)
             s = score.compute(inputVolume, inputVolumeLabel, arteries_dict, arteries_sum, slice_step, slice_thickness)
             image.scores.append(s)
         return image
