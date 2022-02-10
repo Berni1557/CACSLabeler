@@ -44,7 +44,7 @@ import io
 
 # Set parameter
 #lowerThresholdValue = 130
-lowerThresholdValue = 131 # Set to 131 since sitk threshold also includes boundary 131
+lowerThresholdValue = 130 # Set to 131 since sitk threshold also includes boundary 131
 upperThresholdValue = 10000
 
 def splitFilePath(filepath):
@@ -354,8 +354,9 @@ class CACSLabelerModuleWidget:
         if self.settings['MODE']=='CACSTREE_CUMULATIVE':
             self.settings['CACSTree'].createColorTable(filepath_colorTable)
         elif self.settings['MODE']=='CACS_4':
-            #self.settings['CACSTree'].createColorTable(filepath_colorTable)
             self.settings['CACSTree'].createColorTable_CACS(filepath_colorTable)
+        elif self.settings['MODE']=='LESION':
+            self.settings['CACSTree'].createColorTable(filepath_colorTable)
         else:
             self.settings['CACSTree'].createColorTable_CACS(filepath_colorTable)
         
@@ -511,6 +512,8 @@ class CACSLabelerModuleWidget:
             inputVolumeLabel = su.PullVolumeFromSlicer(image.ref_name)
             arteries_dict, arteries_sum = self.get_arteries_dict()
             slice_step, slice_thickness = self.extract_slice_step(image.image_name)
+            print('image_name123', image.image_name)
+            print('slice_step123', slice_step)
             s = score.compute(inputVolume, inputVolumeLabel, arteries_dict, arteries_sum, slice_step, slice_thickness)
             image.scores.append(s)
         return image
@@ -725,6 +728,7 @@ class CACSLabelerModuleWidget:
         # Threshold image
         self.CACSLabelerModuleLogic = CACSLabelerModuleLogic(self.KEV80.checked, self.KEV120.checked, inputVolumeName)
         self.CACSLabelerModuleLogic.runThreshold()
+        self.CACSLabelerModuleLogic.setLowerPaintThreshold()
 
         # View thresholded image as label map and image as background image in red widget
         #node = slicer.util.getFirstNodeByName(self.CACSLabelerModuleLogic.calciumName[0:-13])
@@ -831,6 +835,9 @@ class CACSLabelerModuleLogic:
             inputVolume = su.PullVolumeFromSlicer(self.inputVolumeName)
             thresholdImage = sitk.BinaryThreshold(inputVolume, self.lowerThresholdValue, self.upperThresholdValue)
             castedThresholdImage = sitk.Cast(thresholdImage, sitk.sitkInt16)
+            
+            #castedThresholdImage = castedThresholdImage - 1
+            
             su.PushLabel(castedThresholdImage, calciumName)
         self.assignLabelLUT(calciumName)
         self.setLowerPaintThreshold()
@@ -954,6 +961,7 @@ class CACSLabelerModuleLogic:
 class CardiacEditorWidget(Editor.EditorWidget):
     def __init__(self, parent=None, showVolumesFrame=None, settings=None):
         self.settings = settings
+        self.foregroundDisabled = False
         super(CardiacEditorWidget, self).__init__(parent=parent, showVolumesFrame=showVolumesFrame)
         
     def createEditBox(self):
@@ -969,7 +977,19 @@ class CardiacEditorWidget(Editor.EditorWidget):
         def updateIdx():
             self.toolsBox.comboList[0].setCurrentIndex(idx)
         return updateIdx
-        
+
+    def updateOpacity(self):
+        if not self.foregroundDisabled:
+            slicer.util.setSliceViewerLayers(label = 'keep-current', foreground = 'keep-current', foregroundOpacity = 0.0, labelOpacity = 1.0)
+            self.foregroundDisabled = True
+        else:
+#            if self.widget.refAction['action']=='LABEL_LESION' or self.widget.refAction['action']=='LABEL_NEW':
+#                foregroundOpacity=1.0
+#            else:
+#                foregroundOpacity=0.1
+            slicer.util.setSliceViewerLayers(label = 'keep-current', foreground = 'keep-current', foregroundOpacity = 0.0, labelOpacity = 0.0)
+            self.foregroundDisabled = False
+            
     def installShortcutKeys(self):
         print('installShortcutKeys')
         """Turn on editor-wide shortcuts.  These are active independent
@@ -983,6 +1003,7 @@ class CardiacEditorWidget(Editor.EditorWidget):
             ('h', self.editUtil.toggleCrosshair),
             ('o', self.editUtil.toggleLabelOutline),
             ('t', self.editUtil.toggleForegroundBackground),
+            ('m', self.updateOpacity),
             (Key_Escape, self.toolsBox.defaultEffect),
             ('p', lambda : self.toolsBox.selectEffect('PaintEffect')),
             ('1', self.updateComboShortcut(0)),
@@ -990,7 +1011,10 @@ class CardiacEditorWidget(Editor.EditorWidget):
             ('3', self.updateComboShortcut(2)),
             ('4', self.updateComboShortcut(3)),
             ('5', self.updateComboShortcut(4)),
-            )
+            ('6', self.updateComboShortcut(5)),
+            ('7', self.updateComboShortcut(6)),
+            ('8', self.updateComboShortcut(7)),
+            ('9', self.updateComboShortcut(8)))
         for key,callback in keysAndCallbacks:
             shortcut = qt.QShortcut(slicer.util.mainWindow())
             shortcut.setKey( qt.QKeySequence(key) )
@@ -1012,7 +1036,6 @@ class CardiacEditBox(EditorLib.EditBox):
         self.buttons = {}
         self.icons = {}
         self.callbacks = {}
-
 
         if self.settings['MODE']=='CACSTREE_CUMULATIVE' or self.settings['MODE']=='CACSTREE' or self.settings['MODE']=='CACS_4':
             self.mainFrame = qt.QFrame(self.parent)
@@ -1052,7 +1075,32 @@ class CardiacEditBox(EditorLib.EditBox):
             self.comboList = []
             addCombo(CACSTreeDict, NumCombos=5)
         
-        ####################################################
+        elif self.settings['MODE']=='LESION':
+            
+            self.mainFrame = qt.QFrame(self.parent)
+            self.mainFrame.objectName = 'TreeFrame'
+            vbox = qt.QVBoxLayout()
+            self.mainFrame.setLayout(vbox)
+            self.parent.layout().addWidget(self.mainFrame)
+            
+            CACSTreeDict = self.settings['CACSTreeDict'][self.settings['MODE']][0]
+            self.comboList = []
+
+            combo = qt.QComboBox()
+            items = list(CACSTreeDict.keys())
+            items = [x for x in items if not x=='COLOR' and not x=='VALUE']
+            combo.addItems(items)
+            combo.setCurrentIndex(items.index('1'))
+            combo.toolTip = "Label - Default"
+            color = CACSTreeDict['1']['COLOR']
+            color_str = 'background-color: rgb(' + str(color[0]) + ',' + str(color[1]) + ',' + str(color[2]) + ')'
+            combo.setStyleSheet(color_str)
+            combo.setVisible(True)
+            combo.setAccessibleName(str(0))
+            combo.currentIndexChanged.connect(self.selectionChangeFunc(0))
+            self.mainFrame.layout().addWidget(combo)
+            self.comboList.append(combo)
+
         else:
             self.mainFrame = qt.QFrame(self.parent)
             self.mainFrame.objectName = 'MainFrame'
