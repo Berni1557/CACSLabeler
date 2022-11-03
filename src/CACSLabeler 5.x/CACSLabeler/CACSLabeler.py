@@ -594,6 +594,7 @@ class ScoreExport():
         referenceTemporaryCopy[referenceTemporaryCopy == 24] = 35
 
         if False:
+            pass
             # Combines all lesions in arteries into one group
             # RCA
             #referenceTemporaryCopy[(referenceTemporaryCopy >= 4) & (referenceTemporaryCopy <= 7)] = 3
