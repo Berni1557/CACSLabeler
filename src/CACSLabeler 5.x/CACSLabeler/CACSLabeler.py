@@ -1,6 +1,7 @@
 import logging
 import os
 
+import numpy as np
 import vtk
 import qt
 
@@ -41,11 +42,8 @@ try:
     import pandas
     from scipy.ndimage import label
     from scipy import ndimage as ndi
-    #import cc3d
+
 except ModuleNotFoundError as e:
-    #if e.name == "cc3d":
-    #    moduleName = "connected-components-3d"
-    #else:
     moduleName = e.name
     if slicer.util.confirmOkCancelDisplay(
             "This module requires '"+moduleName+"' Python package. Click OK to install it now."):
@@ -53,6 +51,7 @@ except ModuleNotFoundError as e:
 
     from scipy.ndimage import label
     import pandas
+    #import torch
     #import cc3d
 
 def splitFilePath(filepath):
@@ -465,7 +464,8 @@ class ScoreExport():
             "imageFolder": "",
             "referenceFolder": "",
             "sliceStepFile": "",
-            "exportFile": ""
+            "exportFileCSV": "",
+            "exportFileJSON": ""
         }
 
         self.dataset = "OrCaScore"
@@ -504,6 +504,7 @@ class ScoreExport():
                 26, 27, 28,  # AORTA
                 30, 31, 32, 33,  # VALVES
                 24, 35,  # NFS_CACS
+                34, #PAPILLAR_MUSCLE
             ],
             "AORTA": [26, 27, 28],
             "AORTA_ASC": 26,
@@ -515,7 +516,7 @@ class ScoreExport():
             "VALVE_TRICUSPID": 32,
             "VALVE_MITRAL": 33,
             "PAPILLAR_MUSCLE": 34,
-            "NFS_CACS": [24, 35],
+            "NFS_CACS": 35,
         }
 
         self.arteryId = {}
@@ -526,28 +527,43 @@ class ScoreExport():
 
         self.exportJson = {}
 
+    def runExportProcess(self, filename, sliceStepDataframe, exportList):
+        referenceFilePath = self.filepaths["referenceFolder"] + filename
+
+        file = self.processFilename(filename)
+        imageFilePath = self.filepaths["imageFolder"] + file[1] + ".mhd"
+
+        sliceThickness = sliceStepDataframe.loc[(sliceStepDataframe['patient_id'] == file[2])].slice_thickness.item()
+
+        exportList.append(self.exportScore(imageFilePath, referenceFilePath, sliceThickness))
+        print("Exported " + filename)
+
+        dataframe = pandas.DataFrame.from_records(exportList)
+        dataframe.to_csv(self.filepaths["exportFileCSV"], index=False, sep=';')
+
+        if self.calculationMode == '3d':
+            with open(self.filepaths["exportFileJSON"], 'w', encoding='utf-8') as file:
+                json.dump(self.exportJson, file, ensure_ascii=False, indent=4, cls=NpEncoder)
+
     def export(self):
         sliceStepDataframe = pandas.read_csv(self.filepaths["sliceStepFile"], dtype={'patient_id': 'string'})
 
         exportList = []
 
         total = timeit.default_timer()
+        #threads = []
+
         for filename in os.listdir(self.filepaths["referenceFolder"]):
-            if filename.endswith(".nrrd"): #and filename == "TEV2P7CTI_1.15-label-lesion.nrrd":# and filename.find("1.1") != -1:
-                referenceFilePath = self.filepaths["referenceFolder"] + filename
+            if filename.endswith(".nrrd"):
+                self.runExportProcess(filename, sliceStepDataframe, exportList)
+        #        thread = threading.Thread(target=self.runExportProcess, args=[filename, sliceStepDataframe, exportList])
+        #        thread.start()
+        #        threads.append(thread)
 
-                file = self.processFilename(filename)
-                imageFilePath = self.filepaths["imageFolder"] + file[1] + ".mhd"
-
-                sliceThickness = sliceStepDataframe.loc[
-                    (sliceStepDataframe['patient_id'] == file[2])].slice_thickness.item()
-
-                exportList.append(self.exportScore(imageFilePath, referenceFilePath, sliceThickness))
-                print("Exported " + filename)
+        #for thread in threads:
+        #    thread.join()
 
         print("total", timeit.default_timer() - total)
-        dataframe = pandas.DataFrame.from_records(exportList)
-        dataframe.to_csv(self.filepaths["exportFile"], index=False, sep=';')
 
     def processFilename(self, filepath):
         if self.dataset == "DISCHARGE" or self.dataset == "CADMAN":
@@ -574,105 +590,72 @@ class ScoreExport():
         referenceTemporaryCopy = reference.copy()
         referenceTemporaryCopy[referenceTemporaryCopy < 2] = 0
 
+        # NFS
+        referenceTemporaryCopy[referenceTemporaryCopy == 24] = 35
+
         if False:
-            pass
             # Combines all lesions in arteries into one group
             # RCA
-            referenceTemporaryCopy[(referenceTemporaryCopy >= 4) & (referenceTemporaryCopy <= 7)] = 0
             #referenceTemporaryCopy[(referenceTemporaryCopy >= 4) & (referenceTemporaryCopy <= 7)] = 3
 
             # LM
-            referenceTemporaryCopy[(referenceTemporaryCopy >= 9) & (referenceTemporaryCopy <= 12)] = 0
             #referenceTemporaryCopy[(referenceTemporaryCopy >= 9) & (referenceTemporaryCopy <= 12)] = 8
 
             # LAD
-            referenceTemporaryCopy[referenceTemporaryCopy == 14] = 0
-            referenceTemporaryCopy[referenceTemporaryCopy == 15] = 0
-            referenceTemporaryCopy[referenceTemporaryCopy == 16] = 0
-            referenceTemporaryCopy[referenceTemporaryCopy == 17] = 17
-            #referenceTemporaryCopy[(referenceTemporaryCopy >= 14) & (referenceTemporaryCopy <= 17)] = 0
             #referenceTemporaryCopy[(referenceTemporaryCopy >= 14) & (referenceTemporaryCopy <= 17)] = 13
 
             # LCX
-            referenceTemporaryCopy[(referenceTemporaryCopy >= 19) & (referenceTemporaryCopy <= 22)] = 0
             #referenceTemporaryCopy[(referenceTemporaryCopy >= 19) & (referenceTemporaryCopy <= 22)] = 18
 
             # RIM
-            referenceTemporaryCopy[(referenceTemporaryCopy == 23)] = 0
             # referenceTemporaryCopy[(referenceTemporaryCopy == 23)] = 23
 
             # AORTA
-            referenceTemporaryCopy[(referenceTemporaryCopy >= 26) & (referenceTemporaryCopy <= 28)] = 0
             #referenceTemporaryCopy[(referenceTemporaryCopy >= 26) & (referenceTemporaryCopy <= 28)] = 25
 
-            # NFS
-            referenceTemporaryCopy[referenceTemporaryCopy == 35] = 0
-            #referenceTemporaryCopy[referenceTemporaryCopy == 35] = 24
+        if self.calculationMode == "3d":
+            structure = numpy.array([[[0, 0, 0],
+                                       [0, 1, 0],
+                                       [0, 0, 0]],
 
-            # PAPILLAR MUSCLE
-            referenceTemporaryCopy[referenceTemporaryCopy == 34] = 0
+                                      [[0, 1, 0],
+                                       [1, 1, 1],
+                                       [0, 1, 0]],
 
-            # valves
-            referenceTemporaryCopy[(referenceTemporaryCopy >= 30) & (referenceTemporaryCopy <= 33)] = 0
-            #referenceTemporaryCopy[(referenceTemporaryCopy >= 26) & (referenceTemporaryCopy <= 28)] = 25
-        structureConnections3d = numpy.array([[[0, 0, 0],
-                                               [0, 1, 0],
-                                               [0, 0, 0]],
+                                      [[0, 0, 0],
+                                       [0, 1, 0],
+                                       [0, 0, 0]]])
 
-                                              [[0, 1, 0],
-                                               [1, 1, 1],
-                                               [0, 1, 0]],
+        elif self.calculationMode == "2d":
+            structure = numpy.array([[[0, 0, 0],
+                                       [0, 0, 0],
+                                       [0, 0, 0]],
 
-                                              [[0, 0, 0],
-                                               [0, 1, 0],
-                                               [0, 0, 0]]])
+                                      [[0, 1, 0],
+                                       [1, 1, 1],
+                                       [0, 1, 0]],
 
-        structureConnections2d = numpy.array([[[0, 0, 0],
-                                               [0, 0, 0],
-                                               [0, 0, 0]],
-
-                                              [[0, 1, 0],
-                                               [1, 1, 1],
-                                               [0, 1, 0]],
-
-                                              [[0, 0, 0],
-                                               [0, 0, 0],
-                                               [0, 0, 0]]])
+                                      [[0, 0, 0],
+                                       [0, 0, 0],
+                                       [0, 0, 0]]])
 
         uniqueElements = numpy.unique(referenceTemporaryCopy)
 
-        if self.calculationMode == "2d":
-            connectedElements2d = numpy.zeros_like(referenceTemporaryCopy)
-            connectedElements3d = None
-        elif self.calculationMode =="3d":
-            connectedElements3d = numpy.zeros_like(referenceTemporaryCopy)
-            connectedElements2d = None
+        connectedElements = numpy.zeros_like(referenceTemporaryCopy)
+        elementIterator = 0
 
-        #labelTime = timeit.default_timer()
-        if self.calculationMode == "2d":
-            elementIterator2d = 0
-            with concurrent.futures.ThreadPoolExecutor() as executor:
-                results = [executor.submit(ndi.label, (referenceTemporaryCopy == uniqueId).astype(int), structure=structureConnections2d)
-                           for uniqueId in uniqueElements[1:]]
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            results = [executor.submit(ndi.label, (referenceTemporaryCopy == uniqueId).astype(int),
+                                       structure=structure)
+                       for uniqueId in uniqueElements[1:]]
 
-                for future in concurrent.futures.as_completed(results):
-                    label2d, elementCount2d = future.result()
-                    connectedElements2d += numpy.where(label2d > 0, label2d + count, 0).astype(connectedElements2d.dtype)
-                    count += elementCount2d
+            for future in concurrent.futures.as_completed(results):
+                label, elementCount = future.result()
+                connectedElements += numpy.where(label > 0, label + elementIterator, 0).astype(
+                    connectedElements.dtype)
+                elementIterator += elementCount
 
-        if self.calculationMode == "3d":
-            elementIterator3d = 0
-            with concurrent.futures.ThreadPoolExecutor() as executor:
-                results = [
-                    executor.submit(ndi.label, (referenceTemporaryCopy == uniqueId).astype(int), structure=structureConnections3d) for uniqueId in uniqueElements[1:]
-                ]
-
-                for future in concurrent.futures.as_completed(results):
-                    label3d, elementCount3d = future.result()
-                    connectedElements3d += numpy.where(label3d > 0, label3d + elementIterator3d, 0).astype(connectedElements3d.dtype)
-                    elementIterator3d += elementCount3d
-
-        return (connectedElements2d,len(numpy.unique(connectedElements2d)) - 1), (connectedElements3d,len(numpy.unique(connectedElements3d)) - 1)
+        return (connectedElements, len(numpy.unique(connectedElements)) - 1)
 
     def lesionPositionListEntry(self, connectedElements3d, index, image, reference):
         positions = numpy.array(list(zip(*numpy.where(connectedElements3d[0] == index))))
@@ -697,30 +680,78 @@ class ScoreExport():
         slicesDict = dict(zip(slice, voxelCount))
 
         sliceNumber = 0
-        threads = []
+        #threads = []
         for slice in slicesDict:
-            thread = threading.Thread(target=self.jsonSliceLoop, args=[patientID, seriesInstanceUID, it, lesion, slice, sliceNumber, slicesDict])
-            thread.start()
-            threads.append(thread)
+        #    thread = threading.Thread(target=self.jsonSliceLoop, args=[patientID, seriesInstanceUID, it, lesion, slice, sliceNumber, slicesDict])
+        #    thread.start()
+        #    threads.append(thread)
+            self.jsonSliceLoop(patientID, seriesInstanceUID, it, lesion, slice, sliceNumber, slicesDict)
 
             sliceNumber += 1
 
-        for thread in threads:
-            thread.join()
+        #for thread in threads:
+        #    thread.join()
 
     def jsonSliceLoop(self, patientID, seriesInstanceUID, it, lesion, slice, sliceNumber, slicesDict):
         sliceArray = lesion[numpy.in1d(lesion[:, 0], slice)]
+
+        #needed to check if lesions are seperated in 2d but connected in 3d
+        maxCoordinate = 513#max(max(sliceArray[:, 1:2])) + 1
+
+        tempComponentAnalysis = np.zeros(shape=(maxCoordinate,maxCoordinate))
+        tempAttenuation = np.zeros(shape=(maxCoordinate, maxCoordinate))
+        tempLabel = np.zeros(shape=(maxCoordinate, maxCoordinate))
+
+        for element in sliceArray:
+            row = element[1]
+            column = element[2]
+            tempComponentAnalysis[row, column] = 1
+            tempAttenuation[row, column] = element[3]
+            tempLabel[row, column] = element[4]
+
+        structureConnections2d = numpy.array([[0, 1, 0],
+                                               [1, 1, 1],
+                                               [0, 1, 0]])
+
+        connections, N = label(tempComponentAnalysis, structureConnections2d)
+
         self.exportJson[patientID][seriesInstanceUID]["lesions"][it]["slices"][sliceNumber] = {}
         self.exportJson[patientID][seriesInstanceUID]["lesions"][it]["slices"][sliceNumber]["voxelCount2D"] = slicesDict[slice]
         self.exportJson[patientID][seriesInstanceUID]["lesions"][it]["slices"][sliceNumber]["labeledAs"] = {}
-        self.exportJson[patientID][seriesInstanceUID]["lesions"][it]["slices"][sliceNumber]["maxAttenuation"] = max(max(sliceArray[:, 3:4]))
 
-        arteryId = sliceArray[:, 4:5]
-        arteries, arteryCount = numpy.unique(arteryId, return_counts=True)
-        arteryDict = dict(zip(arteries, arteryCount))
+        if N > 1:
+            labelsSummary = {}
 
-        for artery in arteryDict:
-            self.exportJson[patientID][seriesInstanceUID]["lesions"][it]["slices"][sliceNumber]["labeledAs"][self.arteryId[artery]] = arteryDict[artery]
+            for lesionId in range(1, N + 1):
+                positions = numpy.array(list(zip(*numpy.where(connections == lesionId))))
+                lesionSummary = {}
+
+                for position in positions:
+                    labelAtPosition = tempLabel[position[0],position[1]]
+                    attenuationAtPosition = tempAttenuation[position[0],position[1]]
+
+                    if self.arteryId[labelAtPosition] in lesionSummary:
+                        lesionSummary[self.arteryId[labelAtPosition]]["voxelCount"] = lesionSummary[self.arteryId[labelAtPosition]]["voxelCount"] + 1
+                        if attenuationAtPosition > lesionSummary[self.arteryId[labelAtPosition]]["maxAttenuation"]:
+                            lesionSummary[self.arteryId[labelAtPosition]]["maxAttenuation"] = attenuationAtPosition
+                    else:
+                        lesionSummary[self.arteryId[labelAtPosition]] = {}
+                        lesionSummary[self.arteryId[labelAtPosition]]["voxelCount"] = 1
+                        lesionSummary[self.arteryId[labelAtPosition]]["maxAttenuation"] = attenuationAtPosition
+
+                labelsSummary[lesionId] = lesionSummary
+
+            self.exportJson[patientID][seriesInstanceUID]["lesions"][it]["slices"][sliceNumber]["labeledAs"] = labelsSummary
+            self.exportJson[patientID][seriesInstanceUID]["lesions"][it]["slices"][sliceNumber]["maxAttenuation"] = None
+        else:
+            self.exportJson[patientID][seriesInstanceUID]["lesions"][it]["slices"][sliceNumber]["maxAttenuation"] = max(max(sliceArray[:, 3:4]))
+
+            arteryId = sliceArray[:, 4:5]
+            arteries, arteryCount = numpy.unique(arteryId, return_counts=True)
+            arteryDict = dict(zip(arteries, arteryCount))
+
+            for artery in arteryDict:
+                self.exportJson[patientID][seriesInstanceUID]["lesions"][it]["slices"][sliceNumber]["labeledAs"][self.arteryId[artery]] = arteryDict[artery]
 
     def calculateLesions(self, image, reference, connectedElements3d, patientID, seriesInstanceUID):
         lesionPositionList = []
@@ -732,73 +763,90 @@ class ScoreExport():
                 lesionPositionList.append(future.result())
 
         it = 0
-        threads = []
+        #threads = []
         for lesion in lesionPositionList:
-            thread = threading.Thread(target=self.jsonLesionLoop, args=[lesion, it, patientID, seriesInstanceUID])
-            thread.start()
-            threads.append(thread)
+        #    thread = threading.Thread(target=self.jsonLesionLoop, args=[lesion, it, patientID, seriesInstanceUID])
+        #    thread.start()
+        #    threads.append(thread)
+            self.jsonLesionLoop(lesion, it, patientID, seriesInstanceUID)
 
             it += 1
 
-        for thread in threads:
-            thread.join()
+        #for thread in threads:
+        #    thread.join()
 
-        # Serializing json
-        #json_object = json.dumps(self.exportJson, indent=4, cls=NpEncoder)
-        #print(json_object)
+    def agatstonScore(self, voxelLength, voxelCount, attenuation, ratio):
+        score = 0.0
 
-    def calculateScore(self, image, reference, pixelArea, sliceThickness, patientID, seriesInstanceUID):
-        #find = timeit.default_timer()
-        connectedElements2d,connectedElements3d = self.findLesions(reference)
-        #print("find", timeit.default_timer() - find)
+        if (voxelLength != None) and (voxelCount != None) and (attenuation != None) and (ratio != None):
+            voxelArea = voxelLength * voxelLength
+            lesionArea = voxelArea * voxelCount
+
+            if attenuation >= 130: #check if 1mm
+                score = lesionArea * self.densityFactor(attenuation) * ratio
+
+        return score
+
+    def calculateScore(self, image, reference, patientID, seriesInstanceUID):
+        connectedElements = self.findLesions(reference)
+
         if self.calculationMode == "3d":
-            #calc = timeit.default_timer()
-            self.calculateLesions(image, reference, connectedElements3d, patientID, seriesInstanceUID)
-            #print("calc", timeit.default_timer() - find)
+            self.calculateLesions(image, reference, connectedElements, patientID, seriesInstanceUID)
 
-            #json = timeit.default_timer()
             total = {}
+
+            total["PatientID"] = patientID
+            total["SeriesInstanceUID"] = seriesInstanceUID
+
+            for key in self.Items:
+                total[key] = 0.0
 
             for lesionsJson in self.exportJson[patientID][seriesInstanceUID]["lesions"]:
                 for sliceJson in self.exportJson[patientID][seriesInstanceUID]["lesions"][lesionsJson]["slices"]:
                     attenuation = self.exportJson[patientID][seriesInstanceUID]["lesions"][lesionsJson]["slices"][sliceJson]["maxAttenuation"]
-                    for arteryJson in self.exportJson[patientID][seriesInstanceUID]["lesions"][lesionsJson]["slices"][sliceJson]["labeledAs"]:
-                        voxelCount = self.exportJson[patientID][seriesInstanceUID]["lesions"][lesionsJson]["slices"][sliceJson]["labeledAs"][arteryJson]
-                        area = voxelCount * self.exportJson[patientID][seriesInstanceUID]["voxelLength"] * self.exportJson[patientID][seriesInstanceUID]["voxelLength"]
 
-                        #if area > 1:
-                        score = area * self.densityFactor(attenuation) * self.exportJson[patientID][seriesInstanceUID]["sliceRatio"]
+                    if attenuation is not None:
+                        for arteryJson in self.exportJson[patientID][seriesInstanceUID]["lesions"][lesionsJson]["slices"][sliceJson]["labeledAs"]:
+                            voxelCount = self.exportJson[patientID][seriesInstanceUID]["lesions"][lesionsJson]["slices"][sliceJson]["labeledAs"][arteryJson]
+                            voxelLength = self.exportJson[patientID][seriesInstanceUID]["voxelLength"]
 
-                        if arteryJson in total:
-                            total[arteryJson] += score
-                        else:
-                            total[arteryJson] = score
+                            score = self.agatstonScore(voxelLength, voxelCount, attenuation, self.exportJson[patientID][seriesInstanceUID]["sliceRatio"])
+
+                            if arteryJson in total:
+                                total[arteryJson] += score
+                            else:
+                                total[arteryJson] = score
+                    else:
+                        for subLabelId in self.exportJson[patientID][seriesInstanceUID]["lesions"][lesionsJson]["slices"][sliceJson]["labeledAs"]:
+                            for sublabelArtery in self.exportJson[patientID][seriesInstanceUID]["lesions"][lesionsJson]["slices"][sliceJson]["labeledAs"][subLabelId]:
+                                maxAttenuation = self.exportJson[patientID][seriesInstanceUID]["lesions"][lesionsJson]["slices"][sliceJson]["labeledAs"][subLabelId][sublabelArtery]["maxAttenuation"]
+                                voxelLength = self.exportJson[patientID][seriesInstanceUID]["voxelLength"]
+                                voxelCount = self.exportJson[patientID][seriesInstanceUID]["lesions"][lesionsJson]["slices"][sliceJson]["labeledAs"][subLabelId][sublabelArtery]["voxelCount"]
+
+                                score = self.agatstonScore(voxelLength, voxelCount, maxAttenuation, self.exportJson[patientID][seriesInstanceUID]["sliceRatio"])
+
+                                if sublabelArtery in total:
+                                    total[sublabelArtery] += score
+                                else:
+                                    total[sublabelArtery] = score
 
             for key in self.Items:
                 if isinstance(self.Items[key], list):
-                    sum = 0
+                    sum = 0.0
                     for id in self.Items[key]:
                         if id in self.arteryId and self.arteryId[id] in total:
                             sum += total[self.arteryId[id]]
 
                     total[key] = sum
 
-            for key in self.Items:
-                if key not in total:
-                    total[key] = 0
-
-            total["PatientID"] = patientID
-            total["SeriesInstanceUID"] = seriesInstanceUID
-
-            #print("json", timeit.default_timer() - json)
             return total
 
         elif self.calculationMode == "2d":
             lesionArray = []
 
             with concurrent.futures.ThreadPoolExecutor() as executor:
-                results = [executor.submit(self.searchLesionPosition, connectedElements2d, image, reference, index) for index in
-                           range(1, connectedElements2d[1] + 1)]
+                results = [executor.submit(self.searchLesionPosition, connectedElements, image, reference, index) for index in
+                           range(1, connectedElements[1] + 1)]
 
                 for future in concurrent.futures.as_completed(results):
                     lesionArray.append(future.result())
@@ -808,23 +856,17 @@ class ScoreExport():
             for elements in lesionArray:
                 array = numpy.array(elements)
                 maxDensity = max(array.max(axis=1))
-                densityFactor = self.densityFactor(maxDensity)
 
                 arteryId = array[:, 1:2]
                 unique, counts = numpy.unique(arteryId, return_counts=True)
                 count = dict(zip(unique, counts))
-                #print(count)
 
                 exportedScores = {}
 
                 for item in count:
-                    if (pixelArea != None) and (count[item] != None) and (densityFactor != None) and (sliceThickness != None):
-                        # ratio if slice thickness is not 3mm
-                        ratio = sliceThickness / 3.0
-                        lesionArea = pixelArea * count[item]
-
-                        #if pixelArea * count[item] > 1:
-                        exportedScores[item] = lesionArea * densityFactor * ratio
+                    # ratio if slice thickness is not 3mm
+                    voxelLength = self.exportJson[patientID][seriesInstanceUID]["voxelLength"]
+                    exportedScores[item] = self.agatstonScore(voxelLength, count[item], maxDensity, self.exportJson[patientID][seriesInstanceUID]["sliceRatio"])
 
                 export.append(exportedScores)
 
@@ -843,7 +885,6 @@ class ScoreExport():
 
         # Read the spacing along each dimension
         spacing = numpy.array(list(reversed(ctImage.GetSpacing())))
-        pixelArea = spacing[1] * spacing[2]
 
         exportData = {}
         exportData["PatientID"] = file[2]
@@ -856,15 +897,15 @@ class ScoreExport():
         self.exportJson[file[2]][file[3]]["lesions"] = {}
 
         if self.calculationMode == "3d":
-            return self.calculateScore(ctImageArray, labelImageArray, pixelArea, sliceThickness, file[2], file[3])
+            return self.calculateScore(ctImageArray, labelImageArray, file[2], file[3])
         elif self.calculationMode == "2d":
             combinedAgatstonScores = self.combineSlicesScores(
-                self.calculateScore(ctImageArray, labelImageArray, pixelArea, sliceThickness, file[2], file[3]))
+                self.calculateScore(ctImageArray, labelImageArray, file[2], file[3]))
 
             for key in self.Items:
                 content = self.Items[key]
                 if isinstance(content, list):
-                    total = 0
+                    total = 0.0
                     for element in content:
                         if element in combinedAgatstonScores:
                             total += combinedAgatstonScores[element]
@@ -875,7 +916,7 @@ class ScoreExport():
                     if content in combinedAgatstonScores:
                         exportData[key] = combinedAgatstonScores[content]
                     else:
-                        exportData[key] = 0
+                        exportData[key] = 0.0
 
             return exportData
 
