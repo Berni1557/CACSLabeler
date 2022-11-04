@@ -16,8 +16,6 @@ import json
 
 import timeit
 
-import threading
-
 class NpEncoder(json.JSONEncoder):
     def default(self, obj):
         if isinstance(obj, numpy.integer):
@@ -551,17 +549,12 @@ class ScoreExport():
         exportList = []
 
         total = timeit.default_timer()
-        #threads = []
 
-        for filename in os.listdir(self.filepaths["referenceFolder"]):
-            if filename.endswith(".nrrd"):
-                self.runExportProcess(filename, sliceStepDataframe, exportList)
-        #        thread = threading.Thread(target=self.runExportProcess, args=[filename, sliceStepDataframe, exportList])
-        #        thread.start()
-        #        threads.append(thread)
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            results = [executor.submit(self.runExportProcess, filename, sliceStepDataframe, exportList) for filename in os.listdir(self.filepaths["referenceFolder"])]
 
-        #for thread in threads:
-        #    thread.join()
+            for future in concurrent.futures.as_completed(results):
+                pass
 
         print("total", timeit.default_timer() - total)
 
@@ -681,23 +674,17 @@ class ScoreExport():
         slicesDict = dict(zip(slice, voxelCount))
 
         sliceNumber = 0
-        #threads = []
         for slice in slicesDict:
-        #    thread = threading.Thread(target=self.jsonSliceLoop, args=[patientID, seriesInstanceUID, it, lesion, slice, sliceNumber, slicesDict])
-        #    thread.start()
-        #    threads.append(thread)
             self.jsonSliceLoop(patientID, seriesInstanceUID, it, lesion, slice, sliceNumber, slicesDict)
 
             sliceNumber += 1
 
-        #for thread in threads:
-        #    thread.join()
 
     def jsonSliceLoop(self, patientID, seriesInstanceUID, it, lesion, slice, sliceNumber, slicesDict):
         sliceArray = lesion[numpy.in1d(lesion[:, 0], slice)]
 
         #needed to check if lesions are seperated in 2d but connected in 3d
-        maxCoordinate = 513#max(max(sliceArray[:, 1:2])) + 1
+        maxCoordinate = 513
 
         tempComponentAnalysis = np.zeros(shape=(maxCoordinate,maxCoordinate))
         tempAttenuation = np.zeros(shape=(maxCoordinate, maxCoordinate))
@@ -764,17 +751,10 @@ class ScoreExport():
                 lesionPositionList.append(future.result())
 
         it = 0
-        #threads = []
         for lesion in lesionPositionList:
-        #    thread = threading.Thread(target=self.jsonLesionLoop, args=[lesion, it, patientID, seriesInstanceUID])
-        #    thread.start()
-        #    threads.append(thread)
             self.jsonLesionLoop(lesion, it, patientID, seriesInstanceUID)
 
             it += 1
-
-        #for thread in threads:
-        #    thread.join()
 
     def agatstonScore(self, voxelLength, voxelCount, attenuation, ratio):
         score = 0.0
