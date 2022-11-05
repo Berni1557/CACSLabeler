@@ -470,7 +470,11 @@ class ScoreExport():
         self.dataset = "OrCaScore"
         self.calculationMode = "3d"
 
-        self.Items = {
+        # Options: ArteryLevel, SegmentLevel
+        self.exportType = "SegmentLevel"
+
+        if self.exportType == "SegmentLevel":
+            self.Items = {
             "CC": [
                 4, 5, 6, 7,  # RCA
                 9, 10, 11, 12,  # LM
@@ -517,6 +521,15 @@ class ScoreExport():
             "PAPILLAR_MUSCLE": 34,
             "NFS_CACS": 35,
         }
+        elif self.exportType == "ArteryLevel":
+            self.Items = {
+                "CC": [
+                    2, 3, 4
+                ],
+                "RCA": 4,
+                "LAD": 2,
+                "LCX": 3,
+            }
 
         self.arteryId = {}
 
@@ -545,7 +558,9 @@ class ScoreExport():
         #total = timeit.default_timer()
 
         with concurrent.futures.ThreadPoolExecutor() as executor:
-            [executor.submit(self.processImages, filename, sliceStepDataframe) for filename in os.listdir(self.filepaths["referenceFolder"])]
+            [executor.submit(self.processImages, filename, sliceStepDataframe)
+             for filename in sorted(filter(lambda x: os.path.isfile(os.path.join(self.filepaths["referenceFolder"], x)),
+                                           os.listdir(self.filepaths["referenceFolder"])))]
 
         #print("total", timeit.default_timer() - total)
 
@@ -570,32 +585,29 @@ class ScoreExport():
 
     def findLesions(self, reference):
         # preprocessing label
-        referenceTemporaryCopy = reference.copy()
-        referenceTemporaryCopy[referenceTemporaryCopy < 2] = 0
+        reference[reference == 24] = 35
 
-        # NFS
-        referenceTemporaryCopy[referenceTemporaryCopy == 24] = 35
-
-        if False:
-            pass
-            # Combines all lesions in arteries into one group
+        if self.exportType == "ArteryLevel":
+            # Combines all lesions in each artery to one group
             # RCA
-            #referenceTemporaryCopy[(referenceTemporaryCopy >= 4) & (referenceTemporaryCopy <= 7)] = 3
+            reference[(reference >= 4) & (reference <= 7)] = 4
 
             # LM
-            #referenceTemporaryCopy[(referenceTemporaryCopy >= 9) & (referenceTemporaryCopy <= 12)] = 8
+            reference[(reference >= 9) & (reference <= 12)] = 2
 
             # LAD
-            #referenceTemporaryCopy[(referenceTemporaryCopy >= 14) & (referenceTemporaryCopy <= 17)] = 13
+            reference[(reference >= 14) & (reference <= 17)] = 2
 
             # LCX
-            #referenceTemporaryCopy[(referenceTemporaryCopy >= 19) & (referenceTemporaryCopy <= 22)] = 18
+            reference[(reference >= 19) & (reference <= 22)] = 3
 
             # RIM
-            # referenceTemporaryCopy[(referenceTemporaryCopy == 23)] = 23
+            reference[(reference == 23)] = 2
 
-            # AORTA
-            #referenceTemporaryCopy[(referenceTemporaryCopy >= 26) & (referenceTemporaryCopy <= 28)] = 25
+            reference[(reference >= 5)] = 0
+
+        referenceTemporaryCopy = reference.copy()
+        referenceTemporaryCopy[referenceTemporaryCopy < 2] = 0
 
         if self.calculationMode == "3d":
             structure = numpy.array([[[0, 0, 0],
