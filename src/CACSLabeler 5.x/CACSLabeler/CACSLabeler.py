@@ -154,7 +154,7 @@ class Image:
                 return True
         return False
 
-    #
+#
 # CACSLabeler
 #
 
@@ -243,8 +243,8 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.ui.datasetComboBox.addItems(["DISCHARGE", "CADMAN", "OrCaScore"])
         self.ui.observerComboBox.addItems(["ST", "FB", "LU"])
 
-        self.ui.loadVolumesButton.connect('clicked(bool)', self.onLoadInputButton)
-        self.ui.exportFromFolder.connect('clicked(bool)', self.logic.onExportButtonClicked)
+        self.ui.exportFromReferenceFolder.connect('clicked(bool)', self.logic.onExportFromReferenceFolderButtonClicked)
+        self.ui.exportFromJsonFile.connect('clicked(bool)', self.logic.onExportFromJSONFileButtonClicked)
 
         # Make sure parameter node is initialized (needed for module reload)
         self.initializeParameterNode()
@@ -386,8 +386,6 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                                    self.ui.imageThresholdSliderWidget.value, not self.ui.invertOutputCheckBox.checked, showResult=False)
 
 
-    def onLoadInputButton(self):
-        print("load input button")
 
 #
 # CACSLabelerLogic
@@ -450,11 +448,14 @@ class CACSLabelerLogic(ScriptedLoadableModuleLogic):
         stopTime = time.time()
         logging.info(f'Processing completed in {stopTime-startTime:.2f} seconds')
 
-    def onExportButtonClicked(self):
+    def onExportFromReferenceFolderButtonClicked(self):
         exporter = ScoreExport()
-        exporter.export()
+        exporter.exportFromReferenceFolder()
 
-        print("Export started")
+    def onExportFromJSONFileButtonClicked(self):
+        exporter = ScoreExport()
+        exporter.exportFromJSONFile()
+
 
 class ScoreExport():
     def __init__(self):
@@ -524,39 +525,29 @@ class ScoreExport():
                 self.arteryId[self.Items[key]] = key
 
         self.exportJson = {}
+        self.exportList = []
 
-    def runExportProcess(self, filename, sliceStepDataframe, exportList):
-        referenceFilePath = self.filepaths["referenceFolder"] + filename
+    def exportFromJSONFile(self):
+        pass
 
-        file = self.processFilename(filename)
-        imageFilePath = self.filepaths["imageFolder"] + file[1] + ".mhd"
-
-        sliceThickness = sliceStepDataframe.loc[(sliceStepDataframe['patient_id'] == file[2])].slice_thickness.item()
-
-        exportList.append(self.exportScore(imageFilePath, referenceFilePath, sliceThickness))
-        print("Exported " + filename)
-
-        dataframe = pandas.DataFrame.from_records(exportList)
+    def createExportFilesAndSaveContent(self):
+        dataframe = pandas.DataFrame.from_records(self.exportList)
         dataframe.to_csv(self.filepaths["exportFileCSV"], index=False, sep=';')
 
         if self.calculationMode == '3d':
             with open(self.filepaths["exportFileJSON"], 'w', encoding='utf-8') as file:
-                json.dump(self.exportJson, file, ensure_ascii=False, indent=4, cls=NpEncoder)
+                #explicit copy to prevent race condition
+                json.dump(dict(self.exportJson), file, ensure_ascii=False, indent=4, cls=NpEncoder)
 
-    def export(self):
+    def exportFromReferenceFolder(self):
         sliceStepDataframe = pandas.read_csv(self.filepaths["sliceStepFile"], dtype={'patient_id': 'string'})
 
-        exportList = []
-
-        total = timeit.default_timer()
+        #total = timeit.default_timer()
 
         with concurrent.futures.ThreadPoolExecutor() as executor:
-            results = [executor.submit(self.runExportProcess, filename, sliceStepDataframe, exportList) for filename in os.listdir(self.filepaths["referenceFolder"])]
+            [executor.submit(self.processImages, filename, sliceStepDataframe) for filename in os.listdir(self.filepaths["referenceFolder"])]
 
-            for future in concurrent.futures.as_completed(results):
-                pass
-
-        print("total", timeit.default_timer() - total)
+        #print("total", timeit.default_timer() - total)
 
     def processFilename(self, filepath):
         if self.dataset == "DISCHARGE" or self.dataset == "CADMAN":
@@ -571,11 +562,10 @@ class ScoreExport():
             PatientID = fileId.split("_")[0]
             SeriesInstanceUID = fileId.split("_")[1]
 
-        return (fileName, fileId, PatientID, SeriesInstanceUID)
+        return fileName, fileId, PatientID, SeriesInstanceUID
 
     def label(self, referenceTemporaryCopy, uniqueId, structureConnections2d, iterator, connectedElements2d):
-        labeled_array, num_features = ndi.label((referenceTemporaryCopy == uniqueId).astype(int),
-                                                structure=structureConnections2d)
+        labeled_array, num_features = ndi.label((referenceTemporaryCopy == uniqueId).astype(int),structure=structureConnections2d)
         return numpy.where(labeled_array > 0, labeled_array + iterator, 0).astype(connectedElements2d.dtype)
 
     def findLesions(self, reference):
@@ -649,7 +639,7 @@ class ScoreExport():
                     connectedElements.dtype)
                 elementIterator += elementCount
 
-        return (connectedElements, len(numpy.unique(connectedElements)) - 1)
+        return connectedElements, len(numpy.unique(connectedElements)) - 1
 
     def lesionPositionListEntry(self, connectedElements3d, index, image, reference):
         positions = numpy.array(list(zip(*numpy.where(connectedElements3d[0] == index))))
@@ -673,14 +663,12 @@ class ScoreExport():
         slice, voxelCount = numpy.unique(slices, return_counts=True)
         slicesDict = dict(zip(slice, voxelCount))
 
-        sliceNumber = 0
+        sliceIterator = 0
         for slice in slicesDict:
-            self.jsonSliceLoop(patientID, seriesInstanceUID, it, lesion, slice, sliceNumber, slicesDict)
+            self.jsonSliceLoop(patientID, seriesInstanceUID, it, lesion, slice, sliceIterator, slicesDict)
+            sliceIterator += 1
 
-            sliceNumber += 1
-
-
-    def jsonSliceLoop(self, patientID, seriesInstanceUID, it, lesion, slice, sliceNumber, slicesDict):
+    def jsonSliceLoop(self, patientID, seriesInstanceUID, it, lesion, slice, sliceIterator, slicesDict):
         sliceArray = lesion[numpy.in1d(lesion[:, 0], slice)]
 
         #needed to check if lesions are seperated in 2d but connected in 3d
@@ -703,9 +691,10 @@ class ScoreExport():
 
         connections, N = label(tempComponentAnalysis, structureConnections2d)
 
-        self.exportJson[patientID][seriesInstanceUID]["lesions"][it]["slices"][sliceNumber] = {}
-        self.exportJson[patientID][seriesInstanceUID]["lesions"][it]["slices"][sliceNumber]["voxelCount2D"] = slicesDict[slice]
-        self.exportJson[patientID][seriesInstanceUID]["lesions"][it]["slices"][sliceNumber]["labeledAs"] = {}
+        self.exportJson[patientID][seriesInstanceUID]["lesions"][it]["slices"][sliceIterator] = {}
+        self.exportJson[patientID][seriesInstanceUID]["lesions"][it]["slices"][sliceIterator]["voxelCount2D"] = slicesDict[slice]
+        self.exportJson[patientID][seriesInstanceUID]["lesions"][it]["slices"][sliceIterator]["labeledAs"] = {}
+        self.exportJson[patientID][seriesInstanceUID]["lesions"][it]["slices"][sliceIterator]["sliceNumber"] = slice
 
         if N > 1:
             labelsSummary = {}
@@ -729,17 +718,17 @@ class ScoreExport():
 
                 labelsSummary[lesionId] = lesionSummary
 
-            self.exportJson[patientID][seriesInstanceUID]["lesions"][it]["slices"][sliceNumber]["labeledAs"] = labelsSummary
-            self.exportJson[patientID][seriesInstanceUID]["lesions"][it]["slices"][sliceNumber]["maxAttenuation"] = None
+            self.exportJson[patientID][seriesInstanceUID]["lesions"][it]["slices"][sliceIterator]["labeledAs"] = labelsSummary
+            self.exportJson[patientID][seriesInstanceUID]["lesions"][it]["slices"][sliceIterator]["maxAttenuation"] = None
         else:
-            self.exportJson[patientID][seriesInstanceUID]["lesions"][it]["slices"][sliceNumber]["maxAttenuation"] = max(max(sliceArray[:, 3:4]))
+            self.exportJson[patientID][seriesInstanceUID]["lesions"][it]["slices"][sliceIterator]["maxAttenuation"] = max(max(sliceArray[:, 3:4]))
 
             arteryId = sliceArray[:, 4:5]
             arteries, arteryCount = numpy.unique(arteryId, return_counts=True)
             arteryDict = dict(zip(arteries, arteryCount))
 
             for artery in arteryDict:
-                self.exportJson[patientID][seriesInstanceUID]["lesions"][it]["slices"][sliceNumber]["labeledAs"][self.arteryId[artery]] = arteryDict[artery]
+                self.exportJson[patientID][seriesInstanceUID]["lesions"][it]["slices"][sliceIterator]["labeledAs"][self.arteryId[artery]] = arteryDict[artery]
 
     def calculateLesions(self, image, reference, connectedElements3d, patientID, seriesInstanceUID):
         lesionPositionList = []
@@ -759,7 +748,7 @@ class ScoreExport():
     def agatstonScore(self, voxelLength, voxelCount, attenuation, ratio):
         score = 0.0
 
-        if (voxelLength != None) and (voxelCount != None) and (attenuation != None) and (ratio != None):
+        if (voxelLength is not None) and (voxelCount is not None) and (attenuation is not None) and (ratio is not None):
             voxelArea = voxelLength * voxelLength
             lesionArea = voxelArea * voxelCount
 
@@ -768,22 +757,17 @@ class ScoreExport():
 
         return score
 
-    def calculateScore(self, image, reference, patientID, seriesInstanceUID):
-        connectedElements = self.findLesions(reference)
+    def calculateScore(self, patientID, seriesInstanceUID):
+        total = {"PatientID": patientID, "SeriesInstanceUID": seriesInstanceUID}
 
-        if self.calculationMode == "3d":
-            self.calculateLesions(image, reference, connectedElements, patientID, seriesInstanceUID)
+        for key in self.Items:
+            total[key] = 0.0
 
-            total = {}
+        for lesionsJson in self.exportJson[patientID][seriesInstanceUID]["lesions"]:
+            for sliceJson in self.exportJson[patientID][seriesInstanceUID]["lesions"][lesionsJson]["slices"]:
 
-            total["PatientID"] = patientID
-            total["SeriesInstanceUID"] = seriesInstanceUID
-
-            for key in self.Items:
-                total[key] = 0.0
-
-            for lesionsJson in self.exportJson[patientID][seriesInstanceUID]["lesions"]:
-                for sliceJson in self.exportJson[patientID][seriesInstanceUID]["lesions"][lesionsJson]["slices"]:
+                sliceNumber = self.exportJson[patientID][seriesInstanceUID]["lesions"][lesionsJson]["slices"][sliceJson]["sliceNumber"]
+                if sliceNumber in self.exportJson[patientID][seriesInstanceUID]["countingSlices"]:
                     attenuation = self.exportJson[patientID][seriesInstanceUID]["lesions"][lesionsJson]["slices"][sliceJson]["maxAttenuation"]
 
                     if attenuation is not None:
@@ -791,7 +775,7 @@ class ScoreExport():
                             voxelCount = self.exportJson[patientID][seriesInstanceUID]["lesions"][lesionsJson]["slices"][sliceJson]["labeledAs"][arteryJson]
                             voxelLength = self.exportJson[patientID][seriesInstanceUID]["voxelLength"]
 
-                            score = self.agatstonScore(voxelLength, voxelCount, attenuation, self.exportJson[patientID][seriesInstanceUID]["sliceRatio"])
+                            score = self.agatstonScore(voxelLength, voxelCount, attenuation,self.exportJson[patientID][seriesInstanceUID]["sliceRatio"])
 
                             if arteryJson in total:
                                 total[arteryJson] += score
@@ -811,16 +795,23 @@ class ScoreExport():
                                 else:
                                     total[sublabelArtery] = score
 
-            for key in self.Items:
-                if isinstance(self.Items[key], list):
-                    sum = 0.0
-                    for id in self.Items[key]:
-                        if id in self.arteryId and self.arteryId[id] in total:
-                            sum += total[self.arteryId[id]]
+        for key in self.Items:
+            if isinstance(self.Items[key], list):
+                sum = 0.0
+                for id in self.Items[key]:
+                    if id in self.arteryId and self.arteryId[id] in total:
+                        sum += total[self.arteryId[id]]
 
-                    total[key] = sum
+                total[key] = sum
 
-            return total
+        return total
+
+    def calculateScoreFromImage(self, image, reference, patientID, seriesInstanceUID):
+        connectedElements = self.findLesions(reference)
+
+        if self.calculationMode == "3d":
+            self.calculateLesions(image, reference, connectedElements, patientID, seriesInstanceUID)
+            return self.calculateScore(patientID, seriesInstanceUID)
 
         elif self.calculationMode == "2d":
             lesionArray = []
@@ -853,35 +844,44 @@ class ScoreExport():
 
             return export
 
-    def exportScore(self, ctImagePath, labelPath, sliceThickness):
-        # Exporting CSV
-        file = self.processFilename(labelPath)
+    def processImages(self, filename, sliceStepDataframe):
+        processedFilename = self.processFilename(self.filepaths["referenceFolder"] + filename)
 
-        ctImage = sitk.ReadImage(ctImagePath)
-        labelImage = sitk.ReadImage(labelPath)
+        image = sitk.ReadImage(self.filepaths["imageFolder"] + processedFilename[1] + ".mhd")
+        label = sitk.ReadImage(self.filepaths["referenceFolder"] + filename)
 
         # Convert the image to a numpy array first and then shuffle the dimensions to get axis in the order z,y,x
-        ctImageArray = sitk.GetArrayFromImage(ctImage)
-        labelImageArray = sitk.GetArrayFromImage(labelImage)
+        imageArray = sitk.GetArrayFromImage(image)
+        labelArray = sitk.GetArrayFromImage(label)
 
         # Read the spacing along each dimension
-        spacing = numpy.array(list(reversed(ctImage.GetSpacing())))
+        spacing = numpy.array(list(reversed(image.GetSpacing())))
+        sliceThickness = sliceStepDataframe.loc[(sliceStepDataframe['patient_id'] == processedFilename[2])].slice_thickness.item()
+        sliceStep = sliceStepDataframe.loc[(sliceStepDataframe['patient_id'] == processedFilename[2])].slice_step.item()
 
-        exportData = {}
-        exportData["PatientID"] = file[2]
-        exportData["SeriesInstanceUID"] = file[3]
+        exportData = {"PatientID": processedFilename[2], "SeriesInstanceUID": processedFilename[3]}
 
-        self.exportJson[file[2]] = {}
-        self.exportJson[file[2]][file[3]] = {}
-        self.exportJson[file[2]][file[3]]["sliceRatio"] = sliceThickness / 3.0
-        self.exportJson[file[2]][file[3]]["voxelLength"] = spacing[1]  # voxel length in mm
-        self.exportJson[file[2]][file[3]]["lesions"] = {}
+        self.exportJson[processedFilename[2]] = {}
+        self.exportJson[processedFilename[2]][processedFilename[3]] = {}
+        self.exportJson[processedFilename[2]][processedFilename[3]]["sliceRatio"] = sliceThickness / 3.0
+        self.exportJson[processedFilename[2]][processedFilename[3]]["voxelLength"] = spacing[1]  # voxel length in mm
+        self.exportJson[processedFilename[2]][processedFilename[3]]["lesions"] = {}
+        self.exportJson[processedFilename[2]][processedFilename[3]]["sliceCount"] = len(imageArray)
+        self.exportJson[processedFilename[2]][processedFilename[3]]["sliceStep"] = sliceStep
+
+        countingSlices = []
+
+        for sliceNumber in range(0, len(imageArray), sliceStep):
+            countingSlices.append(sliceNumber)
+
+        self.exportJson[processedFilename[2]][processedFilename[3]]["countingSlices"] = countingSlices
+
+        result = None
 
         if self.calculationMode == "3d":
-            return self.calculateScore(ctImageArray, labelImageArray, file[2], file[3])
+            result = self.calculateScoreFromImage(imageArray, labelArray, processedFilename[2], processedFilename[3])
         elif self.calculationMode == "2d":
-            combinedAgatstonScores = self.combineSlicesScores(
-                self.calculateScore(ctImageArray, labelImageArray, file[2], file[3]))
+            combinedAgatstonScores = self.combineSlicesScores(self.calculateScoreFromImage(imageArray, labelArray, processedFilename[2], processedFilename[3]))
 
             for key in self.Items:
                 content = self.Items[key]
@@ -899,7 +899,11 @@ class ScoreExport():
                     else:
                         exportData[key] = 0.0
 
-            return exportData
+            result = exportData
+
+        print("Exported " + processedFilename[1])
+        self.exportList.append(result)
+        self.createExportFilesAndSaveContent()
 
     def searchLesionPosition(self, array, image, reference, index):
         # gives position in 3d space where value equals the index => all voxels of a lesion in 2d space

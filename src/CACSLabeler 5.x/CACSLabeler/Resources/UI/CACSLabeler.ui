@@ -314,9 +314,16 @@
     </widget>
    </item>
    <item>
-    <widget class="QPushButton" name="exportFromFolder">
+    <widget class="QPushButton" name="exportFromReferenceFolder">
      <property name="text">
       <string>Export scores from references folder</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QPushButton" name="exportFromJsonFile">
+     <property name="text">
+      <string>Export scores from JSON file</string>
      </property>
     </widget>
    </item>
