@@ -468,7 +468,6 @@ class ScoreExport():
         }
 
         self.dataset = "OrCaScore"
-        self.calculationMode = "3d"
 
         # Options: ArteryLevel, SegmentLevel
         self.exportType = "SegmentLevel"
@@ -564,7 +563,7 @@ class ScoreExport():
         dataframe = pandas.DataFrame.from_records(self.exportList)
         dataframe.to_csv(self.filepaths["exportFileCSV"], index=False, sep=';')
 
-        if self.calculationMode == '3d' and createJson == True:
+        if createJson:
             with open(self.filepaths["exportFileJSON"], 'w', encoding='utf-8') as file:
                 #explicit copy to prevent race condition
                 json.dump(dict(self.exportJson), file, ensure_ascii=False, indent=4, cls=NpEncoder)
@@ -626,31 +625,18 @@ class ScoreExport():
         referenceTemporaryCopy = reference.copy()
         referenceTemporaryCopy[referenceTemporaryCopy < 2] = 0
 
-        if self.calculationMode == "3d":
-            structure = numpy.array([[[0, 0, 0],
-                                       [0, 1, 0],
-                                       [0, 0, 0]],
 
-                                      [[0, 1, 0],
-                                       [1, 1, 1],
-                                       [0, 1, 0]],
+        structure = numpy.array([[[0, 0, 0],
+                                   [0, 1, 0],
+                                   [0, 0, 0]],
 
-                                      [[0, 0, 0],
-                                       [0, 1, 0],
-                                       [0, 0, 0]]])
+                                  [[0, 1, 0],
+                                   [1, 1, 1],
+                                   [0, 1, 0]],
 
-        elif self.calculationMode == "2d":
-            structure = numpy.array([[[0, 0, 0],
-                                       [0, 0, 0],
-                                       [0, 0, 0]],
-
-                                      [[0, 1, 0],
-                                       [1, 1, 1],
-                                       [0, 1, 0]],
-
-                                      [[0, 0, 0],
-                                       [0, 0, 0],
-                                       [0, 0, 0]]])
+                                  [[0, 0, 0],
+                                   [0, 1, 0],
+                                   [0, 0, 0]]])
 
         uniqueElements = numpy.unique(referenceTemporaryCopy)
 
@@ -838,40 +824,9 @@ class ScoreExport():
     def calculateScoreFromImage(self, image, reference, patientID, seriesInstanceUID):
         connectedElements = self.findLesions(reference)
 
-        if self.calculationMode == "3d":
-            self.calculateLesions(image, reference, connectedElements, patientID, seriesInstanceUID)
-            return self.calculateScore(patientID, seriesInstanceUID)
+        self.calculateLesions(image, reference, connectedElements, patientID, seriesInstanceUID)
+        return self.calculateScore(patientID, seriesInstanceUID)
 
-        elif self.calculationMode == "2d":
-            lesionArray = []
-
-            with concurrent.futures.ThreadPoolExecutor() as executor:
-                results = [executor.submit(self.searchLesionPosition, connectedElements, image, reference, index) for index in
-                           range(1, connectedElements[1] + 1)]
-
-                for future in concurrent.futures.as_completed(results):
-                    lesionArray.append(future.result())
-
-            export = []
-
-            for elements in lesionArray:
-                array = numpy.array(elements)
-                maxDensity = max(array.max(axis=1))
-
-                arteryId = array[:, 1:2]
-                unique, counts = numpy.unique(arteryId, return_counts=True)
-                count = dict(zip(unique, counts))
-
-                exportedScores = {}
-
-                for item in count:
-                    # ratio if slice thickness is not 3mm
-                    voxelLength = self.exportJson[patientID][seriesInstanceUID]["voxelLength"]
-                    exportedScores[item] = self.agatstonScore(voxelLength, count[item], maxDensity, self.exportJson[patientID][seriesInstanceUID]["sliceRatio"])
-
-                export.append(exportedScores)
-
-            return export
 
     def processImages(self, filename, sliceStepDataframe):
         processedFilename = self.processFilename(self.filepaths["referenceFolder"] + filename)
@@ -905,49 +860,11 @@ class ScoreExport():
 
         self.exportJson[processedFilename[2]][processedFilename[3]]["countingSlices"] = countingSlices
 
-        result = None
-
-        if self.calculationMode == "3d":
-            result = self.calculateScoreFromImage(imageArray, labelArray, processedFilename[2], processedFilename[3])
-        elif self.calculationMode == "2d":
-            combinedAgatstonScores = self.combineSlicesScores(self.calculateScoreFromImage(imageArray, labelArray, processedFilename[2], processedFilename[3]))
-
-            for key in self.Items:
-                content = self.Items[key]
-                if isinstance(content, list):
-                    total = 0.0
-                    for element in content:
-                        if element in combinedAgatstonScores:
-                            total += combinedAgatstonScores[element]
-
-                    exportData[key] = total
-
-                elif isinstance(content, int):
-                    if content in combinedAgatstonScores:
-                        exportData[key] = combinedAgatstonScores[content]
-                    else:
-                        exportData[key] = 0.0
-
-            result = exportData
+        result = self.calculateScoreFromImage(imageArray, labelArray, processedFilename[2], processedFilename[3])
 
         print("Exported " + processedFilename[1])
         self.exportList.append(result)
         self.createExportFilesAndSaveContent(createJson=True)
-
-    def searchLesionPosition(self, array, image, reference, index):
-        # gives position in 3d space where value equals the index => all voxels of a lesion in 2d space
-        positionArray = numpy.array(list(zip(*numpy.where(array[0] == index))))
-        dataArray = []
-
-        for element in positionArray:
-            dataArray.append(
-                [
-                    image[element[0]][element[1]][element[2]],
-                    reference[element[0]][element[1]][element[2]]
-                ]
-            )
-
-        return dataArray
 
     def densityFactor(self, maxDensity):
         if maxDensity >= 130 and maxDensity <= 199:
@@ -958,19 +875,6 @@ class ScoreExport():
             return 3
         if maxDensity >= 400:
             return 4
-
-    def combineSlicesScores(self, scores):
-        totalScore = {}
-
-        for items in scores:
-            if items:
-                for key in items:
-                    if key in totalScore:
-                        totalScore[key] = totalScore[key] + items[key]
-                    else:
-                        totalScore[key] = items[key]
-
-        return totalScore
 
 #
 # CACSLabelerTest
