@@ -541,13 +541,30 @@ class ScoreExport():
         self.exportList = []
 
     def exportFromJSONFile(self):
-        pass
+        # Opening JSON file
 
-    def createExportFilesAndSaveContent(self):
+        with open(self.filepaths["exportFileJSON"], 'r', encoding='utf-8') as file:
+            # returns JSON object as
+            # a dictionary
+            self.exportJson = None
+            self.exportJson = json.load(file)
+
+            # Iterating through the json
+            # list
+            for patientId in self.exportJson:
+                for seriesInstanceUID in self.exportJson[patientId]:
+
+                    result = self.calculateScore(patientId, seriesInstanceUID)
+                    self.exportList.append(result)
+                    print("Exported", patientId, seriesInstanceUID)
+
+        self.createExportFilesAndSaveContent(createJson=False)
+
+    def createExportFilesAndSaveContent(self, createJson):
         dataframe = pandas.DataFrame.from_records(self.exportList)
         dataframe.to_csv(self.filepaths["exportFileCSV"], index=False, sep=';')
 
-        if self.calculationMode == '3d':
+        if self.calculationMode == '3d' and createJson == True:
             with open(self.filepaths["exportFileJSON"], 'w', encoding='utf-8') as file:
                 #explicit copy to prevent race condition
                 json.dump(dict(self.exportJson), file, ensure_ascii=False, indent=4, cls=NpEncoder)
@@ -764,7 +781,7 @@ class ScoreExport():
             voxelArea = voxelLength * voxelLength
             lesionArea = voxelArea * voxelCount
 
-            if attenuation >= 130: #check if 1mm
+            if attenuation >= 130 and lesionArea > 1:
                 score = lesionArea * self.densityFactor(attenuation) * ratio
 
         return score
@@ -915,7 +932,7 @@ class ScoreExport():
 
         print("Exported " + processedFilename[1])
         self.exportList.append(result)
-        self.createExportFilesAndSaveContent()
+        self.createExportFilesAndSaveContent(createJson=True)
 
     def searchLesionPosition(self, array, image, reference, index):
         # gives position in 3d space where value equals the index => all voxels of a lesion in 2d space
