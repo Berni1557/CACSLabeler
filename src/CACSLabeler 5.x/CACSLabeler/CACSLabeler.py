@@ -9,6 +9,7 @@ import qt
 import slicer
 from slicer.ScriptedLoadableModule import *
 from slicer.util import VTKObservationMixin
+import sitkUtils
 
 import concurrent.futures
 import SimpleITK as sitk
@@ -114,6 +115,7 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
         # Default UI Status
         self.mainUIHidden(True)
+        self.ui.errorText.setHidden(True)
 
         self.ui.exportFromReferenceFolder.connect('clicked(bool)', self.onExportFromReferenceFolderButtonClicked)
         self.ui.exportFromJsonFile.connect('clicked(bool)', self.onExportFromJSONFileButtonClicked)
@@ -131,19 +133,26 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
         self.loadSettings()
         self.loadDatasetSettings()
-        self.selectDatasetAndObserver()
-        self.saveSettings()
-        self.mainUIHidden(False)
-        self.updateDatasetAndObserverDropdownSelection()
 
-        # after first updateDatasetAndObserverDropdownSelection to prevent call on automatic selection
-        self.datasetComboBoxEventBlocked = False
-        self.ui.datasetComboBox.connect("currentIndexChanged(int)", self.onChangeDataset)
-        self.observerComboBoxEventBlocked = False
-        self.ui.observerComboBox.connect("currentIndexChanged(int)", self.onChangeObserver)
+        if self.availableDatasetsAndObservers:
+            self.selectDatasetAndObserver()
+            self.saveSettings()
+            self.mainUIHidden(False)
+            self.updateDatasetAndObserverDropdownSelection()
 
-        self.currentLoadedNode = None
-        self.initializeMainUI()
+            # after first updateDatasetAndObserverDropdownSelection to prevent call on automatic selection
+            self.datasetComboBoxEventBlocked = False
+            self.ui.datasetComboBox.connect("currentIndexChanged(int)", self.onChangeDataset)
+            self.observerComboBoxEventBlocked = False
+            self.ui.observerComboBox.connect("currentIndexChanged(int)", self.onChangeObserver)
+
+            self.currentLoadedNode = None
+            self.initializeMainUI()
+        else:
+            print("Settings file error! Change settings in JSON file!")
+            self.ui.errorText.setHidden(False)
+            self.ui.settingsCollapsibleButton.setHidden(True)
+            self.ui.errorText.text = "Settings file error! \n Change settings in JSON file!"
 
     def cleanup(self):
         """
@@ -204,6 +213,18 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             self.datasetComboBoxEventBlocked = False
             self.observerComboBoxEventBlocked = False
 
+    def loadVolumeToSlice(self, filename, imagesPath):
+        properties = {'Name': filename}
+
+        self.currentLoadedNode = slicer.util.loadVolume(os.path.join(imagesPath, filename), properties=properties)
+        self.currentLoadedNode.SetName(filename)
+
+        # Activate buttons
+        self.ui.RadioButton120keV.enabled = True
+        self.ui.thresholdVolumeButton.enabled = True
+        self.ui.selectedVolumeTextField.text = filename
+        self.ui.selectedVolumeTextField.cursorPosition = 0
+
     def onSelectNextUnlabeledImage(self):
         if self.currentLoadedNode or len(slicer.util.getNodesByClass("vtkMRMLScalarVolumeNode")):
             if not slicer.util.confirmOkCancelDisplay(
@@ -221,17 +242,7 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         filename = imageList["unlabeledImages"][0] + ".mhd"
 
         if os.path.isfile(os.path.join(imagesPath, filename)):
-            properties = {'Name': filename}
-
-            self.currentLoadedNode = slicer.util.loadVolume(os.path.join(imagesPath, filename), properties=properties)
-            self.currentLoadedNode.SetName(filename)
-
-            # Activate buttons
-            self.ui.RadioButton120keV.enabled = True
-            self.ui.thresholdVolumeButton.enabled = True
-            self.ui.selectedVolumeTextField.text = filename
-            self.ui.selectedVolumeTextField.cursorPosition = 0
-
+            self.loadVolumeToSlice(filename, imagesPath)
 
     def onLoadButton(self):
         dataset = self.settings["savedDatasetAndObserverSelection"]["dataset"]
@@ -249,16 +260,8 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         # opens file selection window
         filepath = qt.QFileDialog.getOpenFileName(self.parent, 'Open files', imagesPath, "Files(*.mhd)")
         filename = filepath.split("/")[-1]
-        properties = {'Name': filename}
 
-        self.currentLoadedNode = slicer.util.loadVolume(filepath, properties=properties)
-        self.currentLoadedNode.SetName(filename)
-
-        #Activate buttons
-        self.ui.RadioButton120keV.enabled = True
-        self.ui.thresholdVolumeButton.enabled = True
-        self.ui.selectedVolumeTextField.text = filename
-        self.ui.selectedVolumeTextField.cursorPosition = 0
+        self.loadVolumeToSlice(filename, imagesPath)
 
     #Todo: Not implemented
     def onThresholdVolume(self):
@@ -355,9 +358,34 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             self.ui.selectNextUnlabeledImageButton.enabled = False
 
     def loadSettings(self):
-        with open(self.settingsPath, 'r', encoding='utf-8') as file:
-            self.settings = None
-            self.settings = json.load(file)
+        if os.path.isfile(self.settingsPath):
+            with open(self.settingsPath, 'r', encoding='utf-8') as file:
+                self.settings = None
+                self.settings = json.load(file)
+        else:
+            #create default settings file
+            defaultSettings = {
+                "datasets": {
+                    "VAR_DATASET_NAME": {
+                        "imagesPath": "",
+                        "sliceStepFile": "",
+                        "observers": {
+                            "VAR_OBSERVER_NAME": {
+                                "labelsPath": "",
+                                "segmentationMode": ""
+                            }
+                        }
+                    }
+                },
+                "exportFolder": "",
+                "savedDatasetAndObserverSelection": {
+                    "dataset": "",
+                    "observer": ""
+                }
+            }
+
+            self.settings = defaultSettings
+            self.saveSettings()
 
     def saveSettings(self):
         with open(self.settingsPath, 'w', encoding='utf-8') as file:

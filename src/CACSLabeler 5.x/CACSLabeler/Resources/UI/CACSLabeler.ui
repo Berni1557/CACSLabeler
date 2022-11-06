@@ -12,6 +12,16 @@
   </property>
   <layout class="QVBoxLayout" name="verticalLayout">
    <item>
+    <widget class="QLabel" name="errorText">
+     <property name="text">
+      <string>Error text placeholder</string>
+     </property>
+     <property name="alignment">
+      <set>Qt::AlignCenter</set>
+     </property>
+    </widget>
+   </item>
+   <item>
     <widget class="ctkCollapsibleButton" name="settingsCollapsibleButton">
      <property name="text">
       <string>Settings</string>
