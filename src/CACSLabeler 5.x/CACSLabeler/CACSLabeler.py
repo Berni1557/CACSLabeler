@@ -26,15 +26,6 @@ class NpEncoder(json.JSONEncoder):
             return obj.tolist()
         return super(NpEncoder, self).default(obj)
 
-#importing custom packages
-import sys
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-dirname = os.path.dirname(os.path.abspath(__file__))
-dir_src = os.path.dirname(os.path.dirname(dirname))
-sys.path.append(dir_src)
-
-from settings.settings import Settings
-
 #install needed dependencies if not available
 try:
     import pandas
@@ -49,110 +40,9 @@ except ModuleNotFoundError as e:
 
     from scipy.ndimage import label
     import pandas
+    #from termcolor import colored
     #import torch
     #import cc3d
-
-def splitFilePath(filepath):
-    """ Split filepath into folderpath, filename and file extension
-
-    :param filepath: Filepath
-    :type filepath: str
-    """
-    #folderpath, _ = ntpath.split(filepath)
-    folderpath = os.path.dirname(filepath)
-    head, file_extension = os.path.splitext(filepath)
-    filename = os.path.basename(head)
-    return folderpath, filename, file_extension
-
-class Image:
-    def __init__(self, fip_image=None, fip_ref=None, settings=None):
-        if fip_image is None and fip_ref is not None:
-            _, ref_name, _ = splitFilePath(fip_ref)
-            if len(ref_name.split('_')) == 1:
-                if settings['MODE'] == 'CACS_ORCASCORE':
-                    PatientID = ''
-                    SeriesInstanceUID = ref_name.split('-')[0][0:-1]
-                    image_name = SeriesInstanceUID
-                else:
-                    PatientID = ''
-                    SeriesInstanceUID = ref_name.split('-')[0]
-                    image_name = SeriesInstanceUID
-            else:
-                PatientID = ref_name.split('_')[0]
-                SeriesInstanceUID = ref_name.split('_')[1].split('-')[0]
-                image_name = PatientID + '_' + SeriesInstanceUID
-
-            self.fip_ref = fip_ref
-            self.ref_name = ref_name
-
-            self.fip_image = ''
-            self.image_name = image_name
-
-            self.PatientID = PatientID
-            self.SeriesInstanceUID = SeriesInstanceUID
-
-        if fip_image is not None and fip_ref is None:
-            _, image_name, _ = splitFilePath(fip_image)
-            if len(image_name.split('_')) == 1:
-                PatientID = ''
-                SeriesInstanceUID = image_name
-            else:
-                PatientID = image_name.split('_')[0]
-                SeriesInstanceUID = image_name.split('_')[1]
-                image_name = PatientID + '_' + SeriesInstanceUID
-
-            self.fip_ref = None
-            self.ref_name = image_name + '-label-lesion'
-
-            self.fip_image = ''
-            self.image_name = image_name
-
-            self.PatientID = PatientID
-            self.SeriesInstanceUID = SeriesInstanceUID
-
-        self.scores = []
-        self.arteries_dict = dict()
-        self.arteries_sum = dict()
-
-    def findImage(self, images, dataset):
-        if dataset == 'ORCASCORE':
-            for image in images:
-                _, name, _ = splitFilePath(image)
-                if self.image_name == name[0:-3]:
-                    self.fip_image = image
-        else:
-            for image in images:
-                _, name, _ = splitFilePath(image)
-                if self.image_name == name:
-                    self.fip_image = image
-
-    def setRef_name(self, ref_name):
-        if len(ref_name.split('_')) == 1:
-            PatientID = ''
-            SeriesInstanceUID = ref_name.split('-')[0]
-            image_name = SeriesInstanceUID
-        else:
-            PatientID = ref_name.split('_')[0]
-            SeriesInstanceUID = ref_name.split('_')[1].split('-')[0]
-            image_name = PatientID + '_' + SeriesInstanceUID
-
-        self.PatientID = PatientID
-        self.SeriesInstanceUID = SeriesInstanceUID
-        self.image_name = image_name
-        self.ref_name = ref_name
-
-    def scoreExist(self, scorename):
-        for s in self.scores:
-            if s['NAME'] == scorename:
-                return True
-        return False
-
-    def deleteScore(self, scorename):
-        for i, s in enumerate(self.scores):
-            if s['NAME'] == scorename:
-                del self.scores[i]
-                return True
-        return False
 
 #
 # CACSLabeler
@@ -196,8 +86,9 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         ScriptedLoadableModuleWidget.__init__(self, parent)
         VTKObservationMixin.__init__(self)  # needed for parameter node observation
         self.logic = None
-        self._parameterNode = None
-        self._updatingGUIFromParameterNode = False
+
+        #clears screen on reload
+        slicer.mrmlScene.Clear(0)
 
     def setup(self):
         """
@@ -220,172 +111,343 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         # in batch mode, without a graphical user interface.
         self.logic = CACSLabelerLogic()
 
-        # Connections
-
-        # These connections ensure that we update parameter node when scene is closed
-        self.addObserver(slicer.mrmlScene, slicer.mrmlScene.StartCloseEvent, self.onSceneStartClose)
-        self.addObserver(slicer.mrmlScene, slicer.mrmlScene.EndCloseEvent, self.onSceneEndClose)
-
-        # These connections ensure that whenever user changes some settings on the GUI, that is saved in the MRML scene
-        # (in the selected parameter node).
-        self.ui.inputSelector.connect("currentNodeChanged(vtkMRMLNode*)", self.updateParameterNodeFromGUI)
-        self.ui.outputSelector.connect("currentNodeChanged(vtkMRMLNode*)", self.updateParameterNodeFromGUI)
-        self.ui.imageThresholdSliderWidget.connect("valueChanged(double)", self.updateParameterNodeFromGUI)
-        self.ui.invertOutputCheckBox.connect("toggled(bool)", self.updateParameterNodeFromGUI)
-        self.ui.invertedOutputSelector.connect("currentNodeChanged(vtkMRMLNode*)", self.updateParameterNodeFromGUI)
-
-        # Buttons
-        self.ui.applyButton.connect('clicked(bool)', self.onApplyButton)
-
-        #######################
-        # Own Code            #
-        #######################
-        self.ui.datasetComboBox.addItems(["DISCHARGE", "CADMAN", "OrCaScore"])
-        self.ui.observerComboBox.addItems(["ST", "FB", "LU"])
+        # Default UI Status
+        self.mainUIHidden(True)
 
         self.ui.exportFromReferenceFolder.connect('clicked(bool)', self.logic.onExportFromReferenceFolderButtonClicked)
         self.ui.exportFromJsonFile.connect('clicked(bool)', self.logic.onExportFromJSONFileButtonClicked)
+        self.ui.loadVolumeButton.connect('clicked(bool)', self.onLoadButton)
+        self.ui.thresholdVolumeButton.connect('clicked(bool)', self.onThresholdVolume)
 
-        # Make sure parameter node is initialized (needed for module reload)
-        self.initializeParameterNode()
+        self.topLevelPath = Path(__file__).absolute().parent.parent.parent.parent
+        self.dataPath = os.path.join(Path(__file__).absolute().parent.parent.parent.parent, "data")
+
+        # Loads Settings
+        self.settingsPath = os.path.join(self.dataPath, "settings_CACSLabeler5.x.json")
+        self.settings = None
+        self.availableDatasetsAndObservers = {}
+
+        self.loadSettings()
+        self.loadDatasetSettings()
+        self.selectDatasetAndObserver()
+        self.saveSettings()
+        self.mainUIHidden(False)
+        self.updateDatasetAndObserverDropdownSelection()
+
+        # after first updateDatasetAndObserverDropdownSelection to prevent call on automatic selection
+        self.datasetComboBoxEventBlocked = False
+        self.ui.datasetComboBox.connect("currentIndexChanged(int)", self.onChangeDataset)
+        self.observerComboBoxEventBlocked = False
+        self.ui.observerComboBox.connect("currentIndexChanged(int)", self.onChangeObserver)
+
+        self.currentLoadedNode = None
+        self.initializeMainUI()
 
     def cleanup(self):
         """
         Called when the application closes and the module widget is destroyed.
         """
-        self.removeObservers()
+        pass
 
     def enter(self):
         """
         Called each time the user opens this module.
         """
-        # Make sure parameter node exists and observed
-        self.initializeParameterNode()
+        pass
 
     def exit(self):
         """
         Called each time the user opens a different module.
         """
-        # Do not react to parameter node changes (GUI wlil be updated when the user enters into the module)
-        self.removeObserver(self._parameterNode, vtk.vtkCommand.ModifiedEvent, self.updateGUIFromParameterNode)
+        pass
 
-    def onSceneStartClose(self, caller, event):
-        """
-        Called just before the scene is closed.
-        """
-        # Parameter node will be reset, do not use it anymore
-        self.setParameterNode(None)
+    def onChangeDataset(self, datasetListId=None):
+        if self.currentLoadedNode or len(slicer.util.getNodesByClass("vtkMRMLScalarVolumeNode")):
+            if not slicer.util.confirmOkCancelDisplay(
+                    "This will close current scene.  Please make sure you have saved your current work.\n"
+                    "Are you sure to continue?"
+            ):
+                return
 
-    def onSceneEndClose(self, caller, event):
-        """
-        Called just after the scene is closed.
-        """
-        # If this module is shown while the scene is closed then recreate a new parameter node immediately
-        if self.parent.isEntered:
-            self.initializeParameterNode()
+        #protect from triggering during change
+        if not self.datasetComboBoxEventBlocked:
+            self.datasetComboBoxEventBlocked = True
+            self.observerComboBoxEventBlocked = True
 
-    def initializeParameterNode(self):
-        """
-        Ensure parameter node exists and observed.
-        """
-        # Parameter node stores all user choices in parameter values, node selections, etc.
-        # so that when the scene is saved and reloaded, these settings are restored.
+            newDataset = list(self.availableDatasetsAndObservers.keys())[datasetListId]
+            self.selectDatasetAndObserver(newDataset)
+            self.updateDatasetAndObserverDropdownSelection()
+            self.saveSettings()
+            self.initializeMainUI()
 
-        self.setParameterNode(self.logic.getParameterNode())
+            self.datasetComboBoxEventBlocked = False
+            self.observerComboBoxEventBlocked = False
 
-        # Select default input nodes if nothing is selected yet to save a few clicks for the user
-        if not self._parameterNode.GetNodeReference("InputVolume"):
-            firstVolumeNode = slicer.mrmlScene.GetFirstNodeByClass("vtkMRMLScalarVolumeNode")
-            if firstVolumeNode:
-                self._parameterNode.SetNodeReferenceID("InputVolume", firstVolumeNode.GetID())
+    def onChangeObserver(self, item=None):
+        if self.currentLoadedNode or len(slicer.util.getNodesByClass("vtkMRMLScalarVolumeNode")):
+            if not slicer.util.confirmOkCancelDisplay(
+                    "This will close current scene.  Please make sure you have saved your current work.\n"
+                    "Are you sure to continue?"
+            ):
+                return
 
-    def setParameterNode(self, inputParameterNode):
-        """
-        Set and observe parameter node.
-        Observation is needed because when the parameter node is changed then the GUI must be updated immediately.
-        """
+        if not self.observerComboBoxEventBlocked:
+            self.datasetComboBoxEventBlocked = True
+            self.observerComboBoxEventBlocked = True
 
-        if inputParameterNode:
-            self.logic.setDefaultParameters(inputParameterNode)
+            self.selectDatasetAndObserver(self.settings["savedDatasetAndObserverSelection"]["dataset"], self.availableDatasetsAndObservers[self.settings["savedDatasetAndObserverSelection"]["dataset"]][item])
+            self.saveSettings()
+            self.initializeMainUI()
 
-        # Unobserve previously selected parameter node and add an observer to the newly selected.
-        # Changes of parameter node are observed so that whenever parameters are changed by a script or any other module
-        # those are reflected immediately in the GUI.
-        if self._parameterNode is not None:
-            self.removeObserver(self._parameterNode, vtk.vtkCommand.ModifiedEvent, self.updateGUIFromParameterNode)
-        self._parameterNode = inputParameterNode
-        if self._parameterNode is not None:
-            self.addObserver(self._parameterNode, vtk.vtkCommand.ModifiedEvent, self.updateGUIFromParameterNode)
+            self.datasetComboBoxEventBlocked = False
+            self.observerComboBoxEventBlocked = False
 
-        # Initial GUI update
-        self.updateGUIFromParameterNode()
+    def onLoadButton(self):
+        # TODO: filter input files
+        # # Deleta all old nodes
+        # if self.settings['show_input_if_ref_found'] or self.settings['show_input_if_ref_not_found']:
+        #     # files_ref = glob(self.settings['folderpath_references'] + '/*label-lesion.nrrd')
+        #     files_ref = glob(self.settings['folderpath_references'] + '/*-label.nrrd')
+        #     filter_input = self.settings['filter_input'].decode('utf-8')
+        #     filter_input_list = filter_input.split('(')[1].split(')')[0].split(',')
+        #     filter_input_list = [x.replace(" ", "") for x in filter_input_list]
+        #     filter_input_list = [x.encode('utf8') for x in filter_input_list]
+        #
+        #     # Collect filenames
+        #     files = []
+        #     for filt in filter_input_list:
+        #         # print('filt', filt)
+        #         files = files + glob(self.settings['folderpath_images'] + '/' + filt)
+        #
+        #     filepaths_label_ref = glob(self.settings['folderpath_references'] + '/*.nrrd')
+        #     filter_reference_with = self.settings['filter_reference_with']
+        #     filter_reference_without = self.settings['filter_reference_without']
+        #     files = self.filter_by_reference(files, filepaths_label_ref, filter_reference_with,
+        #                                      filter_reference_without)
+        #     filter_input_ref = ''
+        #     for f in files:
+        #         _, fname, _ = splitFilePath(f)
+        #         ref_found = any([fname in ref for ref in files_ref])
+        #         if ref_found and self.settings['show_input_if_ref_found']:
+        #             filter_input_ref = filter_input_ref + fname + '.mhd '
+        #         if not ref_found and self.settings['show_input_if_ref_not_found']:
+        #             filter_input_ref = filter_input_ref + fname + '.mhd '
+        #
+        #     filenames = qt.QFileDialog.getOpenFileNames(self.parent, 'Open files', self.settings['folderpath_images'],
+        #                                                 filter_input_ref)
+        # else:
 
-    def updateGUIFromParameterNode(self, caller=None, event=None):
-        """
-        This method is called whenever parameter node is changed.
-        The module GUI is updated to show the current state of the parameter node.
-        """
+        # TODO: from settings file
+        settings_imagePath = "/Users/***REMOVED***/Desktop/OrCaScore/images/"
 
-        if self._parameterNode is None or self._updatingGUIFromParameterNode:
+        if self.currentLoadedNode or len(slicer.util.getNodesByClass("vtkMRMLScalarVolumeNode")):
+            if not slicer.util.confirmOkCancelDisplay(
+                    "This will close current scene.  Please make sure you have saved your current work.\n"
+                    "Are you sure to continue?"
+            ):
+                return
+
+        self.clearCurrentViewedNode()
+
+        # opens file selection window
+        filepath = qt.QFileDialog.getOpenFileName(self.parent, 'Open files', settings_imagePath, "Files(*.mhd)")
+
+        # TODO: change function to return all parts of the name
+        filename = filepath.split("/")[-1]
+        properties = {'Name': filename}
+
+        self.currentLoadedNode = slicer.util.loadVolume(filepath, properties=properties)
+        self.currentLoadedNode.SetName(filename)
+
+        #Activate buttons
+        self.ui.RadioButton120keV.enabled = True
+        self.ui.thresholdVolumeButton.enabled = True
+        self.ui.selectedVolumeTextField.text = filename
+        self.ui.selectedVolumeTextField.cursorPosition = 0
+
+    def onThresholdVolume(self):
+        if not self.ui.RadioButton120keV.checked:
+            qt.QMessageBox.warning(slicer.util.mainWindow(),"Select KEV", "The KEV (80 or 120) must be selected to continue.")
             return
 
-        # Make sure GUI changes do not call updateParameterNodeFromGUI (it could cause infinite loop)
-        self._updatingGUIFromParameterNode = True
+        settings_load_reference_if_exist = True
+        settings_folderpath_references = "/Users/***REMOVED***/Desktop/OrCaScore/testRef"
 
-        # Update node selectors and sliders
-        self.ui.inputSelector.setCurrentNode(self._parameterNode.GetNodeReference("InputVolume"))
-        self.ui.outputSelector.setCurrentNode(self._parameterNode.GetNodeReference("OutputVolume"))
-        self.ui.invertedOutputSelector.setCurrentNode(self._parameterNode.GetNodeReference("OutputVolumeInverse"))
-        self.ui.imageThresholdSliderWidget.value = float(self._parameterNode.GetParameter("Threshold"))
-        self.ui.invertOutputCheckBox.checked = (self._parameterNode.GetParameter("Invert") == "true")
+        #removes file extension
+        inputVolumeName = os.path.splitext(self.currentLoadedNode.GetName())[0]
 
-        # Update buttons states and tooltips
-        if self._parameterNode.GetNodeReference("InputVolume") and self._parameterNode.GetNodeReference("OutputVolume"):
-            self.ui.applyButton.toolTip = "Compute output volume"
-            self.ui.applyButton.enabled = True
+        # Load reference if load_reference_if_exist is true and reference file exist and no label node exist
+        if settings_load_reference_if_exist:
+            if self.currentLoadedNode is not None:
+                labelName = inputVolumeName + '-label-lesion'
+                nodeLabel = slicer.util.getFirstNodeByName(labelName)
+
+                if nodeLabel is None and 'label' not in inputVolumeName and not inputVolumeName == '1': #Todo check this expression
+                    labelFilePath = os.path.join(settings_folderpath_references, labelName + '.nrrd')
+
+                    properties = {'name': labelName, 'labelmap': True}
+                    if os.path.isfile(labelFilePath):
+                        nodeLabel = slicer.util.loadVolume(labelFilePath, properties=properties)
+                        nodeLabel.SetName(labelName)
+
+
+        #             filepath_ref = os.path.join(self.settings['folderpath_references'], calciumName + '.nrrd')
+        #
+        #             if os.path.isfile(filepath_ref):
+        #                 node_label = slicer.util.loadVolume(filepath_ref, returnNode=True, properties=properties)[1]
+        #                 node_label.SetName(calciumName)
+        #                 # self.CACSLabelerModuleLogic.assignLabelLUT(calciumName)
+        #                 # self.CACSLabelerModuleLogic.calciumName = calciumName
+        #
+        # # Threshold image
+        # self.CACSLabelerModuleLogic = CACSLabelerModuleLogic(self.KEV80.checked, self.KEV120.checked, inputVolumeName)
+        # self.CACSLabelerModuleLogic.runThreshold()
+        # self.CACSLabelerModuleLogic.setLowerPaintThreshold()
+        #
+        # # View thresholded image as label map and image as background image in red widget
+        # # node = slicer.util.getFirstNodeByName(self.CACSLabelerModuleLogic.calciumName[0:-13])
+        # nodes = slicer.util.getNodesByClass('vtkMRMLScalarVolumeNode')
+        # for n in nodes:
+        #     if n.GetName() == self.CACSLabelerModuleLogic.calciumName[0:-13]:
+        #         node = n
+        #         break
+        # slicer.util.setSliceViewerLayers(background=node)
+        #
+        # # Set ref_name
+        # name = self.CACSLabelerModuleLogic.calciumName[0:-13]
+        # for image in self.imagelist:
+        #     if image.image_name == name:
+        #         image.ref_name = node.GetName() + '-label-lesion'
+        #
+        # # Set slicer offset
+        # slicer.util.resetSliceViews()
+        #
+        # # Creates and adds the custom Editor Widget to the module
+        # if self.localCardiacEditorWidget is None:
+        #     self.localCardiacEditorWidget = CardiacEditorWidget(parent=self.parent, showVolumesFrame=False,
+        #                                                         settings=self.settings)
+        #     self.localCardiacEditorWidget.setup()
+        #     self.localCardiacEditorWidget.enter()
+        #
+        # # Activate Save Button
+        # self.saveButton.enabled = True
+        # self.scoreButton.enabled = True
+        # self.exportButton.enabled = True
+
+    def initializeMainUI(self):
+        self.clearCurrentViewedNode()
+        self.progressBarUpdate()
+
+    def clearCurrentViewedNode(self):
+        slicer.mrmlScene.Clear(0)
+        self.ui.RadioButton120keV.enabled = False
+        self.ui.thresholdVolumeButton.enabled = False
+        self.ui.selectedVolumeTextField.text = ""
+        self.ui.selectedVolumeTextField.cursorPosition = 0
+
+    def progressBarUpdate(self):
+        images = self.logic.getImageList(self.selectedDatasetAndObserverSetting())
+        self.ui.progressBar.minimum = 0
+        self.ui.progressBar.maximum = len(images["allImages"])
+        self.ui.progressBar.value = len(images["allImages"]) - len(images["unlabeledImages"])
+
+        self.ui.completedCountText.text = str(len(images["allImages"]) - len(images["unlabeledImages"])) + " / " + str(len(images["allImages"]))
+
+    def loadSettings(self):
+        with open(self.settingsPath, 'r', encoding='utf-8') as file:
+            self.settings = None
+            self.settings = json.load(file)
+
+    def saveSettings(self):
+        with open(self.settingsPath, 'w', encoding='utf-8') as file:
+            # explicit copy to prevent race condition
+            json.dump(self.settings, file, ensure_ascii=False, indent=4, cls=NpEncoder)
+
+    def loadDatasetSettings(self):
+        for dataset in self.settings["datasets"]:
+            if self.settings["datasets"][dataset]:
+                if self.settings["datasets"][dataset]["imagesPath"] and os.path.isdir(self.settings["datasets"][dataset]["imagesPath"]):
+
+                    if dataset not in self.availableDatasetsAndObservers:
+                        self.availableDatasetsAndObservers[dataset] = []
+
+                    for observer in self.settings["datasets"][dataset]["observers"]:
+                        if os.path.isdir(self.settings["datasets"][dataset]["observers"][observer]["labelsPath"]):
+
+                            # Options: ArteryLevel, SegmentLevel
+                            if self.settings["datasets"][dataset]["observers"][observer]["segmentationMode"] == "ArteryLevel" or self.settings["datasets"][dataset]["observers"][observer]["segmentationMode"] == "SegmentLevel":
+                                self.availableDatasetsAndObservers[dataset].append(observer)
+
+                            else:
+                                print(f"Observer [{observer}] missing segmentationMode")
+                        else:
+                            print(f"Observer [{observer}] missing labels folder path")
+                else:
+                    print(f"Dataset [{dataset}] missing images folder path")
+            else:
+                print(f"Dataset [{dataset}] settings empty")
+
+    def selectDatasetAndObserver(self, dataset = None, observer = None):
+        if dataset is None and observer is None:
+            if ("savedDatasetAndObserverSelection" in self.settings) \
+                    and (self.settings["savedDatasetAndObserverSelection"]) \
+                    and ("dataset" in self.settings["savedDatasetAndObserverSelection"]) \
+                    and ("observer" in self.settings["savedDatasetAndObserverSelection"]):
+
+                if self.settings["savedDatasetAndObserverSelection"]["dataset"] in self.availableDatasetsAndObservers:
+                    try:
+                        self.availableDatasetsAndObservers[self.settings["savedDatasetAndObserverSelection"]["dataset"]].index(self.settings["savedDatasetAndObserverSelection"]["observer"])
+                        return
+                    except ValueError:
+                        pass
         else:
-            self.ui.applyButton.toolTip = "Select input and output volume nodes"
-            self.ui.applyButton.enabled = False
+            if dataset in self.availableDatasetsAndObservers:
+                self.settings["savedDatasetAndObserverSelection"]["dataset"] = dataset
+                try:
+                    self.availableDatasetsAndObservers[dataset].index(observer)
+                    self.settings["savedDatasetAndObserverSelection"]["observer"] = observer
+                    return
+                except ValueError:
+                    #if no observer selected select first available
+                    self.settings["savedDatasetAndObserverSelection"]["observer"] = self.availableDatasetsAndObservers[dataset][0]
+                    return
 
-        # All the GUI updates are done
-        self._updatingGUIFromParameterNode = False
+        # if not already selected in settings selecting first element
+        firstDataset = list(self.availableDatasetsAndObservers.keys())[0]
+        firstObserver = self.availableDatasetsAndObservers[firstDataset][0]
 
-    def updateParameterNodeFromGUI(self, caller=None, event=None):
-        """
-        This method is called when the user makes any change in the GUI.
-        The changes are saved into the parameter node (so that they are restored when the scene is saved and loaded).
-        """
+        self.settings["savedDatasetAndObserverSelection"]["dataset"] = firstDataset
+        self.settings["savedDatasetAndObserverSelection"]["observer"] = firstObserver
 
-        if self._parameterNode is None or self._updatingGUIFromParameterNode:
-            return
+    def selectedDatasetAndObserverSetting(self):
+        dataset = self.settings["savedDatasetAndObserverSelection"]["dataset"]
+        observer = self.settings["savedDatasetAndObserverSelection"]["observer"]
 
-        wasModified = self._parameterNode.StartModify()  # Modify all properties in a single batch
+        imagesPath = self.settings["datasets"][dataset]["imagesPath"]
+        labelsPath = self.settings["datasets"][dataset]["observers"][observer]["labelsPath"]
+        segmentationMode = self.settings["datasets"][dataset]["observers"][observer]["segmentationMode"]
 
-        self._parameterNode.SetNodeReferenceID("InputVolume", self.ui.inputSelector.currentNodeID)
-        self._parameterNode.SetNodeReferenceID("OutputVolume", self.ui.outputSelector.currentNodeID)
-        self._parameterNode.SetParameter("Threshold", str(self.ui.imageThresholdSliderWidget.value))
-        self._parameterNode.SetParameter("Invert", "true" if self.ui.invertOutputCheckBox.checked else "false")
-        self._parameterNode.SetNodeReferenceID("OutputVolumeInverse", self.ui.invertedOutputSelector.currentNodeID)
+        return imagesPath, labelsPath, segmentationMode
 
-        self._parameterNode.EndModify(wasModified)
+    def mainUIHidden(self, hide):
+        self.ui.inputCollapsibleButton.setHidden(hide)
+        self.ui.exportCollapsibleButton.setHidden(hide)
+        self.ui.datasetComboBox.setHidden(hide)
+        self.ui.datasetLabel.setHidden(hide)
+        self.ui.observerComboBox.setHidden(hide)
+        self.ui.observerLabel.setHidden(hide)
 
-    def onApplyButton(self):
-        """
-        Run processing when user clicks "Apply" button.
-        """
-        with slicer.util.tryWithErrorDisplay("Failed to compute results.", waitCursor=True):
+    def updateDatasetAndObserverDropdownSelection(self):
+        self.ui.datasetComboBox.clear()
+        self.ui.datasetComboBox.addItems(list(self.availableDatasetsAndObservers.keys()))
+        self.ui.datasetComboBox.setCurrentText(self.settings["savedDatasetAndObserverSelection"]["dataset"])
 
-            # Compute output
-            self.logic.process(self.ui.inputSelector.currentNode(), self.ui.outputSelector.currentNode(),
-                               self.ui.imageThresholdSliderWidget.value, self.ui.invertOutputCheckBox.checked)
+        self.ui.observerComboBox.clear()
+        self.ui.observerComboBox.addItems(self.availableDatasetsAndObservers[self.settings["savedDatasetAndObserverSelection"]["dataset"]])
+        self.ui.observerComboBox.setCurrentText(self.settings["savedDatasetAndObserverSelection"]["observer"])
 
-            # Compute inverted output (if needed)
-            if self.ui.invertedOutputSelector.currentNode():
-                # If additional output volume is selected then result with inverted threshold is written there
-                self.logic.process(self.ui.inputSelector.currentNode(), self.ui.invertedOutputSelector.currentNode(),
-                                   self.ui.imageThresholdSliderWidget.value, not self.ui.invertOutputCheckBox.checked, showResult=False)
-
-
+    def changeSettings(self):
+        pass
 
 #
 # CACSLabelerLogic
@@ -456,6 +518,31 @@ class CACSLabelerLogic(ScriptedLoadableModuleLogic):
         exporter = ScoreExport()
         exporter.exportFromJSONFile()
 
+    def runThreshold(self):
+        pass
+
+    def getImageList(self, datasetSettings):
+        imagesPath, labelsPath, segmentationMode = datasetSettings
+
+        files = {"allImages": [], "unlabeledImages": []}
+        references = []
+
+        for referenceFileName in sorted(filter(lambda x: os.path.isfile(os.path.join(labelsPath, x)),os.listdir(labelsPath))):
+            name, extension = os.path.splitext(referenceFileName)
+            if extension == ".nrrd":
+               references.append(name.split("-label-lesion")[0])
+
+        for imageFileName in sorted(filter(lambda x: os.path.isfile(os.path.join(imagesPath, x)),os.listdir(imagesPath))):
+            name, extension = os.path.splitext(imageFileName)
+            if extension == ".mhd":
+                files["allImages"].append(name)
+
+                try:
+                    references.index(name)
+                except ValueError:
+                    files["unlabeledImages"].append(name)
+
+        return files
 
 class ScoreExport():
     def __init__(self):
