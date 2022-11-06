@@ -186,9 +186,9 @@
          </widget>
         </item>
         <item>
-         <widget class="QPushButton" name="pushButton">
+         <widget class="QPushButton" name="selectNextUnlabeledImageButton">
           <property name="text">
-           <string>PushButton</string>
+           <string>Select next unlabeled image</string>
           </property>
          </widget>
         </item>

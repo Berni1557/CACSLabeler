@@ -1,5 +1,6 @@
 import logging
 import os
+from pathlib import Path
 
 import numpy as np
 import vtk
@@ -114,10 +115,11 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         # Default UI Status
         self.mainUIHidden(True)
 
-        self.ui.exportFromReferenceFolder.connect('clicked(bool)', self.logic.onExportFromReferenceFolderButtonClicked)
-        self.ui.exportFromJsonFile.connect('clicked(bool)', self.logic.onExportFromJSONFileButtonClicked)
+        self.ui.exportFromReferenceFolder.connect('clicked(bool)', self.onExportFromReferenceFolderButtonClicked)
+        self.ui.exportFromJsonFile.connect('clicked(bool)', self.onExportFromJSONFileButtonClicked)
         self.ui.loadVolumeButton.connect('clicked(bool)', self.onLoadButton)
         self.ui.thresholdVolumeButton.connect('clicked(bool)', self.onThresholdVolume)
+        self.ui.selectNextUnlabeledImageButton.connect('clicked(bool)', self.onSelectNextUnlabeledImage)
 
         self.topLevelPath = Path(__file__).absolute().parent.parent.parent.parent
         self.dataPath = os.path.join(Path(__file__).absolute().parent.parent.parent.parent, "data")
@@ -202,43 +204,38 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             self.datasetComboBoxEventBlocked = False
             self.observerComboBoxEventBlocked = False
 
-    def onLoadButton(self):
-        # TODO: filter input files
-        # # Deleta all old nodes
-        # if self.settings['show_input_if_ref_found'] or self.settings['show_input_if_ref_not_found']:
-        #     # files_ref = glob(self.settings['folderpath_references'] + '/*label-lesion.nrrd')
-        #     files_ref = glob(self.settings['folderpath_references'] + '/*-label.nrrd')
-        #     filter_input = self.settings['filter_input'].decode('utf-8')
-        #     filter_input_list = filter_input.split('(')[1].split(')')[0].split(',')
-        #     filter_input_list = [x.replace(" ", "") for x in filter_input_list]
-        #     filter_input_list = [x.encode('utf8') for x in filter_input_list]
-        #
-        #     # Collect filenames
-        #     files = []
-        #     for filt in filter_input_list:
-        #         # print('filt', filt)
-        #         files = files + glob(self.settings['folderpath_images'] + '/' + filt)
-        #
-        #     filepaths_label_ref = glob(self.settings['folderpath_references'] + '/*.nrrd')
-        #     filter_reference_with = self.settings['filter_reference_with']
-        #     filter_reference_without = self.settings['filter_reference_without']
-        #     files = self.filter_by_reference(files, filepaths_label_ref, filter_reference_with,
-        #                                      filter_reference_without)
-        #     filter_input_ref = ''
-        #     for f in files:
-        #         _, fname, _ = splitFilePath(f)
-        #         ref_found = any([fname in ref for ref in files_ref])
-        #         if ref_found and self.settings['show_input_if_ref_found']:
-        #             filter_input_ref = filter_input_ref + fname + '.mhd '
-        #         if not ref_found and self.settings['show_input_if_ref_not_found']:
-        #             filter_input_ref = filter_input_ref + fname + '.mhd '
-        #
-        #     filenames = qt.QFileDialog.getOpenFileNames(self.parent, 'Open files', self.settings['folderpath_images'],
-        #                                                 filter_input_ref)
-        # else:
+    def onSelectNextUnlabeledImage(self):
+        if self.currentLoadedNode or len(slicer.util.getNodesByClass("vtkMRMLScalarVolumeNode")):
+            if not slicer.util.confirmOkCancelDisplay(
+                    "This will close current scene.  Please make sure you have saved your current work.\n"
+                    "Are you sure to continue?"
+            ):
+                return
 
-        # TODO: from settings file
-        settings_imagePath = "/Users/***REMOVED***/Desktop/OrCaScore/images/"
+        self.clearCurrentViewedNode()
+        imageList = self.logic.getImageList(self.selectedDatasetAndObserverSetting())
+
+
+        dataset = self.settings["savedDatasetAndObserverSelection"]["dataset"]
+        imagesPath = self.settings["datasets"][dataset]["imagesPath"]
+        filename = imageList["unlabeledImages"][0] + ".mhd"
+
+        if os.path.isfile(os.path.join(imagesPath, filename)):
+            properties = {'Name': filename}
+
+            self.currentLoadedNode = slicer.util.loadVolume(os.path.join(imagesPath, filename), properties=properties)
+            self.currentLoadedNode.SetName(filename)
+
+            # Activate buttons
+            self.ui.RadioButton120keV.enabled = True
+            self.ui.thresholdVolumeButton.enabled = True
+            self.ui.selectedVolumeTextField.text = filename
+            self.ui.selectedVolumeTextField.cursorPosition = 0
+
+
+    def onLoadButton(self):
+        dataset = self.settings["savedDatasetAndObserverSelection"]["dataset"]
+        imagesPath = self.settings["datasets"][dataset]["imagesPath"]
 
         if self.currentLoadedNode or len(slicer.util.getNodesByClass("vtkMRMLScalarVolumeNode")):
             if not slicer.util.confirmOkCancelDisplay(
@@ -250,9 +247,7 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.clearCurrentViewedNode()
 
         # opens file selection window
-        filepath = qt.QFileDialog.getOpenFileName(self.parent, 'Open files', settings_imagePath, "Files(*.mhd)")
-
-        # TODO: change function to return all parts of the name
+        filepath = qt.QFileDialog.getOpenFileName(self.parent, 'Open files', imagesPath, "Files(*.mhd)")
         filename = filepath.split("/")[-1]
         properties = {'Name': filename}
 
@@ -265,13 +260,14 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.ui.selectedVolumeTextField.text = filename
         self.ui.selectedVolumeTextField.cursorPosition = 0
 
+    #Todo: Not implemented
     def onThresholdVolume(self):
         if not self.ui.RadioButton120keV.checked:
             qt.QMessageBox.warning(slicer.util.mainWindow(),"Select KEV", "The KEV (80 or 120) must be selected to continue.")
             return
 
         settings_load_reference_if_exist = True
-        settings_folderpath_references = "/Users/***REMOVED***/Desktop/OrCaScore/testRef"
+        settings_folderpath_references = ""
 
         #removes file extension
         inputVolumeName = os.path.splitext(self.currentLoadedNode.GetName())[0]
@@ -353,6 +349,11 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
         self.ui.completedCountText.text = str(len(images["allImages"]) - len(images["unlabeledImages"])) + " / " + str(len(images["allImages"]))
 
+        if self.ui.progressBar.value < self.ui.progressBar.maximum:
+            self.ui.selectNextUnlabeledImageButton.enabled = True
+        else:
+            self.ui.selectNextUnlabeledImageButton.enabled = False
+
     def loadSettings(self):
         with open(self.settingsPath, 'r', encoding='utf-8') as file:
             self.settings = None
@@ -426,8 +427,10 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         imagesPath = self.settings["datasets"][dataset]["imagesPath"]
         labelsPath = self.settings["datasets"][dataset]["observers"][observer]["labelsPath"]
         segmentationMode = self.settings["datasets"][dataset]["observers"][observer]["segmentationMode"]
+        sliceStepFile = self.settings["datasets"][dataset]["sliceStepFile"]
+        exportFolder = self.settings["exportFolder"]
 
-        return imagesPath, labelsPath, segmentationMode
+        return imagesPath, labelsPath, segmentationMode, sliceStepFile, exportFolder, dataset, observer
 
     def mainUIHidden(self, hide):
         self.ui.inputCollapsibleButton.setHidden(hide)
@@ -448,6 +451,14 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
     def changeSettings(self):
         pass
+
+    def onExportFromReferenceFolderButtonClicked(self):
+        exporter = ScoreExport(self.selectedDatasetAndObserverSetting())
+        exporter.exportFromReferenceFolder()
+
+    def onExportFromJSONFileButtonClicked(self):
+        exporter = ScoreExport(self.selectedDatasetAndObserverSetting())
+        exporter.exportFromJSONFile()
 
 #
 # CACSLabelerLogic
@@ -510,19 +521,11 @@ class CACSLabelerLogic(ScriptedLoadableModuleLogic):
         stopTime = time.time()
         logging.info(f'Processing completed in {stopTime-startTime:.2f} seconds')
 
-    def onExportFromReferenceFolderButtonClicked(self):
-        exporter = ScoreExport()
-        exporter.exportFromReferenceFolder()
-
-    def onExportFromJSONFileButtonClicked(self):
-        exporter = ScoreExport()
-        exporter.exportFromJSONFile()
-
     def runThreshold(self):
         pass
 
     def getImageList(self, datasetSettings):
-        imagesPath, labelsPath, segmentationMode = datasetSettings
+        imagesPath, labelsPath, segmentationMode, sliceStepFile, exportFolder, dataset, observer = datasetSettings
 
         files = {"allImages": [], "unlabeledImages": []}
         references = []
@@ -545,19 +548,27 @@ class CACSLabelerLogic(ScriptedLoadableModuleLogic):
         return files
 
 class ScoreExport():
-    def __init__(self):
+    def __init__(self, datasetSettings):
+        imagesPath, labelsPath, segmentationMode, sliceStepFile, exportFolder, dataset, observer = datasetSettings
+
         self.filepaths = {
-            "imageFolder": "",
-            "referenceFolder": "",
-            "sliceStepFile": "",
-            "exportFileCSV": "",
-            "exportFileJSON": ""
+            "imageFolder": imagesPath,
+            "referenceFolder": labelsPath,
+            "sliceStepFile": sliceStepFile,
+            "exportFileCSV": os.path.join(exportFolder, dataset + "_" + observer + ".csv"),
+            "exportFileJSON": os.path.join(exportFolder, dataset + "_" + observer + ".json")
         }
 
-        self.dataset = "OrCaScore"
+        self.dataset = dataset
 
         # Options: ArteryLevel, SegmentLevel
-        self.exportType = "SegmentLevel"
+        if segmentationMode == "ArteryLevel":
+            #force ArteryLevel if dataset was created on artery level
+            self.exportType = "ArteryLevel"
+        else:
+            self.exportType = "SegmentLevel"
+
+        print(self.filepaths ,self.dataset,  self.exportType)
 
         if self.exportType == "SegmentLevel":
             self.Items = {
@@ -916,10 +927,10 @@ class ScoreExport():
 
 
     def processImages(self, filename, sliceStepDataframe):
-        processedFilename = self.processFilename(self.filepaths["referenceFolder"] + filename)
+        processedFilename = self.processFilename(os.path.join(self.filepaths["referenceFolder"], filename))
 
-        image = sitk.ReadImage(self.filepaths["imageFolder"] + processedFilename[1] + ".mhd")
-        label = sitk.ReadImage(self.filepaths["referenceFolder"] + filename)
+        image = sitk.ReadImage(os.path.join(self.filepaths["imageFolder"], processedFilename[1] + ".mhd"))
+        label = sitk.ReadImage(os.path.join(self.filepaths["referenceFolder"], filename))
 
         # Convert the image to a numpy array first and then shuffle the dimensions to get axis in the order z,y,x
         imageArray = sitk.GetArrayFromImage(image)
