@@ -9,7 +9,9 @@ import qt
 import slicer
 from slicer.ScriptedLoadableModule import *
 from slicer.util import VTKObservationMixin
-import sitkUtils
+import vtkSegmentationCorePython as vtkSegmentationCore
+#import qSlicerSegmentationsModuleWidgetsPythonQt
+from PIL import ImageColor
 
 import concurrent.futures
 import SimpleITK as sitk
@@ -28,27 +30,11 @@ class NpEncoder(json.JSONEncoder):
             return obj.tolist()
         return super(NpEncoder, self).default(obj)
 
-#install needed dependencies if not available
-try:
-    import pandas
-    from scipy.ndimage import label
-    from scipy import ndimage as ndi
-
-except ModuleNotFoundError as e:
-    moduleName = e.name
-    if slicer.util.confirmOkCancelDisplay(
-            "This module requires '"+moduleName+"' Python package. Click OK to install it now."):
-        slicer.util.pip_install(moduleName)
-
-    from scipy.ndimage import label
-    import pandas
-    #from termcolor import colored
-    #import torch
-    #import cc3d
-
 #
 # CACSLabeler
 #
+
+lowerThresholdValue = 130
 
 class CACSLabeler(ScriptedLoadableModule):
     """Uses ScriptedLoadableModule base class, available at:
@@ -122,6 +108,7 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.ui.loadVolumeButton.connect('clicked(bool)', self.onLoadButton)
         self.ui.thresholdVolumeButton.connect('clicked(bool)', self.onThresholdVolume)
         self.ui.selectNextUnlabeledImageButton.connect('clicked(bool)', self.onSelectNextUnlabeledImage)
+        self.ui.saveButton.connect('clicked(bool)', self.onSaveButton)
 
         self.topLevelPath = Path(__file__).absolute().parent.parent.parent.parent
         self.dataPath = os.path.join(Path(__file__).absolute().parent.parent.parent.parent, "data")
@@ -147,12 +134,27 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             self.ui.observerComboBox.connect("currentIndexChanged(int)", self.onChangeObserver)
 
             self.currentLoadedNode = None
+            self.currentLoadedReferenceNode = None
             self.initializeMainUI()
         else:
             print("Settings file error! Change settings in JSON file!")
             self.ui.errorText.setHidden(False)
             self.ui.settingsCollapsibleButton.setHidden(True)
             self.ui.errorText.text = "Settings file error! \n Change settings in JSON file!"
+
+        self.ui.embeddedSegmentEditorWidget.setMRMLScene(slicer.mrmlScene)
+        self.ui.embeddedSegmentEditorWidget.setSegmentationNodeSelectorVisible(False)
+        self.ui.embeddedSegmentEditorWidget.setMasterVolumeNodeSelectorVisible(False)
+        self.ui.embeddedSegmentEditorWidget.setEffectNameOrder(['Paint', 'Erase'])
+        self.ui.embeddedSegmentEditorWidget.unorderedEffectsVisible = False
+        self.ui.embeddedSegmentEditorWidget.setMRMLSegmentEditorNode(self.logic.getSegmentEditorNode())
+        self.ui.embeddedSegmentEditorWidget.setSwitchToSegmentationsButtonVisible(False)
+
+        self.colorTableNode = None
+        self.createColorTable()
+
+        self.ui.embeddedSegmentEditorWidget.setHidden(True)
+        self.ui.saveButton.setHidden(True)
 
     def cleanup(self):
         """
@@ -214,6 +216,10 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             self.observerComboBoxEventBlocked = False
 
     def loadVolumeToSlice(self, filename, imagesPath):
+        self.ui.embeddedSegmentEditorWidget.setHidden(True)
+        self.ui.saveButton.setHidden(True)
+
+        self.createColorTable()
         properties = {'Name': filename}
 
         self.currentLoadedNode = slicer.util.loadVolume(os.path.join(imagesPath, filename), properties=properties)
@@ -263,75 +269,33 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
         self.loadVolumeToSlice(filename, imagesPath)
 
-    #Todo: Not implemented
     def onThresholdVolume(self):
         if not self.ui.RadioButton120keV.checked:
             qt.QMessageBox.warning(slicer.util.mainWindow(),"Select KEV", "The KEV (80 or 120) must be selected to continue.")
             return
 
-        settings_load_reference_if_exist = True
-        settings_folderpath_references = ""
-
         #removes file extension
-        inputVolumeName = os.path.splitext(self.currentLoadedNode.GetName())[0]
+        inputVolumeName = self.currentLoadedNode.GetName()
+        labelName = os.path.splitext(inputVolumeName)[0] + '-label-lesion'
 
-        # Load reference if load_reference_if_exist is true and reference file exist and no label node exist
-        if settings_load_reference_if_exist:
-            if self.currentLoadedNode is not None:
-                labelName = inputVolumeName + '-label-lesion'
-                nodeLabel = slicer.util.getFirstNodeByName(labelName)
+        imagesPath, labelsPath, segmentationMode, sliceStepFile, exportFolder, dataset, observer = self.selectedDatasetAndObserverSetting()
 
-                if nodeLabel is None and 'label' not in inputVolumeName and not inputVolumeName == '1': #Todo check this expression
-                    labelFilePath = os.path.join(settings_folderpath_references, labelName + '.nrrd')
+        self.logic.runThreshold(inputVolumeName, labelName, segmentationMode, self.settings, labelsPath, self.colorTableNode)
+        self.currentLoadedReferenceNode = slicer.util.getNode(labelName)
 
-                    properties = {'name': labelName, 'labelmap': True}
-                    if os.path.isfile(labelFilePath):
-                        nodeLabel = slicer.util.loadVolume(labelFilePath, properties=properties)
-                        nodeLabel.SetName(labelName)
+        self.ui.embeddedSegmentEditorWidget.setSegmentationNode(slicer.util.getNode(labelName))
+        #target = slicer.util.getNode(labelName).GetSegmentation().GetSegmentIdBySegmentName('RCA_PROXIMAL')
+        #self.logic.getSegmentEditorNode().SetSelectedSegmentID(target)
 
+        #self.ui.embeddedSegmentEditorWidget.setActiveEffectByName("Paint")
 
-        #             filepath_ref = os.path.join(self.settings['folderpath_references'], calciumName + '.nrrd')
-        #
-        #             if os.path.isfile(filepath_ref):
-        #                 node_label = slicer.util.loadVolume(filepath_ref, returnNode=True, properties=properties)[1]
-        #                 node_label.SetName(calciumName)
-        #                 # self.CACSLabelerModuleLogic.assignLabelLUT(calciumName)
-        #                 # self.CACSLabelerModuleLogic.calciumName = calciumName
-        #
-        # # Threshold image
-        # self.CACSLabelerModuleLogic = CACSLabelerModuleLogic(self.KEV80.checked, self.KEV120.checked, inputVolumeName)
-        # self.CACSLabelerModuleLogic.runThreshold()
-        # self.CACSLabelerModuleLogic.setLowerPaintThreshold()
-        #
-        # # View thresholded image as label map and image as background image in red widget
-        # # node = slicer.util.getFirstNodeByName(self.CACSLabelerModuleLogic.calciumName[0:-13])
-        # nodes = slicer.util.getNodesByClass('vtkMRMLScalarVolumeNode')
-        # for n in nodes:
-        #     if n.GetName() == self.CACSLabelerModuleLogic.calciumName[0:-13]:
-        #         node = n
-        #         break
-        # slicer.util.setSliceViewerLayers(background=node)
-        #
-        # # Set ref_name
-        # name = self.CACSLabelerModuleLogic.calciumName[0:-13]
-        # for image in self.imagelist:
-        #     if image.image_name == name:
-        #         image.ref_name = node.GetName() + '-label-lesion'
-        #
-        # # Set slicer offset
-        # slicer.util.resetSliceViews()
-        #
-        # # Creates and adds the custom Editor Widget to the module
-        # if self.localCardiacEditorWidget is None:
-        #     self.localCardiacEditorWidget = CardiacEditorWidget(parent=self.parent, showVolumesFrame=False,
-        #                                                         settings=self.settings)
-        #     self.localCardiacEditorWidget.setup()
-        #     self.localCardiacEditorWidget.enter()
-        #
-        # # Activate Save Button
-        # self.saveButton.enabled = True
-        # self.scoreButton.enabled = True
-        # self.exportButton.enabled = True
+        #effect = self.ui.embeddedSegmentEditorWidget.activeEffect()
+        #effect.setCommonParameter("BrushRelativeDiameter", float(3))
+        self.logic.getSegmentEditorNode().SetMasterVolumeIntensityMask(True)
+        self.logic.getSegmentEditorNode().SetMasterVolumeIntensityMaskRange(float(lowerThresholdValue), 10000.0)
+
+        self.ui.embeddedSegmentEditorWidget.setHidden(False)
+        self.ui.saveButton.setHidden(False)
 
     def initializeMainUI(self):
         self.clearCurrentViewedNode()
@@ -381,6 +345,241 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                 "savedDatasetAndObserverSelection": {
                     "dataset": "",
                     "observer": ""
+                },
+                "labels": {
+                    "SegmentLevel": {
+                        "OTHER": {
+                            "value": 1,
+                            "color": "#00ff00"
+                        },
+                        "RCA_PROXIMAL": {
+                            "value": 4,
+                            "color": "#cc0000"
+                        },
+                        "RCA_MID": {
+                            "value": 5,
+                            "color": "#ff0000"
+                        },
+                        "RCA_DISTAL": {
+                            "value": 6,
+                            "color": "#ff7c80"
+                        },
+                        "RCA_SIDE_BRANCH": {
+                            "value": 7,
+                            "color": "#ffc2c2"
+                        },
+                        "LM_BIF_LAD_LCX": {
+                            "value": 9,
+                            "color": "#0bfde0"
+                        },
+                        "LM_BIF_LAD": {
+                            "value": 10,
+                            "color": "#1acbee"
+                        },
+                        "LM_BIF_LCX": {
+                            "value": 11,
+                            "color": "#208482"
+                        },
+                        "LM_BRANCH": {
+                            "value": 12,
+                            "color": "#ffce79"
+                        },
+                        "LAD_PROXIMAL": {
+                            "value": 14,
+                            "color": "#ff641c"
+                        },
+                        "LAD_MID": {
+                            "value": 15,
+                            "color": "#ff8c00"
+                        },
+                        "LAD_DISTAL": {
+                            "value": 16,
+                            "color": "#ffe51e"
+                        },
+                        "LAD_SIDE_BRANCH": {
+                            "value": 17,
+                            "color": "#0bfdf4"
+                        },
+                        "LCX_PROXIMAL": {
+                            "value": 19,
+                            "color": "#ff00ff"
+                        },
+                        "LCX_MID": {
+                            "value": 20,
+                            "color": "#ff66ff"
+                        },
+                        "LCX_DISTAL": {
+                            "value": 21,
+                            "color": "#ff99ff"
+                        },
+                        "LCX_SIDE_BRANCH": {
+                            "value": 22,
+                            "color": "#ffccff"
+                        },
+                        "RIM": {
+                            "value": 23,
+                            "color": "#ff3399"
+                        },
+                        "AORTA_ASC": {
+                            "value": 26,
+                            "color": "#483fff"
+                        },
+                        "AORTA_DSC": {
+                            "value": 27,
+                            "color": "#0c00f6"
+                        },
+                        "AORTA_ARC": {
+                            "value": 28,
+                            "color": "#8b85ff"
+                        },
+                        "VALVE_AORTIC": {
+                            "value": 30,
+                            "color": "#caffa7"
+                        },
+                        "VALVE_PULMONIC": {
+                            "value": 31,
+                            "color": "#8dff4f"
+                        },
+                        "VALVE_TRICUSPID": {
+                            "value": 32,
+                            "color": "#009900"
+                        },
+                        "VALVE_MITRAL": {
+                            "value": 33,
+                            "color": "#5dcc80"
+                        },
+                        "PAPILLAR_MUSCLE": {
+                            "value": 34,
+                            "color": "#a7954b"
+                        },
+                        "NFS_CACS": {
+                            "value": 35,
+                            "color": "#d8cfa8"
+                        }
+                    },
+                    "ArteryLevel": {
+                        "OTHER": {
+                            "value": 1,
+                            "color": "#00ff00"
+                        },
+                        "LAD": {
+                            "value": 2,
+                            "color": "#ffcc66"
+                        },
+                        "LCX": {
+                            "value": 3,
+                            "color": "#ff00ff"
+                        },
+                        "RCA": {
+                            "value": 4,
+                            "color": "#cc0000"
+                        }
+                    }
+                },
+                "exportedLabels": {
+                    "SegmentLevel": {
+                        "CC": [
+                            "RCA_PROXIMAL",
+                            "RCA_MID",
+                            "RCA_DISTAL",
+                            "RCA_SIDE_BRANCH",
+                            "LM_BIF_LAD_LCX",
+                            "LM_BIF_LAD",
+                            "LM_BIF_LCX",
+                            "LM_BRANCH",
+                            "LAD_PROXIMAL",
+                            "LAD_MID",
+                            "LAD_DISTAL",
+                            "LAD_SIDE_BRANCH",
+                            "LCX_PROXIMAL",
+                            "LCX_MID",
+                            "LCX_DISTAL",
+                            "LCX_SIDE_BRANCH",
+                            "RIM"
+                        ],
+                        "RCA": [
+                            "RCA_PROXIMAL",
+                            "RCA_MID",
+                            "RCA_DISTAL",
+                            "RCA_SIDE_BRANCH"
+                        ],
+                        "RCA_PROXIMAL": "RCA_PROXIMAL",
+                        "RCA_MID": "RCA_MID",
+                        "RCA_DISTAL": "RCA_DISTAL",
+                        "RCA_SIDE_BRANCH": "RCA_SIDE_BRANCH",
+                        "LM": [
+                            "LM_BIF_LAD_LCX",
+                            "LM_BIF_LAD",
+                            "LM_BIF_LCX",
+                            "LM_BRANCH"
+                        ],
+                        "LM_BIF_LAD_LCX": "LM_BIF_LAD_LCX",
+                        "LM_BIF_LAD": "LM_BIF_LAD",
+                        "LM_BIF_LCX": "LM_BIF_LCX",
+                        "LM_BRANCH": "LM_BRANCH",
+                        "LAD": [
+                            "LAD_PROXIMAL",
+                            "LAD_MID",
+                            "LAD_DISTAL",
+                            "LAD_SIDE_BRANCH"
+                        ],
+                        "LAD_PROXIMAL": "LAD_PROXIMAL",
+                        "LAD_MID": "LAD_MID",
+                        "LAD_DISTAL": "LAD_DISTAL",
+                        "LAD_SIDE_BRANCH": "LAD_SIDE_BRANCH",
+                        "LCX": [
+                            "LCX_PROXIMAL",
+                            "LCX_MID",
+                            "LCX_DISTAL",
+                            "LCX_SIDE_BRANCH"
+                        ],
+                        "LCX_PROXIMAL": "LCX_PROXIMAL",
+                        "LCX_MID": "LCX_MID",
+                        "LCX_DISTAL": "LCX_DISTAL",
+                        "LCX_SIDE_BRANCH": "LCX_SIDE_BRANCH",
+                        "RIM": "RIM",
+                        "NCC": [
+                            "AORTA_ASC",
+                            "AORTA_DSC",
+                            "AORTA_ARC",
+                            "VALVE_AORTIC",
+                            "VALVE_PULMONIC",
+                            "VALVE_TRICUSPID",
+                            "VALVE_MITRAL",
+                            "NFS_CACS",
+                            "PAPILLAR_MUSCLE"
+                        ],
+                        "AORTA": [
+                            "AORTA_ASC",
+                            "AORTA_DSC",
+                            "AORTA_ARC"
+                        ],
+                        "AORTA_ASC": "AORTA_ASC",
+                        "AORTA_DSC": "AORTA_DSC",
+                        "AORTA_ARC": "AORTA_ARC",
+                        "VALVES": [
+                            "VALVE_AORTIC",
+                            "VALVE_PULMONIC",
+                            "VALVE_TRICUSPID",
+                            "VALVE_MITRAL"
+                        ],
+                        "VALVE_AORTIC": "VALVE_AORTIC",
+                        "VALVE_PULMONIC": "VALVE_PULMONIC",
+                        "VALVE_TRICUSPID": "VALVE_TRICUSPID",
+                        "VALVE_MITRAL": "VALVE_MITRAL",
+                        "PAPILLAR_MUSCLE": "PAPILLAR_MUSCLE",
+                        "NFS_CACS": "NFS_CACS"
+                    },
+                    "ArteryLevel": {
+                        "CC": [
+                            "LAD",
+                            "RCA",
+                            "LCX"
+                        ],
+                        "LAD": "LAD",
+                        "RCA": "RCA",
+                        "LCX": "LCX"
+                    }
                 }
             }
 
@@ -477,16 +676,59 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.ui.observerComboBox.addItems(self.availableDatasetsAndObservers[self.settings["savedDatasetAndObserverSelection"]["dataset"]])
         self.ui.observerComboBox.setCurrentText(self.settings["savedDatasetAndObserverSelection"]["observer"])
 
-    def changeSettings(self):
-        pass
-
     def onExportFromReferenceFolderButtonClicked(self):
-        exporter = ScoreExport(self.selectedDatasetAndObserverSetting())
+        exporter = ScoreExport(self.selectedDatasetAndObserverSetting(), self.settings)
         exporter.exportFromReferenceFolder()
 
     def onExportFromJSONFileButtonClicked(self):
-        exporter = ScoreExport(self.selectedDatasetAndObserverSetting())
+        exporter = ScoreExport(self.selectedDatasetAndObserverSetting(), self.settings)
         exporter.exportFromJSONFile()
+
+    def createColorTable(self):
+        imagesPath, labelsPath, segmentationMode, sliceStepFile, exportFolder, dataset, observer = self.selectedDatasetAndObserverSetting()
+        segmentNamesToLabels = []
+
+        for key in self.settings["labels"][segmentationMode]:
+
+            value = self.settings["labels"][segmentationMode][key]["value"]
+            color = self.settings["labels"][segmentationMode][key]["color"]
+
+            segmentNamesToLabels.append((key, value, color))
+
+        self.colorTableNode = slicer.mrmlScene.CreateNodeByClass("vtkMRMLColorTableNode")
+        self.colorTableNode.SetTypeToUser()
+        self.colorTableNode.HideFromEditorsOff()  # make the color table selectable in the GUI outside Colors module
+        slicer.mrmlScene.AddNode(self.colorTableNode)
+        self.colorTableNode.UnRegister(None)
+        largestLabelValue = max([name_value[1] for name_value in segmentNamesToLabels])
+        self.colorTableNode.SetNumberOfColors(largestLabelValue + 1)
+        self.colorTableNode.SetNamesInitialised(True)  # prevent automatic color name generation
+        # import random
+        for segmentName, labelValue, color in segmentNamesToLabels:
+            r,g,b = ImageColor.getcolor(color, "RGB")
+            a = 1.0
+            self.colorTableNode.SetColor(labelValue, segmentName, r, g, b, a)
+
+    def onSaveButton(self):
+        imagesPath, labelsPath, segmentationMode, sliceStepFile, exportFolder, dataset, observer = self.selectedDatasetAndObserverSetting()
+
+        labelmapVolumeNode = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLLabelMapVolumeNode")
+        labelmapVolumeNode.SetName("temporaryExportLabel")
+        referenceVolumeNode = None  # it could be set to the master volume
+        segmentIds = self.currentLoadedReferenceNode.GetSegmentation().GetSegmentIDs()  # export all segments
+        slicer.modules.segmentations.logic().ExportSegmentsToLabelmapNode(self.currentLoadedReferenceNode, segmentIds,
+                                                                           labelmapVolumeNode, referenceVolumeNode,
+                                                                           slicer.vtkSegmentation.EXTENT_REFERENCE_GEOMETRY,
+                                                                           self.colorTableNode)
+
+        filename = self.currentLoadedReferenceNode.GetName() + ".nrrd"
+
+        volumeNode = slicer.mrmlScene.GetFirstNodeByClass('vtkMRMLLabelMapVolumeNode')
+        slicer.util.exportNode(volumeNode, os.path.join(labelsPath, filename))
+
+        slicer.mrmlScene.RemoveNode(labelmapVolumeNode)
+        self.progressBarUpdate()
+        print(f"Saved {filename}")
 
 #
 # CACSLabelerLogic
@@ -549,8 +791,68 @@ class CACSLabelerLogic(ScriptedLoadableModuleLogic):
         stopTime = time.time()
         logging.info(f'Processing completed in {stopTime-startTime:.2f} seconds')
 
-    def runThreshold(self):
-        pass
+    def runThreshold(self, inputVolumeName ,labelName, segmentationMode, settings, labelsPath, colorTableNode):
+        node = slicer.util.getFirstNodeByName(labelName)
+        if node is None:
+            print('----- Thresholding -----')
+            print('Threshold value:', lowerThresholdValue)
+
+            imageNode = slicer.util.getNode(inputVolumeName)
+
+            segmentationNode = None
+            segmentation = None
+
+            #file exists
+            if os.path.isfile(os.path.join(labelsPath, labelName + '.nrrd')):
+                loadedVolumeNode = slicer.util.loadVolume(os.path.join(labelsPath, labelName + '.nrrd'), {"labelmap": True})
+                segmentationNode = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLSegmentationNode")  # import into new segmentation node
+                segmentationNode.SetName(labelName)
+                segmentationNode.SetReferenceImageGeometryParameterFromVolumeNode(imageNode)
+                loadedVolumeNode.GetDisplayNode().SetAndObserveColorNodeID(colorTableNode.GetID())  # just in case the custom color table has not been already associated with the labelmap volume
+                slicer.modules.segmentations.logic().ImportLabelmapToSegmentationNode(loadedVolumeNode, segmentationNode)
+
+                slicer.mrmlScene.RemoveNode(loadedVolumeNode)
+            else:
+                segmentationNode = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLSegmentationNode")
+                segmentationNode.SetName(labelName)
+                segmentationNode.CreateDefaultDisplayNodes()  # only needed for display
+
+                segmentationNode.SetReferenceImageGeometryParameterFromVolumeNode(imageNode)
+
+            segmentation = segmentationNode.GetSegmentation()
+            displayNode = segmentationNode.GetDisplayNode()
+
+            for key in settings["labels"][segmentationMode]:
+                color = settings["labels"][segmentationMode][key]["color"]
+
+                if segmentation.GetSegment(key) is None:
+                    segmentation.AddEmptySegment(key)
+
+                segment = segmentation.GetSegment(key)
+
+                r, g, b = ImageColor.getcolor(color, "RGB")
+                segment.SetColor(r/255, g/255, b/255)  # red
+                displayNode.SetSegmentOpacity3D(key, 1)  # Set opacity of a single segment
+
+                if key == "OTHER" and not os.path.isfile(os.path.join(labelsPath, labelName + '.nrrd')):
+                    segmentId = segmentationNode.GetSegmentation().GetSegmentIdBySegmentName(key)
+                    segmentArray = slicer.util.arrayFromSegmentBinaryLabelmap(segmentationNode, key, imageNode)
+                    segmentArray[slicer.util.arrayFromVolume(imageNode) >= lowerThresholdValue] = 1  # create segment by simple thresholding of an image
+                    slicer.util.updateSegmentBinaryLabelmapFromArray(segmentArray, segmentationNode, segmentId,
+                                                                     imageNode)
+
+    def getSegmentEditorNode(self):
+        # Use the Segment Editor module's parameter node for the embedded segment editor widget.
+        # This ensures that if the user switches to the Segment Editor then the selected
+        # segmentation node, volume node, etc. are the same.
+        segmentEditorSingletonTag = "SegmentEditor"
+        segmentEditorNode = slicer.mrmlScene.GetSingletonNode(segmentEditorSingletonTag, "vtkMRMLSegmentEditorNode")
+        if segmentEditorNode is None:
+            segmentEditorNode = slicer.mrmlScene.CreateNodeByClass("vtkMRMLSegmentEditorNode")
+            segmentEditorNode.UnRegister(None)
+            segmentEditorNode.SetSingletonTag(segmentEditorSingletonTag)
+            segmentEditorNode = slicer.mrmlScene.AddNode(segmentEditorNode)
+        return segmentEditorNode
 
     def getImageList(self, datasetSettings):
         imagesPath, labelsPath, segmentationMode, sliceStepFile, exportFolder, dataset, observer = datasetSettings
@@ -576,8 +878,22 @@ class CACSLabelerLogic(ScriptedLoadableModuleLogic):
         return files
 
 class ScoreExport():
-    def __init__(self, datasetSettings):
-        imagesPath, labelsPath, segmentationMode, sliceStepFile, exportFolder, dataset, observer = datasetSettings
+    def __init__(self, datasetInformation, settings):
+        try:
+            import pandas
+            from scipy.ndimage import label
+            from scipy import ndimage as ndi
+
+        except ModuleNotFoundError as e:
+            moduleName = e.name
+            if slicer.util.confirmOkCancelDisplay(
+                    "This module requires '" + moduleName + "' Python package. Click OK to install it now."):
+                slicer.util.pip_install(moduleName)
+
+            from scipy.ndimage import label
+            import pandas
+
+        imagesPath, labelsPath, segmentationMode, sliceStepFile, exportFolder, dataset, observer = datasetInformation
 
         self.filepaths = {
             "imageFolder": imagesPath,
@@ -596,65 +912,7 @@ class ScoreExport():
         else:
             self.exportType = "SegmentLevel"
 
-        print(self.filepaths ,self.dataset,  self.exportType)
-
-        if self.exportType == "SegmentLevel":
-            self.Items = {
-            "CC": [
-                4, 5, 6, 7,  # RCA
-                9, 10, 11, 12,  # LM
-                14, 15, 16, 17,  # LAD
-                19, 20, 21, 22,  # LCX
-                23,  # RIM
-            ],
-            "RCA": [4, 5, 6, 7],
-            "RCA_PROXIMAL": 4,
-            "RCA_MID": 5,
-            "RCA_DISTAL": 6,
-            "RCA_SIDE_BRANCH": 7,
-            "LM": [9, 10, 11, 12],
-            "LM_BIF_LAD_LCX": 9,
-            "LM_BIF_LAD": 10,
-            "LM_BIF_LCX": 11,
-            "LM_BRANCH": 12,
-            "LAD": [14, 15, 16, 17],
-            "LAD_PROXIMAL": 14,
-            "LAD_MID": 15,
-            "LAD_DISTAL": 16,
-            "LAD_SIDE_BRANCH": 17,
-            "LCX": [19, 20, 21, 22],
-            "LCX_PROXIMAL": 19,
-            "LCX_MID": 20,
-            "LCX_DISTAL": 21,
-            "LCX_SIDE_BRANCH": 22,
-            "RIM": 23,
-            "NCC": [
-                26, 27, 28,  # AORTA
-                30, 31, 32, 33,  # VALVES
-                24, 35,  # NFS_CACS
-                34, #PAPILLAR_MUSCLE
-            ],
-            "AORTA": [26, 27, 28],
-            "AORTA_ASC": 26,
-            "AORTA_DSC": 27,
-            "AORTA_ARC": 28,
-            "VALVES": [30, 31, 32, 33],
-            "VALVE_AORTIC": 30,
-            "VALVE_PULMONIC": 31,
-            "VALVE_TRICUSPID": 32,
-            "VALVE_MITRAL": 33,
-            "PAPILLAR_MUSCLE": 34,
-            "NFS_CACS": 35,
-        }
-        elif self.exportType == "ArteryLevel":
-            self.Items = {
-                "CC": [
-                    2, 3, 4
-                ],
-                "RCA": 4,
-                "LAD": 2,
-                "LCX": 3,
-            }
+        self.Items = self.createItems(settings)
 
         self.arteryId = {}
 
@@ -664,6 +922,30 @@ class ScoreExport():
 
         self.exportJson = {}
         self.exportList = []
+
+    def createItems(self, settings):
+        items = None
+
+        generatedItems = {}
+
+        for item in settings["exportedLabels"][self.exportType]:
+            itemContent = None
+
+            labelContent = settings["exportedLabels"][self.exportType][item]
+
+            if isinstance(labelContent, list):
+                itemContent = []
+
+                for groupElement in labelContent:
+                    itemContent.append(settings["labels"][self.exportType][groupElement]["value"])
+
+            else:
+                itemContent = settings["labels"][self.exportType][labelContent]["value"]
+                pass
+
+            generatedItems[item] = itemContent
+
+        return generatedItems
 
     def exportFromJSONFile(self):
         # Opening JSON file
