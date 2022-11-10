@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>443</width>
-    <height>694</height>
+    <height>745</height>
    </rect>
   </property>
   <layout class="QVBoxLayout" name="verticalLayout">
@@ -245,15 +245,25 @@
      <property name="text">
       <string>Export</string>
      </property>
-     <layout class="QVBoxLayout" name="verticalLayout_2">
-      <item>
+     <layout class="QFormLayout" name="formLayout">
+      <item row="0" column="0">
+       <widget class="QLabel" name="label">
+        <property name="text">
+         <string>Export type: </string>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="1">
+       <widget class="QComboBox" name="exportTypeComboBox"/>
+      </item>
+      <item row="3" column="0" colspan="2">
        <widget class="QPushButton" name="exportFromReferenceFolder">
         <property name="text">
          <string>Export scores from references folder</string>
         </property>
        </widget>
       </item>
-      <item>
+      <item row="4" column="0" colspan="2">
        <widget class="QPushButton" name="exportFromJsonFile">
         <property name="text">
          <string>Export scores from JSON file</string>

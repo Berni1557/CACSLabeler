@@ -2,7 +2,6 @@ import logging
 import os
 from pathlib import Path
 
-import numpy as np
 import vtk
 import qt
 
@@ -19,6 +18,20 @@ import numpy
 import json
 
 import timeit
+
+try:
+    import pandas
+    from scipy.ndimage import label
+    from scipy import ndimage as ndi
+
+except ModuleNotFoundError as e:
+    moduleName = e.name
+    if slicer.util.confirmOkCancelDisplay(
+            "This module requires '" + moduleName + "' Python package. Click OK to install it now."):
+        slicer.util.pip_install(moduleName)
+
+    from scipy.ndimage import label
+    import pandas
 
 class NpEncoder(json.JSONEncoder):
     def default(self, obj):
@@ -132,6 +145,8 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             self.ui.datasetComboBox.connect("currentIndexChanged(int)", self.onChangeDataset)
             self.observerComboBoxEventBlocked = False
             self.ui.observerComboBox.connect("currentIndexChanged(int)", self.onChangeObserver)
+            self.exportTypeComboBoxEventBlocked = False
+            self.ui.exportTypeComboBox.connect("currentIndexChanged(int)", self.onChangeExportType)
 
             self.currentLoadedNode = None
             self.currentLoadedReferenceNode = None
@@ -156,6 +171,13 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.ui.embeddedSegmentEditorWidget.setHidden(True)
         self.ui.saveButton.setHidden(True)
 
+        self.selectedExportType = self.settings["exportType"]
+        self.availableExportTypes = ["SegmentLevel", "ArteryLevel"]
+
+        self.ui.exportTypeComboBox.clear()
+        self.ui.exportTypeComboBox.addItems(self.availableExportTypes)
+        self.ui.exportTypeComboBox.setCurrentText(self.selectedExportType)
+
     def cleanup(self):
         """
         Called when the application closes and the module widget is destroyed.
@@ -173,6 +195,15 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         Called each time the user opens a different module.
         """
         pass
+
+    def onChangeExportType(self, exportTypeId=None):
+        if not self.exportTypeComboBoxEventBlocked:
+            self.exportTypeComboBoxEventBlocked = True
+
+            self.settings["exportType"] = self.availableExportTypes[exportTypeId]
+            self.saveSettings()
+
+            self.exportTypeComboBoxEventBlocked = False
 
     def onChangeDataset(self, datasetListId=None):
         if self.currentLoadedNode or len(slicer.util.getNodesByClass("vtkMRMLScalarVolumeNode")):
@@ -879,20 +910,6 @@ class CACSLabelerLogic(ScriptedLoadableModuleLogic):
 
 class ScoreExport():
     def __init__(self, datasetInformation, settings):
-        try:
-            import pandas
-            from scipy.ndimage import label
-            from scipy import ndimage as ndi
-
-        except ModuleNotFoundError as e:
-            moduleName = e.name
-            if slicer.util.confirmOkCancelDisplay(
-                    "This module requires '" + moduleName + "' Python package. Click OK to install it now."):
-                slicer.util.pip_install(moduleName)
-
-            from scipy.ndimage import label
-            import pandas
-
         imagesPath, labelsPath, segmentationMode, sliceStepFile, exportFolder, dataset, observer = datasetInformation
 
         self.filepaths = {
@@ -910,7 +927,7 @@ class ScoreExport():
             #force ArteryLevel if dataset was created on artery level
             self.exportType = "ArteryLevel"
         else:
-            self.exportType = "SegmentLevel"
+            self.exportType = settings["exportType"]
 
         self.Items = self.createItems(settings)
 
