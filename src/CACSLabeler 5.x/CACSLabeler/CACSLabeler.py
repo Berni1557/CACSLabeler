@@ -372,6 +372,7 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                         }
                     }
                 },
+                "exportType": "SegmentLevel",
                 "exportFolder": "",
                 "savedDatasetAndObserverSelection": {
                     "dataset": "",
