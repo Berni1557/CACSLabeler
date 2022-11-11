@@ -1114,9 +1114,9 @@ class ScoreExport():
         #needed to check if lesions are seperated in 2d but connected in 3d
         maxCoordinate = 513
 
-        tempComponentAnalysis = np.zeros(shape=(maxCoordinate,maxCoordinate))
-        tempAttenuation = np.zeros(shape=(maxCoordinate, maxCoordinate))
-        tempLabel = np.zeros(shape=(maxCoordinate, maxCoordinate))
+        tempComponentAnalysis = numpy.zeros(shape=(maxCoordinate,maxCoordinate))
+        tempAttenuation = numpy.zeros(shape=(maxCoordinate, maxCoordinate))
+        tempLabel = numpy.zeros(shape=(maxCoordinate, maxCoordinate))
 
         for element in sliceArray:
             row = element[1]
