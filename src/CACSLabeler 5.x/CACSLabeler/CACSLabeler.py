@@ -172,7 +172,7 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.ui.saveButton.setHidden(True)
 
         self.selectedExportType = self.settings["exportType"]
-        self.availableExportTypes = ["SegmentLevel", "ArteryLevel"]
+        self.availableExportTypes = list(self.settings["exportedLabels"].keys())
 
         self.ui.exportTypeComboBox.clear()
         self.ui.exportTypeComboBox.addItems(self.availableExportTypes)
@@ -506,6 +506,28 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                             "value": 4,
                             "color": "#cc0000"
                         }
+                    },
+                    "ArteryLevelWithLM": {
+                        "OTHER": {
+                            "value": 1,
+                            "color": "#00ff00"
+                        },
+                        "LAD": {
+                            "value": 2,
+                            "color": "#ffcc66"
+                        },
+                        "LCX": {
+                            "value": 3,
+                            "color": "#ff00ff"
+                        },
+                        "RCA": {
+                            "value": 4,
+                            "color": "#cc0000"
+                        },
+                        "LM": {
+                            "value": 5,
+                            "color": "#00c3ff"
+                        }
                     }
                 },
                 "exportedLabels": {
@@ -611,6 +633,18 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                         "LAD": "LAD",
                         "RCA": "RCA",
                         "LCX": "LCX"
+                    },
+                    "ArteryLevelWithLM": {
+                        "CC": [
+                            "LAD",
+                            "RCA",
+                            "LCX",
+                            "LM"
+                        ],
+                        "LAD": "LAD",
+                        "RCA": "RCA",
+                        "LCX": "LCX",
+                        "LM": "LM"
                     }
                 }
             }
@@ -634,8 +668,10 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                     for observer in self.settings["datasets"][dataset]["observers"]:
                         if os.path.isdir(self.settings["datasets"][dataset]["observers"][observer]["labelsPath"]):
 
-                            # Options: ArteryLevel, SegmentLevel
-                            if self.settings["datasets"][dataset]["observers"][observer]["segmentationMode"] == "ArteryLevel" or self.settings["datasets"][dataset]["observers"][observer]["segmentationMode"] == "SegmentLevel":
+                            # Options: ArteryLevel, SegmentLevel, ArteryLevelWithLM
+                            if self.settings["datasets"][dataset]["observers"][observer]["segmentationMode"] == "ArteryLevel" \
+                                    or self.settings["datasets"][dataset]["observers"][observer]["segmentationMode"] == "SegmentLevel"\
+                                    or self.settings["datasets"][dataset]["observers"][observer]["segmentationMode"] == "ArteryLevelWithLM":
                                 self.availableDatasetsAndObservers[dataset].append(observer)
 
                             else:
@@ -894,7 +930,7 @@ class CACSLabelerLogic(ScriptedLoadableModuleLogic):
 
         for referenceFileName in sorted(filter(lambda x: os.path.isfile(os.path.join(labelsPath, x)),os.listdir(labelsPath))):
             name, extension = os.path.splitext(referenceFileName)
-            if extension == ".nrrd":
+            if extension == ".nrrd" and os.path.isfile(os.path.join(imagesPath, name.split("-label-lesion")[0] + ".mhd")):
                references.append(name.split("-label-lesion")[0])
 
         for imageFileName in sorted(filter(lambda x: os.path.isfile(os.path.join(imagesPath, x)),os.listdir(imagesPath))):
@@ -913,22 +949,24 @@ class ScoreExport():
     def __init__(self, datasetInformation, settings):
         imagesPath, labelsPath, segmentationMode, sliceStepFile, exportFolder, dataset, observer = datasetInformation
 
+        self.segmentationMode = segmentationMode
+        self.dataset = dataset
+
+        exportTypesOrder = ["ArteryLevel", "ArteryLevelWithLM", "SegmentLevel"]
+
+        if exportTypesOrder.index(segmentationMode) >= exportTypesOrder.index(settings["exportType"]):
+            self.exportType = settings["exportType"]
+
+        else:
+            self.exportType = segmentationMode
+
         self.filepaths = {
             "imageFolder": imagesPath,
             "referenceFolder": labelsPath,
             "sliceStepFile": sliceStepFile,
-            "exportFileCSV": os.path.join(exportFolder, dataset + "_" + observer + ".csv"),
-            "exportFileJSON": os.path.join(exportFolder, dataset + "_" + observer + ".json")
+            "exportFileCSV": os.path.join(exportFolder, dataset + "_" + observer + "_" + self.exportType + ".csv"),
+            "exportFileJSON": os.path.join(exportFolder, dataset + "_" + observer + "_" + self.exportType + ".json")
         }
-
-        self.dataset = dataset
-
-        # Options: ArteryLevel, SegmentLevel
-        if segmentationMode == "ArteryLevel":
-            #force ArteryLevel if dataset was created on artery level
-            self.exportType = "ArteryLevel"
-        else:
-            self.exportType = settings["exportType"]
 
         self.Items = self.createItems(settings)
 
@@ -1029,7 +1067,7 @@ class ScoreExport():
         # preprocessing label
         reference[reference == 24] = 35
 
-        if self.exportType == "ArteryLevel":
+        if self.segmentationMode == "SegmentLevel" and self.exportType == "ArteryLevel":
             # Combines all lesions in each artery to one group
             # RCA
             reference[(reference >= 4) & (reference <= 7)] = 4
@@ -1047,6 +1085,28 @@ class ScoreExport():
             reference[(reference == 23)] = 2
 
             reference[(reference >= 5)] = 0
+        elif self.segmentationMode == "SegmentLevel" and self.exportType == "ArteryLevelWithLM":
+            # Combines all lesions in each artery to one group
+            # RCA
+            reference[(reference >= 4) & (reference <= 7)] = 4
+
+            # LAD
+            reference[(reference >= 14) & (reference <= 17)] = 2
+
+            # LCX
+            reference[(reference >= 19) & (reference <= 22)] = 3
+
+            # RIM
+            reference[(reference == 23)] = 2
+
+            # LM
+            reference[(reference >= 9) & (reference <= 12)] = 5
+
+            reference[(reference >= 6)] = 0
+        elif self.segmentationMode == "ArteryLevelWithLM" and self.exportType == "ArteryLevel":
+            # LM
+            reference[reference == 5] = 2
+            reference[(reference > 5)] = 0
 
         referenceTemporaryCopy = reference.copy()
         referenceTemporaryCopy[referenceTemporaryCopy < 2] = 0
@@ -1257,40 +1317,43 @@ class ScoreExport():
     def processImages(self, filename, sliceStepDataframe):
         processedFilename = self.processFilename(os.path.join(self.filepaths["referenceFolder"], filename))
 
-        image = sitk.ReadImage(os.path.join(self.filepaths["imageFolder"], processedFilename[1] + ".mhd"))
-        label = sitk.ReadImage(os.path.join(self.filepaths["referenceFolder"], filename))
+        if os.path.isfile(os.path.join(self.filepaths["imageFolder"], processedFilename[1] + ".mhd")):
+            image = sitk.ReadImage(os.path.join(self.filepaths["imageFolder"], processedFilename[1] + ".mhd"))
+            label = sitk.ReadImage(os.path.join(self.filepaths["referenceFolder"], filename))
 
-        # Convert the image to a numpy array first and then shuffle the dimensions to get axis in the order z,y,x
-        imageArray = sitk.GetArrayFromImage(image)
-        labelArray = sitk.GetArrayFromImage(label)
+            # Convert the image to a numpy array first and then shuffle the dimensions to get axis in the order z,y,x
+            imageArray = sitk.GetArrayFromImage(image)
+            labelArray = sitk.GetArrayFromImage(label)
 
-        # Read the spacing along each dimension
-        spacing = numpy.array(list(reversed(image.GetSpacing())))
-        sliceThickness = sliceStepDataframe.loc[(sliceStepDataframe['patient_id'] == processedFilename[2])].slice_thickness.item()
-        sliceStep = sliceStepDataframe.loc[(sliceStepDataframe['patient_id'] == processedFilename[2])].slice_step.item()
+            # Read the spacing along each dimension
+            spacing = numpy.array(list(reversed(image.GetSpacing())))
+            sliceThickness = sliceStepDataframe.loc[(sliceStepDataframe['patient_id'] == processedFilename[2])].slice_thickness.item()
+            sliceStep = sliceStepDataframe.loc[(sliceStepDataframe['patient_id'] == processedFilename[2])].slice_step.item()
 
-        exportData = {"PatientID": processedFilename[2], "SeriesInstanceUID": processedFilename[3]}
+            exportData = {"PatientID": processedFilename[2], "SeriesInstanceUID": processedFilename[3]}
 
-        self.exportJson[processedFilename[2]] = {}
-        self.exportJson[processedFilename[2]][processedFilename[3]] = {}
-        self.exportJson[processedFilename[2]][processedFilename[3]]["sliceRatio"] = sliceThickness / 3.0
-        self.exportJson[processedFilename[2]][processedFilename[3]]["voxelLength"] = spacing[1]  # voxel length in mm
-        self.exportJson[processedFilename[2]][processedFilename[3]]["lesions"] = {}
-        self.exportJson[processedFilename[2]][processedFilename[3]]["sliceCount"] = len(imageArray)
-        self.exportJson[processedFilename[2]][processedFilename[3]]["sliceStep"] = sliceStep
+            self.exportJson[processedFilename[2]] = {}
+            self.exportJson[processedFilename[2]][processedFilename[3]] = {}
+            self.exportJson[processedFilename[2]][processedFilename[3]]["sliceRatio"] = sliceThickness / 3.0
+            self.exportJson[processedFilename[2]][processedFilename[3]]["voxelLength"] = spacing[1]  # voxel length in mm
+            self.exportJson[processedFilename[2]][processedFilename[3]]["lesions"] = {}
+            self.exportJson[processedFilename[2]][processedFilename[3]]["sliceCount"] = len(imageArray)
+            self.exportJson[processedFilename[2]][processedFilename[3]]["sliceStep"] = sliceStep
 
-        countingSlices = []
+            countingSlices = []
 
-        for sliceNumber in range(0, len(imageArray), sliceStep):
-            countingSlices.append(sliceNumber)
+            for sliceNumber in range(0, len(imageArray), sliceStep):
+                countingSlices.append(sliceNumber)
 
-        self.exportJson[processedFilename[2]][processedFilename[3]]["countingSlices"] = countingSlices
+            self.exportJson[processedFilename[2]][processedFilename[3]]["countingSlices"] = countingSlices
 
-        result = self.calculateScoreFromImage(imageArray, labelArray, processedFilename[2], processedFilename[3])
+            result = self.calculateScoreFromImage(imageArray, labelArray, processedFilename[2], processedFilename[3])
 
-        print("Exported " + processedFilename[1])
-        self.exportList.append(result)
-        self.createExportFilesAndSaveContent(createJson=True)
+            print("Exported " + processedFilename[1])
+            self.exportList.append(result)
+            self.createExportFilesAndSaveContent(createJson=True)
+
+
 
     def densityFactor(self, maxDensity):
         if maxDensity >= 130 and maxDensity <= 199:
