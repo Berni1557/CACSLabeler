@@ -206,12 +206,7 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             self.exportTypeComboBoxEventBlocked = False
 
     def onChangeDataset(self, datasetListId=None):
-        if self.currentLoadedNode or len(slicer.util.getNodesByClass("vtkMRMLScalarVolumeNode")):
-            if not slicer.util.confirmOkCancelDisplay(
-                    "This will close current scene.  Please make sure you have saved your current work.\n"
-                    "Are you sure to continue?"
-            ):
-                return
+        self.clearCurrentViewedNode(True)
 
         #protect from triggering during change
         if not self.datasetComboBoxEventBlocked:
@@ -228,12 +223,7 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             self.observerComboBoxEventBlocked = False
 
     def onChangeObserver(self, item=None):
-        if self.currentLoadedNode or len(slicer.util.getNodesByClass("vtkMRMLScalarVolumeNode")):
-            if not slicer.util.confirmOkCancelDisplay(
-                    "This will close current scene.  Please make sure you have saved your current work.\n"
-                    "Are you sure to continue?"
-            ):
-                return
+        self.clearCurrentViewedNode(True)
 
         if not self.observerComboBoxEventBlocked:
             self.datasetComboBoxEventBlocked = True
@@ -263,14 +253,7 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.ui.selectedVolumeTextField.cursorPosition = 0
 
     def onSelectNextUnlabeledImage(self):
-        if self.currentLoadedNode or len(slicer.util.getNodesByClass("vtkMRMLScalarVolumeNode")):
-            if not slicer.util.confirmOkCancelDisplay(
-                    "This will close current scene.  Please make sure you have saved your current work.\n"
-                    "Are you sure to continue?"
-            ):
-                return
-
-        self.clearCurrentViewedNode()
+        self.clearCurrentViewedNode(True)
         imageList = self.logic.getImageList(self.selectedDatasetAndObserverSetting())
 
 
@@ -285,14 +268,8 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         dataset = self.settings["savedDatasetAndObserverSelection"]["dataset"]
         imagesPath = self.settings["datasets"][dataset]["imagesPath"]
 
-        if self.currentLoadedNode or len(slicer.util.getNodesByClass("vtkMRMLScalarVolumeNode")):
-            if not slicer.util.confirmOkCancelDisplay(
-                    "This will close current scene.  Please make sure you have saved your current work.\n"
-                    "Are you sure to continue?"
-            ):
-                return
 
-        self.clearCurrentViewedNode()
+        self.clearCurrentViewedNode(True)
 
         # opens file selection window
         filepath = qt.QFileDialog.getOpenFileName(self.parent, 'Open files', imagesPath, "Files(*.mhd)")
@@ -332,12 +309,21 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.clearCurrentViewedNode()
         self.progressBarUpdate()
 
-    def clearCurrentViewedNode(self):
+    def clearCurrentViewedNode(self, changeAlert = False):
+        if changeAlert:
+            if self.currentLoadedNode != None or len(slicer.util.getNodesByClass("vtkMRMLScalarVolumeNode")):
+                if not slicer.util.confirmOkCancelDisplay(
+                        "This will close current scene.  Please make sure you have saved your current work.\n"
+                        "Are you sure to continue?"
+                ):
+                    return
+
         slicer.mrmlScene.Clear(0)
         self.ui.RadioButton120keV.enabled = False
         self.ui.thresholdVolumeButton.enabled = False
         self.ui.selectedVolumeTextField.text = ""
         self.ui.selectedVolumeTextField.cursorPosition = 0
+        self.currentLoadedNode = None
 
     def progressBarUpdate(self):
         images = self.logic.getImageList(self.selectedDatasetAndObserverSetting())
