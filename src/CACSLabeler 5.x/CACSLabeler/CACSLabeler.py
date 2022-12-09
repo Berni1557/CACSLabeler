@@ -1011,7 +1011,7 @@ class ScoreExport():
 
     def createExportFilesAndSaveContent(self, createJson):
         dataframe = pandas.DataFrame.from_records(self.exportList)
-        dataframe.to_csv(self.filepaths["exportFileCSV"], index=False, sep=';')
+        dataframe.to_csv(self.filepaths["exportFileCSV"], index=False, sep=';', float_format='%.3f')
 
         if createJson:
             with open(self.filepaths["exportFileJSON"], 'w', encoding='utf-8') as file:
