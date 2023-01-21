@@ -376,7 +376,7 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                         },
                         "RCA_MID": {
                             "value": 5,
-                            "color": "#ff0000"
+                            "color": "#f5b207"
                         },
                         "RCA_DISTAL": {
                             "value": 6,
@@ -436,7 +436,7 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                         },
                         "RIM": {
                             "value": 23,
-                            "color": "#ff3399"
+                            "color": "#fc0303"
                         },
                         "AORTA_ASC": {
                             "value": 26,
@@ -474,6 +474,64 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                             "value": 35,
                             "color": "#d8cfa8"
                         }
+                    },
+                    "SegmentLevelDLNExport":{
+                        "LM": {
+                            "value": 2,
+                            "color": "#feda00"
+                        },
+                        "LAD_PROXIMAL": {
+                            "value": 3,
+                            "color": "#4dff00"
+                        },
+                        "LAD_MID": {
+                            "value": 4,
+                            "color": "#d0ff85"
+                        },
+                        "LAD_DISTAL": {
+                            "value": 5,
+                            "color": "#03ad00"
+                        },
+                        "LAD_SIDE_BRANCH": {
+                            "value": 6,
+                            "color": "#0ec9fd"
+                        },
+                        "LCX_PROXIMAL": {
+                            "value": 7,
+                            "color": "#b300ff"
+                        },
+                        "LCX_MID": {
+                            "value": 8,
+                            "color": "#ff93b9"
+                        },
+                        "LCX_DISTAL": {
+                            "value": 9,
+                            "color": "#b8b3ff"
+                        },
+                        "LCX_SIDE_BRANCH": {
+                            "value": 10,
+                            "color": "#97d2ff"
+                        },
+                        "RCA_PROXIMAL": {
+                            "value": 11,
+                            "color": "#ff0000"
+                        },
+                        "RCA_MID": {
+                            "value": 12,
+                            "color": "#ff8989"
+                        },
+                        "RCA_DISTAL": {
+                            "value": 13,
+                            "color": "#ffe5c1"
+                        },
+                        "RCA_SIDE_BRANCH": {
+                            "value": 14,
+                            "color": "#e3ffb8"
+                        },
+                        "RIM": {
+                            "value": 15,
+                            "color": "#ffaa00"
+                        },
                     },
                     "ArteryLevel": {
                         "OTHER": {
@@ -610,6 +668,56 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                         "PAPILLAR_MUSCLE": "PAPILLAR_MUSCLE",
                         "NFS_CACS": "NFS_CACS"
                     },
+                    "SegmentLevelDLNExport": {
+                        "CC": [
+                            "LM",
+                            "LAD_PROXIMAL",
+                            "LAD_MID",
+                            "LAD_DISTAL",
+                            "LAD_SIDE_BRANCH",
+                            "LCX_PROXIMAL",
+                            "LCX_MID",
+                            "LCX_DISTAL",
+                            "LCX_SIDE_BRANCH",
+                            "RCA_PROXIMAL",
+                            "RCA_MID",
+                            "RCA_DISTAL",
+                            "RCA_SIDE_BRANCH",
+                            "RIM"
+                        ],
+                        "LM": "LM",
+                        "LAD": [
+                            "LAD_PROXIMAL",
+                            "LAD_MID",
+                            "LAD_DISTAL",
+                            "LAD_SIDE_BRANCH"
+                        ],
+                        "LAD_PROXIMAL": "LAD_PROXIMAL",
+                        "LAD_MID": "LAD_MID",
+                        "LAD_DISTAL": "LAD_DISTAL",
+                        "LAD_SIDE_BRANCH": "LAD_SIDE_BRANCH",
+                        "RCA": [
+                            "RCA_PROXIMAL",
+                            "RCA_MID",
+                            "RCA_DISTAL",
+                            "RCA_SIDE_BRANCH"
+                        ],
+                        "RCA_PROXIMAL": "RCA_PROXIMAL",
+                        "RCA_MID": "RCA_MID",
+                        "RCA_DISTAL": "RCA_DISTAL",
+                        "RCA_SIDE_BRANCH": "RCA_SIDE_BRANCH",
+                        "LCX": [
+                            "LCX_PROXIMAL",
+                            "LCX_MID",
+                            "LCX_DISTAL",
+                            "LCX_SIDE_BRANCH"
+                        ],
+                        "LCX_PROXIMAL": "LCX_PROXIMAL",
+                        "LCX_MID": "LCX_MID",
+                        "LCX_DISTAL": "LCX_DISTAL",
+                        "LCX_SIDE_BRANCH": "LCX_SIDE_BRANCH",
+                        "RIM": "RIM"
+                    },
                     "ArteryLevel": {
                         "CC": [
                             "LAD",
@@ -654,9 +762,10 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                     for observer in self.settings["datasets"][dataset]["observers"]:
                         if os.path.isdir(self.settings["datasets"][dataset]["observers"][observer]["labelsPath"]):
 
-                            # Options: ArteryLevel, SegmentLevel, ArteryLevelWithLM
+                            # Options: ArteryLevel, SegmentLevel, ArteryLevelWithLM, SegmentLevelDLNExport
                             if self.settings["datasets"][dataset]["observers"][observer]["segmentationMode"] == "ArteryLevel" \
-                                    or self.settings["datasets"][dataset]["observers"][observer]["segmentationMode"] == "SegmentLevel"\
+                                    or self.settings["datasets"][dataset]["observers"][observer]["segmentationMode"] == "SegmentLevel" \
+                                    or self.settings["datasets"][dataset]["observers"][observer]["segmentationMode"] == "SegmentLevelDLNExport" \
                                     or self.settings["datasets"][dataset]["observers"][observer]["segmentationMode"] == "ArteryLevelWithLM":
                                 self.availableDatasetsAndObservers[dataset].append(observer)
 
@@ -938,7 +1047,7 @@ class ScoreExport():
         self.segmentationMode = segmentationMode
         self.dataset = dataset
 
-        exportTypesOrder = ["ArteryLevel", "ArteryLevelWithLM", "SegmentLevel"]
+        exportTypesOrder = ["ArteryLevel", "ArteryLevelWithLM", "SegmentLevelDLNExport", "SegmentLevel"]
 
         if exportTypesOrder.index(segmentationMode) >= exportTypesOrder.index(settings["exportType"]):
             self.exportType = settings["exportType"]
@@ -1053,6 +1162,7 @@ class ScoreExport():
         # preprocessing label
         reference[reference == 24] = 35
 
+        # Options: ArteryLevel, SegmentLevel, ArteryLevelWithLM, SegmentLevelDLNExport
         if self.segmentationMode == "SegmentLevel" and self.exportType == "ArteryLevel":
             # Combines all lesions in each artery to one group
             # RCA
@@ -1093,6 +1203,120 @@ class ScoreExport():
             # LM
             reference[reference == 5] = 2
             reference[(reference > 5)] = 0
+
+        elif self.segmentationMode == "SegmentLevel" and self.exportType == "SegmentLevelDLNExport":
+            reference[reference == 4] = 104  # RCA PROX
+            reference[reference == 5] = 105  # RCA MID
+            reference[reference == 6] = 106  # RCA DIST
+            reference[reference == 7] = 107  # RCA SIDE
+
+            reference[reference == 14] = 114  # LAD PROX
+            reference[reference == 15] = 115  # LAD MID
+            reference[reference == 16] = 116  # LAD DIST
+            reference[reference == 17] = 117  # LAD SIDE
+
+            reference[reference == 19] = 119  # LCX PROX
+            reference[reference == 20] = 120  # LCX MID
+            reference[reference == 21] = 121  # LCX DIST
+            reference[reference == 22] = 122  # LCX SIDE
+
+            #convert ids
+            reference[(reference >= 9) & (reference <= 12)] = 2 # LM
+
+            reference[reference == 114] = 3  # LAD PROX
+            reference[reference == 115] = 4  # LAD MID
+            reference[reference == 116] = 5  # LAD DIST
+            reference[reference == 117] = 6  # LAD SIDE
+
+            reference[reference == 119] = 7  # LCX PROX
+            reference[reference == 120] = 8  # LCX MID
+            reference[reference == 121] = 9  # LCX DIST
+            reference[reference == 122] = 10  # LCX SIDE
+
+            reference[reference == 104] = 11  # RCA PROX
+            reference[reference == 105] = 12  # RCA MID
+            reference[reference == 106] = 13  # RCA DIST
+            reference[reference == 107] = 14  # RCA SIDE
+
+            reference[reference == 23] = 15  # RIM
+
+            reference[(reference >= 16)] = 0  # LM
+
+        elif self.segmentationMode == "SegmentLevelDLNExport" and self.exportType == "ArteryLevelWithLM":
+            reference[reference == 2] = 102  # LM
+
+            reference[reference == 3] = 103  # LAD PROX
+            reference[reference == 4] = 104  # LAD MID
+            reference[reference == 5] = 105  # LAD DIST
+            reference[reference == 6] = 106  # LAD SIDE
+
+            reference[reference == 7] = 107  # LCX PROX
+            reference[reference == 8] = 108  # LCX MID
+            reference[reference == 9] = 109  # LCX DIST
+            reference[reference == 10] = 110  # LCX SIDE
+
+            reference[reference == 11] = 111  # RCA PROX
+            reference[reference == 12] = 112  # RCA MID
+            reference[reference == 13] = 113  # RCA DIST
+            reference[reference == 14] = 114  # RCA SIDE
+
+            reference[reference == 15] = 115  # RIM
+
+            # Combines all lesions in each artery to one group
+            # RCA
+            reference[(reference >= 111) & (reference <= 114)] = 4
+
+            # LAD
+            reference[(reference >= 103) & (reference <= 106)] = 2
+
+            # LCX
+            reference[(reference >= 107) & (reference <= 110)] = 3
+
+            # RIM
+            reference[(reference == 115)] = 2
+
+            # LM
+            reference[reference == 102] = 5
+
+            reference[(reference >= 6)] = 0
+
+        elif self.segmentationMode == "SegmentLevelDLNExport" and self.exportType == "ArteryLevel":
+            reference[reference == 2] = 102  # LM
+
+            reference[reference == 3] = 103  # LAD PROX
+            reference[reference == 4] = 104  # LAD MID
+            reference[reference == 5] = 105  # LAD DIST
+            reference[reference == 6] = 106  # LAD SIDE
+
+            reference[reference == 7] = 107  # LCX PROX
+            reference[reference == 8] = 108  # LCX MID
+            reference[reference == 9] = 109  # LCX DIST
+            reference[reference == 10] = 110  # LCX SIDE
+
+            reference[reference == 11] = 111  # RCA PROX
+            reference[reference == 12] = 112  # RCA MID
+            reference[reference == 13] = 113  # RCA DIST
+            reference[reference == 14] = 114  # RCA SIDE
+
+            reference[reference == 15] = 115  # RIM
+
+            # Combines all lesions in each artery to one group
+            # RCA
+            reference[(reference >= 111) & (reference <= 114)] = 4
+
+            # LAD
+            reference[(reference >= 103) & (reference <= 106)] = 2
+
+            # LCX
+            reference[(reference >= 107) & (reference <= 110)] = 3
+
+            # RIM
+            reference[(reference == 115)] = 2
+
+            # LM
+            reference[reference == 102] = 2
+
+            reference[(reference >= 5)] = 0
 
         referenceTemporaryCopy = reference.copy()
         referenceTemporaryCopy[referenceTemporaryCopy < 2] = 0
