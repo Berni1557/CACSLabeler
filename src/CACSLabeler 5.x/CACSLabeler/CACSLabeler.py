@@ -1,15 +1,11 @@
 import logging
 import os
 from pathlib import Path
-
-import vtk
 import qt
 
 import slicer
 from slicer.ScriptedLoadableModule import *
 from slicer.util import VTKObservationMixin
-import vtkSegmentationCorePython as vtkSegmentationCore
-#import qSlicerSegmentationsModuleWidgetsPythonQt
 from PIL import ImageColor
 
 import concurrent.futures
@@ -17,21 +13,14 @@ import SimpleITK as sitk
 import numpy
 import json
 
+import sys
+
+from scipy.ndimage import label
+from scipy import ndimage as ndi
+
+import importlib
+
 import timeit
-
-try:
-    import pandas
-    from scipy.ndimage import label
-    from scipy import ndimage as ndi
-
-except ModuleNotFoundError as e:
-    moduleName = e.name
-    if slicer.util.confirmOkCancelDisplay(
-            "This module requires '" + moduleName + "' Python package. Click OK to install it now."):
-        slicer.util.pip_install(moduleName)
-
-    from scipy.ndimage import label
-    import pandas
 
 class NpEncoder(json.JSONEncoder):
     def default(self, obj):
@@ -134,6 +123,8 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.loadSettings()
         self.loadDatasetSettings()
 
+        self.checkIfDependenciesAreInstalled()
+
         if self.availableDatasetsAndObservers:
             self.selectDatasetAndObserver()
             self.saveSettings()
@@ -159,7 +150,7 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
         self.ui.embeddedSegmentEditorWidget.setMRMLScene(slicer.mrmlScene)
         self.ui.embeddedSegmentEditorWidget.setSegmentationNodeSelectorVisible(False)
-        self.ui.embeddedSegmentEditorWidget.setMasterVolumeNodeSelectorVisible(False)
+        self.ui.embeddedSegmentEditorWidget.setSourceVolumeNodeSelectorVisible(False)
         self.ui.embeddedSegmentEditorWidget.setEffectNameOrder(['Paint', 'Erase'])
         self.ui.embeddedSegmentEditorWidget.unorderedEffectsVisible = False
         self.ui.embeddedSegmentEditorWidget.setMRMLSegmentEditorNode(self.logic.getSegmentEditorNode())
@@ -177,6 +168,14 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.ui.exportTypeComboBox.clear()
         self.ui.exportTypeComboBox.addItems(self.availableExportTypes)
         self.ui.exportTypeComboBox.setCurrentText(self.selectedExportType)
+
+    def checkIfDependenciesAreInstalled(self):
+        dependencies = ["pandas"]
+
+        for dependency in dependencies:
+            if dependency not in sys.modules:
+                if slicer.util.confirmOkCancelDisplay("This module requires '" + dependency + "' Python package. Click OK to install it now."):
+                    slicer.util.pip_install(dependency)
 
     def cleanup(self):
         """
@@ -300,7 +299,7 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         #effect = self.ui.embeddedSegmentEditorWidget.activeEffect()
         #effect.setCommonParameter("BrushRelativeDiameter", float(3))
         self.logic.getSegmentEditorNode().SetMasterVolumeIntensityMask(True)
-        self.logic.getSegmentEditorNode().SetMasterVolumeIntensityMaskRange(float(lowerThresholdValue), 10000.0)
+        self.logic.getSegmentEditorNode().SetSourceVolumeIntensityMaskRange(float(lowerThresholdValue), 10000.0)
 
         self.ui.embeddedSegmentEditorWidget.setHidden(False)
         self.ui.saveButton.setHidden(False)
@@ -1074,6 +1073,8 @@ class ScoreExport():
         self.exportJson = {}
         self.exportList = []
 
+        self.pandas = importlib.import_module('pandas')
+
     def createItems(self, settings):
         items = None
 
@@ -1119,7 +1120,7 @@ class ScoreExport():
         self.createExportFilesAndSaveContent(createJson=False)
 
     def createExportFilesAndSaveContent(self, createJson):
-        dataframe = pandas.DataFrame.from_records(self.exportList)
+        dataframe = self.pandas.DataFrame.from_records(self.exportList)
         dataframe.to_csv(self.filepaths["exportFileCSV"], index=False, sep=';', float_format='%.3f')
 
         if createJson:
@@ -1128,7 +1129,7 @@ class ScoreExport():
                 json.dump(dict(self.exportJson), file, ensure_ascii=False, indent=4, cls=NpEncoder)
 
     def exportFromReferenceFolder(self):
-        sliceStepDataframe = pandas.read_csv(self.filepaths["sliceStepFile"], dtype={'patient_id': 'string'})
+        sliceStepDataframe = self.pandas.read_csv(self.filepaths["sliceStepFile"], dtype={'patient_id': 'string'})
 
         #total = timeit.default_timer()
 
