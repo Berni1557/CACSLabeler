@@ -46,7 +46,7 @@ class CACSLabeler(ScriptedLoadableModule):
     def __init__(self, parent):
         ScriptedLoadableModule.__init__(self, parent)
         self.parent.title = "CACSLabeler"
-        self.parent.categories = ["Examples"]
+        self.parent.categories = ["Cardiac Computed Tomography"]
         self.parent.dependencies = []
         self.parent.contributors = ["Bernhard Foellmer, Charité"]  # replace with "Firstname Lastname (Organization)"
 
@@ -173,7 +173,7 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         dependencies = ["pandas"]
 
         for dependency in dependencies:
-            if dependency not in sys.modules:
+            if importlib.util.find_spec(dependency) is None:
                 if slicer.util.confirmOkCancelDisplay("This module requires '" + dependency + "' Python package. Click OK to install it now."):
                     slicer.util.pip_install(dependency)
 
@@ -245,11 +245,18 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.currentLoadedNode = slicer.util.loadVolume(os.path.join(imagesPath, filename), properties=properties)
         self.currentLoadedNode.SetName(filename)
 
+        slicer.util.setSliceViewerLayers(background=self.currentLoadedNode)
+        self.currentLoadedNode.GetScalarVolumeDisplayNode().AutoWindowLevelOff()
+        self.currentLoadedNode.GetScalarVolumeDisplayNode().SetWindowLevel(800, 180)
+
         # Activate buttons
         self.ui.RadioButton120keV.enabled = True
         self.ui.thresholdVolumeButton.enabled = True
         self.ui.selectedVolumeTextField.text = filename
         self.ui.selectedVolumeTextField.cursorPosition = 0
+        self.ui.selectedVolumeLabel.enabled = True
+
+        self.checkIfOtherLabelIsAvailable(filename)
 
     def onSelectNextUnlabeledImage(self):
         self.clearCurrentViewedNode(True)
@@ -275,6 +282,16 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         filename = filepath.split("/")[-1]
 
         self.loadVolumeToSlice(filename, imagesPath)
+    def checkIfOtherLabelIsAvailable(self, filename):
+        differentLabelType = self.differentLabelType()
+
+        labelFileName = filename.split(".mhd")[0] + '-label-lesion.nrrd'
+        file = os.path.join(differentLabelType["labelPath"], labelFileName)
+
+        if differentLabelType is not None and os.path.isfile(file):
+            self.ui.availableLabelType.text = differentLabelType["labelSegmentationMode"]
+            self.ui.availableLabelType.cursorPosition = 0
+            self.ui.availableLabel.enabled = True
 
     def onThresholdVolume(self):
         if not self.ui.RadioButton120keV.checked:
@@ -287,22 +304,37 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
         imagesPath, labelsPath, segmentationMode, sliceStepFile, exportFolder, dataset, observer = self.selectedDatasetAndObserverSetting()
 
-        self.logic.runThreshold(inputVolumeName, labelName, segmentationMode, self.settings, labelsPath, self.colorTableNode)
+        differentLabelType = self.differentLabelType()
+
+        self.logic.runThreshold(inputVolumeName, labelName, segmentationMode, self.settings, labelsPath, self.colorTableNode, differentLabelType)
         self.currentLoadedReferenceNode = slicer.util.getNode(labelName)
 
         self.ui.embeddedSegmentEditorWidget.setSegmentationNode(slicer.util.getNode(labelName))
-        #target = slicer.util.getNode(labelName).GetSegmentation().GetSegmentIdBySegmentName('RCA_PROXIMAL')
-        #self.logic.getSegmentEditorNode().SetSelectedSegmentID(target)
-
-        #self.ui.embeddedSegmentEditorWidget.setActiveEffectByName("Paint")
-
-        #effect = self.ui.embeddedSegmentEditorWidget.activeEffect()
-        #effect.setCommonParameter("BrushRelativeDiameter", float(3))
         self.logic.getSegmentEditorNode().SetMasterVolumeIntensityMask(True)
         self.logic.getSegmentEditorNode().SetSourceVolumeIntensityMaskRange(float(lowerThresholdValue), 10000.0)
 
         self.ui.embeddedSegmentEditorWidget.setHidden(False)
         self.ui.saveButton.setHidden(False)
+
+    def differentLabelType(self):
+        imagesPath, labelsPath, segmentationMode, sliceStepFile, exportFolder, dataset, observer = self.selectedDatasetAndObserverSetting()
+        differentLabelType = None
+
+        # check if other labels exist
+        if "differentSegmentationModeLabels" in self.settings["datasets"][dataset]["observers"][observer]:
+            if "labelsPath" in self.settings["datasets"][dataset]["observers"][observer][
+                "differentSegmentationModeLabels"] and "segmentationMode" in \
+                    self.settings["datasets"][dataset]["observers"][observer]["differentSegmentationModeLabels"]:
+                differentLabelType = {
+                    "labelPath":
+                        self.settings["datasets"][dataset]["observers"][observer]["differentSegmentationModeLabels"][
+                            "labelsPath"],
+                    "labelSegmentationMode":
+                        self.settings["datasets"][dataset]["observers"][observer]["differentSegmentationModeLabels"][
+                            "segmentationMode"]
+                }
+
+        return differentLabelType
 
     def initializeMainUI(self):
         self.clearCurrentViewedNode()
@@ -322,6 +354,11 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.ui.thresholdVolumeButton.enabled = False
         self.ui.selectedVolumeTextField.text = ""
         self.ui.selectedVolumeTextField.cursorPosition = 0
+        self.ui.selectedVolumeLabel.enabled = False
+
+        self.ui.availableLabelType.text = ""
+        self.ui.availableLabelType.cursorPosition = 0
+        self.ui.availableLabel.enabled = False
         self.currentLoadedNode = None
 
     def progressBarUpdate(self):
@@ -352,7 +389,11 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                         "observers": {
                             "VAR_OBSERVER_NAME": {
                                 "labelsPath": "",
-                                "segmentationMode": ""
+                                "segmentationMode": "",
+                                "differentSegmentationModeLabels": {
+                                    "labelsPath": "",
+                                    "segmentationMode": ""
+                                }
                             }
                         }
                     }
@@ -953,7 +994,7 @@ class CACSLabelerLogic(ScriptedLoadableModuleLogic):
         stopTime = time.time()
         logging.info(f'Processing completed in {stopTime-startTime:.2f} seconds')
 
-    def runThreshold(self, inputVolumeName ,labelName, segmentationMode, settings, labelsPath, colorTableNode):
+    def runThreshold(self, inputVolumeName, labelName, segmentationMode, settings, labelsPath, colorTableNode, differentLabelType):
         node = slicer.util.getFirstNodeByName(labelName)
         if node is None:
             print('----- Thresholding -----')
@@ -978,7 +1019,6 @@ class CACSLabelerLogic(ScriptedLoadableModuleLogic):
                 segmentationNode = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLSegmentationNode")
                 segmentationNode.SetName(labelName)
                 segmentationNode.CreateDefaultDisplayNodes()  # only needed for display
-
                 segmentationNode.SetReferenceImageGeometryParameterFromVolumeNode(imageNode)
 
             segmentation = segmentationNode.GetSegmentation()
@@ -1000,8 +1040,32 @@ class CACSLabelerLogic(ScriptedLoadableModuleLogic):
                     segmentId = segmentationNode.GetSegmentation().GetSegmentIdBySegmentName(key)
                     segmentArray = slicer.util.arrayFromSegmentBinaryLabelmap(segmentationNode, key, imageNode)
                     segmentArray[slicer.util.arrayFromVolume(imageNode) >= lowerThresholdValue] = 1  # create segment by simple thresholding of an image
-                    slicer.util.updateSegmentBinaryLabelmapFromArray(segmentArray, segmentationNode, segmentId,
-                                                                     imageNode)
+                    slicer.util.updateSegmentBinaryLabelmapFromArray(segmentArray, segmentationNode, segmentId, imageNode)
+
+            # converts label if other label is available
+            if differentLabelType is not None and not os.path.isfile(os.path.join(labelsPath, labelName + '.nrrd')):
+                if os.path.isfile(os.path.join(differentLabelType["labelPath"], labelName + '.nrrd')):
+                    label = sitk.ReadImage(os.path.join(differentLabelType["labelPath"], labelName + '.nrrd'))
+                    labelArray = sitk.GetArrayFromImage(label)
+
+                    if differentLabelType["labelSegmentationMode"] == "ArteryLevelWithLM" and segmentationMode == "SegmentLevel":
+                        self.convertLabelType(labelArray, 5, 'LM_BRANCH', imageNode, segmentationNode)
+                        self.convertLabelType(labelArray, 2, 'LAD_PROXIMAL', imageNode, segmentationNode)
+                        self.convertLabelType(labelArray, 4, "RCA_PROXIMAL", imageNode, segmentationNode)
+                        self.convertLabelType(labelArray, 3, "LCX_PROXIMAL", imageNode, segmentationNode)
+
+    def convertLabelType(self, oldLabelArray, oldArrayId, segmentIdName, imageNode, segmentationNode):
+        segmentId = segmentationNode.GetSegmentation().GetSegmentIdBySegmentName(segmentIdName)
+        otherId = segmentationNode.GetSegmentation().GetSegmentIdBySegmentName('OTHER')
+
+        segmentArray = slicer.util.arrayFromSegmentBinaryLabelmap(segmentationNode, segmentId, imageNode)
+        segmentArray[oldLabelArray == oldArrayId] = 1
+
+        otherArray = slicer.util.arrayFromSegmentBinaryLabelmap(segmentationNode, otherId, imageNode)
+        otherArray[oldLabelArray == oldArrayId] = 0
+
+        slicer.util.updateSegmentBinaryLabelmapFromArray(segmentArray, segmentationNode, segmentId, imageNode)
+        slicer.util.updateSegmentBinaryLabelmapFromArray(otherArray, segmentationNode, otherId, imageNode)
 
     def getSegmentEditorNode(self):
         # Use the Segment Editor module's parameter node for the embedded segment editor widget.
