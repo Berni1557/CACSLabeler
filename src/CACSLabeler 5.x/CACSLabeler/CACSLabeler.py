@@ -111,6 +111,7 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.ui.thresholdVolumeButton.connect('clicked(bool)', self.onThresholdVolume)
         self.ui.selectNextUnlabeledImageButton.connect('clicked(bool)', self.onSelectNextUnlabeledImage)
         self.ui.saveButton.connect('clicked(bool)', self.onSaveButton)
+        self.ui.compareLabelsButton.connect('clicked(bool)', self.onCompareLabelsButton)
 
         self.topLevelPath = Path(__file__).absolute().parent.parent.parent.parent
         self.dataPath = os.path.join(Path(__file__).absolute().parent.parent.parent.parent, "data")
@@ -134,10 +135,15 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             # after first updateDatasetAndObserverDropdownSelection to prevent call on automatic selection
             self.datasetComboBoxEventBlocked = False
             self.ui.datasetComboBox.connect("currentIndexChanged(int)", self.onChangeDataset)
+
             self.observerComboBoxEventBlocked = False
             self.ui.observerComboBox.connect("currentIndexChanged(int)", self.onChangeObserver)
+
             self.exportTypeComboBoxEventBlocked = False
             self.ui.exportTypeComboBox.connect("currentIndexChanged(int)", self.onChangeExportType)
+
+            self.compareObserverComboBoxEventBlocked = False
+            self.ui.compareObserverComboBox.connect("currentIndexChanged(int)", self.onCompareObserverComboBoxChange)
 
             self.currentLoadedNode = None
             self.currentLoadedReferenceNode = None
@@ -211,6 +217,7 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         if not self.datasetComboBoxEventBlocked:
             self.datasetComboBoxEventBlocked = True
             self.observerComboBoxEventBlocked = True
+            self.compareObserverComboBoxEventBlocked = True
 
             newDataset = list(self.availableDatasetsAndObservers.keys())[datasetListId]
             self.selectDatasetAndObserver(newDataset)
@@ -220,6 +227,7 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
             self.datasetComboBoxEventBlocked = False
             self.observerComboBoxEventBlocked = False
+            self.compareObserverComboBoxEventBlocked = False
 
     def onChangeObserver(self, item=None):
         self.clearCurrentViewedNode(True)
@@ -227,13 +235,17 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         if not self.observerComboBoxEventBlocked:
             self.datasetComboBoxEventBlocked = True
             self.observerComboBoxEventBlocked = True
+            self.compareObserverComboBoxEventBlocked = True
 
             self.selectDatasetAndObserver(self.settings["savedDatasetAndObserverSelection"]["dataset"], self.availableDatasetsAndObservers[self.settings["savedDatasetAndObserverSelection"]["dataset"]][item])
             self.saveSettings()
             self.initializeMainUI()
 
+            self.createObserverAvailableList()
+
             self.datasetComboBoxEventBlocked = False
             self.observerComboBoxEventBlocked = False
+            self.compareObserverComboBoxEventBlocked = False
 
     def loadVolumeToSlice(self, filename, imagesPath):
         self.ui.embeddedSegmentEditorWidget.setHidden(True)
@@ -258,6 +270,9 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
         self.checkIfOtherLabelIsAvailable(filename)
 
+        self.ui.compareLabelsButton.enabled = False
+        self.checkIfLabelCanBeCompared(filename)
+
     def onSelectNextUnlabeledImage(self):
         self.clearCurrentViewedNode(True)
         imageList = self.logic.getImageList(self.selectedDatasetAndObserverSetting())
@@ -274,7 +289,6 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         dataset = self.settings["savedDatasetAndObserverSelection"]["dataset"]
         imagesPath = self.settings["datasets"][dataset]["imagesPath"]
 
-
         self.clearCurrentViewedNode(True)
 
         # opens file selection window
@@ -282,10 +296,11 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         filename = filepath.split("/")[-1]
 
         self.loadVolumeToSlice(filename, imagesPath)
+
     def checkIfOtherLabelIsAvailable(self, filename):
         differentLabelType = self.differentLabelType()
 
-        labelFileName = filename.split(".mhd")[0] + '-label-lesion.nrrd'
+        labelFileName = filename.split(".mhd")[0] + differentLabelType["labelFileSuffix"] + '.nrrd'
         file = os.path.join(differentLabelType["labelPath"], labelFileName)
 
         if differentLabelType is not None and os.path.isfile(file):
@@ -298,11 +313,11 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             qt.QMessageBox.warning(slicer.util.mainWindow(),"Select KEV", "The KEV (80 or 120) must be selected to continue.")
             return
 
+        imagesPath, labelsPath, segmentationMode, sliceStepFile, exportFolder, dataset, observer, labelFileSuffix = self.selectedDatasetAndObserverSetting()
+
         #removes file extension
         inputVolumeName = self.currentLoadedNode.GetName()
-        labelName = os.path.splitext(inputVolumeName)[0] + '-label-lesion'
-
-        imagesPath, labelsPath, segmentationMode, sliceStepFile, exportFolder, dataset, observer = self.selectedDatasetAndObserverSetting()
+        labelName = os.path.splitext(inputVolumeName)[0] + labelFileSuffix
 
         differentLabelType = self.differentLabelType()
 
@@ -317,7 +332,7 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.ui.saveButton.setHidden(False)
 
     def differentLabelType(self):
-        imagesPath, labelsPath, segmentationMode, sliceStepFile, exportFolder, dataset, observer = self.selectedDatasetAndObserverSetting()
+        imagesPath, labelsPath, segmentationMode, sliceStepFile, exportFolder, dataset, observer, labelFileSuffix = self.selectedDatasetAndObserverSetting()
         differentLabelType = None
 
         # check if other labels exist
@@ -326,12 +341,9 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                 "differentSegmentationModeLabels"] and "segmentationMode" in \
                     self.settings["datasets"][dataset]["observers"][observer]["differentSegmentationModeLabels"]:
                 differentLabelType = {
-                    "labelPath":
-                        self.settings["datasets"][dataset]["observers"][observer]["differentSegmentationModeLabels"][
-                            "labelsPath"],
-                    "labelSegmentationMode":
-                        self.settings["datasets"][dataset]["observers"][observer]["differentSegmentationModeLabels"][
-                            "segmentationMode"]
+                    "labelPath": self.settings["datasets"][dataset]["observers"][observer]["differentSegmentationModeLabels"]["labelsPath"],
+                    "labelSegmentationMode": self.settings["datasets"][dataset]["observers"][observer]["differentSegmentationModeLabels"]["segmentationMode"],
+                    "labelFileSuffix": self.settings["datasets"][dataset]["observers"][observer]["differentSegmentationModeLabels"]["labelFileSuffix"]
                 }
 
         return differentLabelType
@@ -385,6 +397,7 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                 "datasets": {
                     "VAR_DATASET_NAME": {
                         "imagesPath": "",
+                        "labelFileSuffix": "",
                         "sliceStepFile": "",
                         "observers": {
                             "VAR_OBSERVER_NAME": {
@@ -859,8 +872,9 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         segmentationMode = self.settings["datasets"][dataset]["observers"][observer]["segmentationMode"]
         sliceStepFile = self.settings["datasets"][dataset]["sliceStepFile"]
         exportFolder = self.settings["exportFolder"]
+        labelFileSuffix = self.settings["datasets"][dataset]["observers"][observer]["labelFileSuffix"]
 
-        return imagesPath, labelsPath, segmentationMode, sliceStepFile, exportFolder, dataset, observer
+        return imagesPath, labelsPath, segmentationMode, sliceStepFile, exportFolder, dataset, observer, labelFileSuffix
 
     def mainUIHidden(self, hide):
         self.ui.inputCollapsibleButton.setHidden(hide)
@@ -879,6 +893,8 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.ui.observerComboBox.addItems(self.availableDatasetsAndObservers[self.settings["savedDatasetAndObserverSelection"]["dataset"]])
         self.ui.observerComboBox.setCurrentText(self.settings["savedDatasetAndObserverSelection"]["observer"])
 
+        self.createObserverAvailableList()
+
     def onExportFromReferenceFolderButtonClicked(self):
         exporter = ScoreExport(self.selectedDatasetAndObserverSetting(), self.settings)
         exporter.exportFromReferenceFolder()
@@ -888,7 +904,7 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         exporter.exportFromJSONFile()
 
     def createColorTable(self):
-        imagesPath, labelsPath, segmentationMode, sliceStepFile, exportFolder, dataset, observer = self.selectedDatasetAndObserverSetting()
+        imagesPath, labelsPath, segmentationMode, sliceStepFile, exportFolder, dataset, observer, labelFileSuffix = self.selectedDatasetAndObserverSetting()
         segmentNamesToLabels = []
 
         for key in self.settings["labels"][segmentationMode]:
@@ -913,7 +929,7 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             self.colorTableNode.SetColor(labelValue, segmentName, r, g, b, a)
 
     def onSaveButton(self):
-        imagesPath, labelsPath, segmentationMode, sliceStepFile, exportFolder, dataset, observer = self.selectedDatasetAndObserverSetting()
+        imagesPath, labelsPath, segmentationMode, sliceStepFile, exportFolder, dataset, observer, labelFileSuffix = self.selectedDatasetAndObserverSetting()
 
         labelmapVolumeNode = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLLabelMapVolumeNode")
         labelmapVolumeNode.SetName("temporaryExportLabel")
@@ -932,6 +948,217 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         slicer.mrmlScene.RemoveNode(labelmapVolumeNode)
         self.progressBarUpdate()
         print(f"Saved {filename}")
+
+    def onCompareObserverComboBoxChange(self, item=None):
+        if not self.compareObserverComboBoxEventBlocked:
+            self.selectedComparableObserver = self.comparableObserversList[item]
+
+    def createObserverAvailableList(self):
+        self.ui.compareObserverComboBox.clear()
+
+        list = self.compareObserverAvailableList()
+        self.ui.compareObserverComboBox.addItems(list)
+
+        if len(list) > 0:
+            self.ui.compareObserverComboBox.enabled = True
+            self.ui.compareObserverLabel.enabled = True
+            self.ui.compareObserverComboBox.setCurrentText(list[0])
+
+            self.comparableObserversList = list
+            self.selectedComparableObserver = list[0]
+        else:
+            self.ui.compareObserverComboBox.enabled = False
+            self.ui.compareObserverLabel.enabled = False
+
+    def compareObserverAvailableList(self):
+        currentDataset = self.settings["savedDatasetAndObserverSelection"]["dataset"]
+        currentObserver = self.settings["savedDatasetAndObserverSelection"]["observer"]
+        currentSegmentationType = self.settings["datasets"][currentDataset]["observers"][currentObserver]["segmentationMode"]
+
+        comparableObservers = []
+
+        for observer in self.settings["datasets"][currentDataset]["observers"]:
+            if observer != currentObserver:
+                segmentationModeOfObserver = self.settings["datasets"][currentDataset]["observers"][observer]["segmentationMode"]
+
+                if (currentSegmentationType == "SegmentLevel") and (segmentationModeOfObserver == "SegmentLevel" or segmentationModeOfObserver == "SegmentLevelDLNExport"):
+                    comparableObservers.append(observer)
+
+                if (currentSegmentationType == "SegmentLevelDLNExport") and (segmentationModeOfObserver == "SegmentLevel" or segmentationModeOfObserver == "SegmentLevelDLNExport"):
+                    comparableObservers.append(observer)
+
+        return comparableObservers
+
+    def checkIfLabelCanBeCompared(self, filename):
+        file = filename.split(".mhd")[0]
+        currentDataset = self.settings["savedDatasetAndObserverSelection"]["dataset"]
+        labelsPath = self.settings["datasets"][currentDataset]["observers"][self.selectedComparableObserver]["labelsPath"]
+        labelFileSuffix = self.settings["datasets"][currentDataset]["observers"][self.selectedComparableObserver]["labelFileSuffix"]
+
+        fullLabelFilename = file + labelFileSuffix + ".nrrd"
+
+        if os.path.isfile(os.path.join(labelsPath, fullLabelFilename)):
+            self.ui.compareLabelsButton.enabled = True
+        else:
+            self.ui.compareLabelsButton.enabled = False
+
+    def onCompareLabelsButton(self):
+        file = self.currentLoadedNode.GetName().split(".mhd")[0]
+        currentDataset = self.settings["savedDatasetAndObserverSelection"]["dataset"]
+        currentObserver = self.settings["savedDatasetAndObserverSelection"]["observer"]
+
+        currentObserverLabelpath = self.settings["datasets"][currentDataset]["observers"][currentObserver]["labelsPath"]
+        currentObserverlabelFileSuffix = self.settings["datasets"][currentDataset]["observers"][currentObserver]["labelFileSuffix"]
+
+        compareObserverLabelpath = self.settings["datasets"][currentDataset]["observers"][self.selectedComparableObserver]["labelsPath"]
+        compareObserverlabelFileSuffix = self.settings["datasets"][currentDataset]["observers"][self.selectedComparableObserver]["labelFileSuffix"]
+
+        currentObserverFilePath = os.path.join(currentObserverLabelpath, (file + currentObserverlabelFileSuffix + ".nrrd"))
+        compareObserverFilePath = os.path.join(compareObserverLabelpath, (file + compareObserverlabelFileSuffix + ".nrrd"))
+
+        # import labels
+        labelCurrentObserver = sitk.GetArrayFromImage(sitk.ReadImage(currentObserverFilePath))
+        labelCompareObserver = sitk.GetArrayFromImage(sitk.ReadImage(compareObserverFilePath))
+
+        #Compare labels
+        currentObserverSegmentationType = self.settings["datasets"][currentDataset]["observers"][currentObserver]["segmentationMode"]
+        compareObserverSegmentationType = self.settings["datasets"][currentDataset]["observers"][self.selectedComparableObserver]["segmentationMode"]
+
+        #segmentationTypes = ["ArteryLevel", "ArteryLevelWithLM", "SegmentLevelDLNExport", "SegmentLevel"]
+
+        if currentObserverSegmentationType != compareObserverSegmentationType:
+            if currentObserverSegmentationType == "SegmentLevel" and compareObserverSegmentationType == "SegmentLevelDLNExport":
+                labelCurrentObserver = self.processDifferentSegmentationType(labelCurrentObserver, "SegmentLevel", "SegmentLevelDLNExport")
+                #removes 1 from DLN export => background category # TODO: normalize somewhere else
+                labelCompareObserver[labelCompareObserver == 1] = 0
+
+            elif currentObserverSegmentationType == "SegmentLevelDLNExport" and compareObserverSegmentationType == "SegmentLevel":
+                labelCompareObserver = self.processDifferentSegmentationType(labelCompareObserver, "SegmentLevel", "SegmentLevelDLNExport")
+                labelCurrentObserver[labelCurrentObserver == 1] = 0
+
+        self.compareLabels(labelCurrentObserver, labelCompareObserver)
+
+    def compareLabels(self, labelOne, labelTwo):
+        comparison = numpy.where(numpy.equal(labelOne, labelTwo) == True, 2, 1)
+
+        oneBackground = numpy.where(labelOne == 0, 0, 1)
+        twoBackground = numpy.where(labelTwo == 0, 0, -1)
+
+        comparison[numpy.equal(oneBackground, twoBackground) == True] = 0
+
+        imageNode = slicer.util.getNode(self.currentLoadedNode.GetName())
+
+        segmentationNode = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLSegmentationNode")
+        segmentationNode.SetName("Comparison")
+        segmentationNode.CreateDefaultDisplayNodes()  # only needed for display
+        segmentationNode.SetReferenceImageGeometryParameterFromVolumeNode(imageNode)
+
+        segmentation = segmentationNode.GetSegmentation()
+        displayNode = segmentationNode.GetDisplayNode()
+
+        names = {
+            "Different label": {
+                "id": 1,
+                "color": "#ff0000"
+            },
+            "Same label": {
+                "id": 2,
+                "color": "#00ff00"
+            },
+        }
+
+        for key in names:
+            color = names[key]["color"]
+            id = names[key]["id"]
+
+            if segmentation.GetSegment(key) is None:
+                segmentation.AddEmptySegment(key)
+
+            segment = segmentation.GetSegment(key)
+            r, g, b = ImageColor.getcolor(color, "RGB")
+            segment.SetColor(r / 255, g / 255, b / 255)
+            displayNode.SetSegmentOpacity3D(key, 1)  # Set opacity of a single segment
+
+            segmentId = segmentationNode.GetSegmentation().GetSegmentIdBySegmentName(key)
+            segmentArray = slicer.util.arrayFromSegmentBinaryLabelmap(segmentationNode, key, imageNode)
+            segmentArray[comparison == id] = 1  # create segment by simple thresholding of an image
+            slicer.util.updateSegmentBinaryLabelmapFromArray(segmentArray, segmentationNode, segmentId, imageNode)
+
+
+    def getLabelIdByName(self, segmentationType, name):
+        return self.settings["labels"][segmentationType][name]["value"]
+
+    def processDifferentSegmentationType(self, label, oldSegmentationType, newSegmentationType):
+        if oldSegmentationType == "SegmentLevel" and newSegmentationType == "SegmentLevelDLNExport":
+            #Remove not needed labels
+            label[label == self.getLabelIdByName(oldSegmentationType, "OTHER")] = 0
+            label[label == self.getLabelIdByName(oldSegmentationType, "AORTA_ASC")] = 0
+            label[label == self.getLabelIdByName(oldSegmentationType, "AORTA_DSC")] = 0
+            label[label == self.getLabelIdByName(oldSegmentationType, "AORTA_ARC")] = 0
+            label[label == self.getLabelIdByName(oldSegmentationType, "VALVE_AORTIC")] = 0
+            label[label == self.getLabelIdByName(oldSegmentationType, "VALVE_PULMONIC")] = 0
+            label[label == self.getLabelIdByName(oldSegmentationType, "VALVE_TRICUSPID")] = 0
+            label[label == self.getLabelIdByName(oldSegmentationType, "VALVE_MITRAL")] = 0
+            label[label == self.getLabelIdByName(oldSegmentationType, "PAPILLAR_MUSCLE")] = 0
+            label[label == self.getLabelIdByName(oldSegmentationType, "NFS_CACS")] = 0
+
+            label[label == self.getLabelIdByName(oldSegmentationType, "RCA_PROXIMAL")] = self.getLabelIdByName(oldSegmentationType, "RCA_PROXIMAL") + 100
+            label[label == self.getLabelIdByName(oldSegmentationType, "RCA_MID")] = self.getLabelIdByName(oldSegmentationType, "RCA_MID") + 100
+            label[label == self.getLabelIdByName(oldSegmentationType, "RCA_DISTAL")] = self.getLabelIdByName(oldSegmentationType, "RCA_DISTAL") + 100
+            label[label == self.getLabelIdByName(oldSegmentationType, "RCA_SIDE_BRANCH")] = self.getLabelIdByName(oldSegmentationType, "RCA_SIDE_BRANCH") + 100
+
+            label[label == self.getLabelIdByName(oldSegmentationType, "LAD_PROXIMAL")] = self.getLabelIdByName(oldSegmentationType, "LAD_PROXIMAL") + 100
+            label[label == self.getLabelIdByName(oldSegmentationType, "LAD_MID")] = self.getLabelIdByName(oldSegmentationType, "LAD_MID") + 100
+            label[label == self.getLabelIdByName(oldSegmentationType, "LAD_DISTAL")] = self.getLabelIdByName(oldSegmentationType, "LAD_DISTAL") + 100
+            label[label == self.getLabelIdByName(oldSegmentationType, "LAD_SIDE_BRANCH")] = self.getLabelIdByName(oldSegmentationType, "LAD_SIDE_BRANCH") + 100
+
+            label[label == self.getLabelIdByName(oldSegmentationType, "LCX_PROXIMAL")] = self.getLabelIdByName(oldSegmentationType, "LCX_PROXIMAL") + 100
+            label[label == self.getLabelIdByName(oldSegmentationType, "LCX_MID")] = self.getLabelIdByName(oldSegmentationType, "LCX_MID") + 100
+            label[label == self.getLabelIdByName(oldSegmentationType, "LCX_DISTAL")] = self.getLabelIdByName(oldSegmentationType, "LCX_DISTAL") + 100
+            label[label == self.getLabelIdByName(oldSegmentationType, "LCX_SIDE_BRANCH")] = self.getLabelIdByName(oldSegmentationType, "LCX_SIDE_BRANCH") + 100
+
+            label[label == self.getLabelIdByName(oldSegmentationType, "RIM")] = self.getLabelIdByName(oldSegmentationType, "RIM") + 100
+
+            #convert ids
+            label[label == self.getLabelIdByName(oldSegmentationType, "LM_BIF_LAD_LCX")] = self.getLabelIdByName(newSegmentationType, "LM")
+            label[label == self.getLabelIdByName(oldSegmentationType, "LM_BIF_LAD")] = self.getLabelIdByName(newSegmentationType, "LM")
+            label[label == self.getLabelIdByName(oldSegmentationType, "LM_BIF_LCX")] = self.getLabelIdByName(newSegmentationType, "LM")
+            label[label == self.getLabelIdByName(oldSegmentationType, "LM_BRANCH")] = self.getLabelIdByName(newSegmentationType, "LM")
+
+            label[label == self.getLabelIdByName(oldSegmentationType, "RCA_PROXIMAL") + 100] = self.getLabelIdByName(
+                newSegmentationType, "RCA_PROXIMAL")
+            label[label == self.getLabelIdByName(oldSegmentationType, "RCA_MID") + 100] = self.getLabelIdByName(
+                newSegmentationType, "RCA_MID")
+            label[label == self.getLabelIdByName(oldSegmentationType, "RCA_DISTAL") + 100] = self.getLabelIdByName(
+                newSegmentationType, "RCA_DISTAL")
+            label[label == self.getLabelIdByName(oldSegmentationType, "RCA_SIDE_BRANCH") + 100] = self.getLabelIdByName(
+                newSegmentationType, "RCA_SIDE_BRANCH")
+
+            label[label == self.getLabelIdByName(oldSegmentationType, "LAD_PROXIMAL") + 100] = self.getLabelIdByName(
+                newSegmentationType, "LAD_PROXIMAL")
+            label[label == self.getLabelIdByName(oldSegmentationType, "LAD_MID") + 100] = self.getLabelIdByName(
+                newSegmentationType, "LAD_MID")
+            label[label == self.getLabelIdByName(oldSegmentationType, "LAD_DISTAL") + 100] = self.getLabelIdByName(
+                newSegmentationType, "LAD_DISTAL")
+            label[label == self.getLabelIdByName(oldSegmentationType, "LAD_SIDE_BRANCH") + 100] = self.getLabelIdByName(
+                newSegmentationType, "LAD_SIDE_BRANCH")
+
+            label[label == self.getLabelIdByName(oldSegmentationType, "LCX_PROXIMAL") + 100] = self.getLabelIdByName(
+                newSegmentationType, "LCX_PROXIMAL")
+            label[label == self.getLabelIdByName(oldSegmentationType, "LCX_MID") + 100] = self.getLabelIdByName(
+                newSegmentationType, "LCX_MID")
+            label[label == self.getLabelIdByName(oldSegmentationType, "LCX_DISTAL") + 100] = self.getLabelIdByName(
+                newSegmentationType, "LCX_DISTAL")
+            label[label == self.getLabelIdByName(oldSegmentationType, "LCX_SIDE_BRANCH") + 100] = self.getLabelIdByName(
+                newSegmentationType, "LCX_SIDE_BRANCH")
+
+            label[label == self.getLabelIdByName(oldSegmentationType, "RIM") + 100] = self.getLabelIdByName(
+                newSegmentationType, "RIM")
+
+        return label
+
+
+    # onCompareButton
 
 #
 # CACSLabelerLogic
@@ -961,38 +1188,6 @@ class CACSLabelerLogic(ScriptedLoadableModuleLogic):
             parameterNode.SetParameter("Threshold", "100.0")
         if not parameterNode.GetParameter("Invert"):
             parameterNode.SetParameter("Invert", "false")
-
-    def process(self, inputVolume, outputVolume, imageThreshold, invert=False, showResult=True):
-        """
-        Run the processing algorithm.
-        Can be used without GUI widget.
-        :param inputVolume: volume to be thresholded
-        :param outputVolume: thresholding result
-        :param imageThreshold: values above/below this threshold will be set to 0
-        :param invert: if True then values above the threshold will be set to 0, otherwise values below are set to 0
-        :param showResult: show output volume in slice viewers
-        """
-
-        if not inputVolume or not outputVolume:
-            raise ValueError("Input or output volume is invalid")
-
-        import time
-        startTime = time.time()
-        logging.info('Processing started')
-
-        # Compute the thresholded output volume using the "Threshold Scalar Volume" CLI module
-        cliParams = {
-            'InputVolume': inputVolume.GetID(),
-            'OutputVolume': outputVolume.GetID(),
-            'ThresholdValue': imageThreshold,
-            'ThresholdType': 'Above' if invert else 'Below'
-        }
-        cliNode = slicer.cli.run(slicer.modules.thresholdscalarvolume, None, cliParams, wait_for_completion=True, update_display=showResult)
-        # We don't need the CLI module node anymore, remove it to not clutter the scene with it
-        slicer.mrmlScene.RemoveNode(cliNode)
-
-        stopTime = time.time()
-        logging.info(f'Processing completed in {stopTime-startTime:.2f} seconds')
 
     def runThreshold(self, inputVolumeName, labelName, segmentationMode, settings, labelsPath, colorTableNode, differentLabelType):
         node = slicer.util.getFirstNodeByName(labelName)
@@ -1081,15 +1276,15 @@ class CACSLabelerLogic(ScriptedLoadableModuleLogic):
         return segmentEditorNode
 
     def getImageList(self, datasetSettings):
-        imagesPath, labelsPath, segmentationMode, sliceStepFile, exportFolder, dataset, observer = datasetSettings
+        imagesPath, labelsPath, segmentationMode, sliceStepFile, exportFolder, dataset, observer, labelFileSuffix = datasetSettings
 
         files = {"allImages": [], "unlabeledImages": []}
         references = []
 
         for referenceFileName in sorted(filter(lambda x: os.path.isfile(os.path.join(labelsPath, x)),os.listdir(labelsPath))):
             name, extension = os.path.splitext(referenceFileName)
-            if extension == ".nrrd" and os.path.isfile(os.path.join(imagesPath, name.split("-label-lesion")[0] + ".mhd")):
-               references.append(name.split("-label-lesion")[0])
+            if extension == ".nrrd" and os.path.isfile(os.path.join(imagesPath, name.split(labelFileSuffix)[0] + ".mhd")):
+               references.append(name.split(labelFileSuffix)[0])
 
         for imageFileName in sorted(filter(lambda x: os.path.isfile(os.path.join(imagesPath, x)),os.listdir(imagesPath))):
             name, extension = os.path.splitext(imageFileName)
@@ -1639,71 +1834,3 @@ class ScoreExport():
             return 3
         if maxDensity >= 400:
             return 4
-
-#
-# CACSLabelerTest
-#
-
-class CACSLabelerTest(ScriptedLoadableModuleTest):
-    """
-    This is the test case for your scripted module.
-    Uses ScriptedLoadableModuleTest base class, available at:
-    https://github.com/Slicer/Slicer/blob/master/Base/Python/slicer/ScriptedLoadableModule.py
-    """
-
-    def setUp(self):
-        """ Do whatever is needed to reset the state - typically a scene clear will be enough.
-        """
-        slicer.mrmlScene.Clear()
-
-    def runTest(self):
-        """Run as few or as many tests as needed here.
-        """
-        self.setUp()
-        self.test_CACSLabeler1()
-
-    def test_CACSLabeler1(self):
-        """ Ideally you should have several levels of tests.  At the lowest level
-        tests should exercise the functionality of the logic with different inputs
-        (both valid and invalid).  At higher levels your tests should emulate the
-        way the user would interact with your code and confirm that it still works
-        the way you intended.
-        One of the most important features of the tests is that it should alert other
-        developers when their changes will have an impact on the behavior of your
-        module.  For example, if a developer removes a feature that you depend on,
-        your test should break so they know that the feature is needed.
-        """
-
-        self.delayDisplay("Starting the test")
-
-        # Get/create input data
-
-        import SampleData
-        registerSampleData()
-        inputVolume = SampleData.downloadSample('CACSLabeler1')
-        self.delayDisplay('Loaded test data set')
-
-        inputScalarRange = inputVolume.GetImageData().GetScalarRange()
-        self.assertEqual(inputScalarRange[0], 0)
-        self.assertEqual(inputScalarRange[1], 695)
-
-        outputVolume = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLScalarVolumeNode")
-        threshold = 100
-
-        # Test the module logic
-
-        logic = CACSLabelerLogic()
-
-        # Test algorithm with non-inverted threshold
-        logic.process(inputVolume, outputVolume, threshold, True)
-        outputScalarRange = outputVolume.GetImageData().GetScalarRange()
-        self.assertEqual(outputScalarRange[0], inputScalarRange[0])
-        self.assertEqual(outputScalarRange[1], threshold)
-
-        # Test algorithm with inverted threshold
-        logic.process(inputVolume, outputVolume, threshold, False)
-        outputScalarRange = outputVolume.GetImageData().GetScalarRange()
-        self.assertEqual(outputScalarRange[0], inputScalarRange[0])
-        self.assertEqual(outputScalarRange[1], inputScalarRange[1])
-
-        self.delayDisplay('Test passed')
