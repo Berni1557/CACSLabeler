@@ -409,15 +409,16 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                 "datasets": {
                     "VAR_DATASET_NAME": {
                         "imagesPath": "",
-                        "labelFileSuffix": "",
                         "sliceStepFile": "",
                         "observers": {
                             "VAR_OBSERVER_NAME": {
                                 "labelsPath": "",
+                                "labelFileSuffix": "",
                                 "segmentationMode": "",
                                 "differentSegmentationModeLabels": {
                                     "labelsPath": "",
-                                    "segmentationMode": ""
+                                    "segmentationMode": "",
+                                    "labelFileSuffix": ""
                                 }
                             }
                         }
