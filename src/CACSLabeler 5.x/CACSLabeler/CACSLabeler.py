@@ -113,6 +113,7 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.ui.saveButton.connect('clicked(bool)', self.onSaveButton)
         self.ui.compareLabelsButton.connect('clicked(bool)', self.onCompareLabelsButton)
 
+
         self.topLevelPath = Path(__file__).absolute().parent.parent.parent.parent
         self.dataPath = os.path.join(Path(__file__).absolute().parent.parent.parent.parent, "data")
 
@@ -144,6 +145,9 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
             self.compareObserverComboBoxEventBlocked = False
             self.ui.compareObserverComboBox.connect("currentIndexChanged(int)", self.onCompareObserverComboBoxChange)
+
+            self.ui.comparableSegmentationTypes.connect("currentIndexChanged(int)",
+                                                        self.onComparisonSegmentationTypeChange)
 
             self.currentLoadedNode = None
             self.currentLoadedReferenceNode = None
@@ -262,6 +266,9 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.currentLoadedNode.GetScalarVolumeDisplayNode().SetWindowLevel(800, 180)
 
         # Activate buttons
+        self.ui.annotateCollapsible.enabled = True
+        self.ui.compareCollapsibleButton.enabled = True
+
         self.ui.RadioButton120keV.enabled = True
         self.ui.thresholdVolumeButton.enabled = True
         self.ui.selectedVolumeTextField.text = filename
@@ -351,6 +358,11 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
     def initializeMainUI(self):
         self.clearCurrentViewedNode()
         self.progressBarUpdate()
+
+        observer = self.settings["savedDatasetAndObserverSelection"]["observer"]
+        dataset = self.settings["savedDatasetAndObserverSelection"]["dataset"]
+        self.ui.currentObserverName.text = observer
+        self.ui.currentObserverSegmentationType.text = self.settings["datasets"][dataset]["observers"][observer]["segmentationMode"]
 
     def clearCurrentViewedNode(self, changeAlert = False):
         if changeAlert:
@@ -879,6 +891,10 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
     def mainUIHidden(self, hide):
         self.ui.inputCollapsibleButton.setHidden(hide)
         self.ui.exportCollapsibleButton.setHidden(hide)
+        self.ui.annotateCollapsible.setHidden(hide)
+        self.ui.annotateCollapsible.setHidden(hide)
+        self.ui.compareCollapsibleButton.setHidden(hide)
+
         self.ui.datasetComboBox.setHidden(hide)
         self.ui.datasetLabel.setHidden(hide)
         self.ui.observerComboBox.setHidden(hide)
@@ -952,6 +968,15 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
     def onCompareObserverComboBoxChange(self, item=None):
         if not self.compareObserverComboBoxEventBlocked:
             self.selectedComparableObserver = self.comparableObserversList[item]
+            self.updateSecondObserverSegmentationTypeLabel(self.selectedComparableObserver)
+
+    def updateSecondObserverSegmentationTypeLabel(self, observer):
+        currentDataset = self.settings["savedDatasetAndObserverSelection"]["dataset"]
+        segmentationType = self.settings["datasets"][currentDataset]["observers"][observer]["segmentationMode"]
+
+        self.ui.secondObserverSegmentationType.text = segmentationType
+
+        self.checkForComparableLabelSegmentationTypes(self.settings["savedDatasetAndObserverSelection"]["observer"], observer)
 
     def createObserverAvailableList(self):
         self.ui.compareObserverComboBox.clear()
@@ -962,13 +987,17 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         if len(list) > 0:
             self.ui.compareObserverComboBox.enabled = True
             self.ui.compareObserverLabel.enabled = True
+            self.ui.secondObserverSegmentationType.enabled = True
+
             self.ui.compareObserverComboBox.setCurrentText(list[0])
+            self.updateSecondObserverSegmentationTypeLabel(list[0])
 
             self.comparableObserversList = list
             self.selectedComparableObserver = list[0]
         else:
             self.ui.compareObserverComboBox.enabled = False
             self.ui.compareObserverLabel.enabled = False
+            self.ui.secondObserverSegmentationType.enabled = False
 
     def compareObserverAvailableList(self):
         currentDataset = self.settings["savedDatasetAndObserverSelection"]["dataset"]
@@ -1002,6 +1031,40 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         else:
             self.ui.compareLabelsButton.enabled = False
 
+    def isSegmentationTypeLowerLevel(self, firstType, secondType):
+        segmentationTypes = ["ArteryLevel", "ArteryLevelWithLM", "SegmentLevelDLNExport", "SegmentLevel"]
+
+        return (segmentationTypes.index(firstType) < segmentationTypes.index(secondType))
+
+    def getEqualAndLowerSegmentationTypes(self, segmentationType):
+        segmentationTypes = ["ArteryLevel", "ArteryLevelWithLM", "SegmentLevelDLNExport", "SegmentLevel"]
+        return segmentationTypes[:segmentationTypes.index(segmentationType)+1]
+
+    def checkForComparableLabelSegmentationTypes(self, firstObserver, secondObserver):
+        currentDataset = self.settings["savedDatasetAndObserverSelection"]["dataset"]
+        firstSegmentationType = self.settings["datasets"][currentDataset]["observers"][firstObserver]["segmentationMode"]
+        secondSegmentationType = self.settings["datasets"][currentDataset]["observers"][secondObserver]["segmentationMode"]
+
+        list = []
+
+        if firstSegmentationType != secondSegmentationType:
+            if self.isSegmentationTypeLowerLevel(firstSegmentationType, secondSegmentationType):
+                list = self.getEqualAndLowerSegmentationTypes(firstSegmentationType)
+            else:
+                list = self.getEqualAndLowerSegmentationTypes(secondSegmentationType)
+        else:
+            list = self.getEqualAndLowerSegmentationTypes(firstSegmentationType)
+
+        self.availableComparisonSegmentationTypes = list[::-1]
+        self.comparisonSegmentationType = self.availableComparisonSegmentationTypes[0]
+
+        self.ui.comparableSegmentationTypes.clear()
+        self.ui.comparableSegmentationTypes.addItems(self.availableComparisonSegmentationTypes)
+        self.ui.comparableSegmentationTypes.setCurrentText(self.availableComparisonSegmentationTypes[0])
+
+    def onComparisonSegmentationTypeChange(self, item):
+        self.comparisonSegmentationType = self.availableComparisonSegmentationTypes[item]
+
     def onCompareLabelsButton(self):
         file = self.currentLoadedNode.GetName().split(".mhd")[0]
         currentDataset = self.settings["savedDatasetAndObserverSelection"]["dataset"]
@@ -1024,17 +1087,9 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         currentObserverSegmentationType = self.settings["datasets"][currentDataset]["observers"][currentObserver]["segmentationMode"]
         compareObserverSegmentationType = self.settings["datasets"][currentDataset]["observers"][self.selectedComparableObserver]["segmentationMode"]
 
-        #segmentationTypes = ["ArteryLevel", "ArteryLevelWithLM", "SegmentLevelDLNExport", "SegmentLevel"]
 
-        if currentObserverSegmentationType != compareObserverSegmentationType:
-            if currentObserverSegmentationType == "SegmentLevel" and compareObserverSegmentationType == "SegmentLevelDLNExport":
-                labelCurrentObserver = self.processDifferentSegmentationType(labelCurrentObserver, "SegmentLevel", "SegmentLevelDLNExport")
-                #removes 1 from DLN export => background category # TODO: normalize somewhere else
-                labelCompareObserver[labelCompareObserver == 1] = 0
-
-            elif currentObserverSegmentationType == "SegmentLevelDLNExport" and compareObserverSegmentationType == "SegmentLevel":
-                labelCompareObserver = self.processDifferentSegmentationType(labelCompareObserver, "SegmentLevel", "SegmentLevelDLNExport")
-                labelCurrentObserver[labelCurrentObserver == 1] = 0
+        labelCurrentObserver = self.processSegmentationLabels(labelCurrentObserver, currentObserverSegmentationType, self.comparisonSegmentationType)
+        labelCompareObserver = self.processSegmentationLabels(labelCompareObserver, compareObserverSegmentationType, self.comparisonSegmentationType)
 
         self.compareLabels(labelCurrentObserver, labelCompareObserver)
 
@@ -1088,7 +1143,12 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
     def getLabelIdByName(self, segmentationType, name):
         return self.settings["labels"][segmentationType][name]["value"]
 
-    def processDifferentSegmentationType(self, label, oldSegmentationType, newSegmentationType):
+    def processSegmentationLabels(self, label, oldSegmentationType, newSegmentationType):
+        if oldSegmentationType == "SegmentLevelDLNExport":
+            label[label == 1] = 0
+        else:
+            label[label == self.getLabelIdByName(oldSegmentationType, "OTHER")] = 0
+
         if oldSegmentationType == "SegmentLevel" and newSegmentationType == "SegmentLevelDLNExport":
             #Remove not needed labels
             label[label == self.getLabelIdByName(oldSegmentationType, "OTHER")] = 0
@@ -1155,8 +1215,164 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             label[label == self.getLabelIdByName(oldSegmentationType, "RIM") + 100] = self.getLabelIdByName(
                 newSegmentationType, "RIM")
 
-        return label
+        elif oldSegmentationType == "SegmentLevel" and newSegmentationType == "ArteryLevel":
+            # Combines all lesions in each artery to one group
+            # RCA
+            label[(label >= 4) & (label <= 7)] = 4
 
+            # LM
+            label[(label >= 9) & (label <= 12)] = 2
+
+            # LAD
+            label[(label >= 14) & (label <= 17)] = 2
+
+            # LCX
+            label[(label >= 19) & (label <= 22)] = 3
+
+            # RIM
+            label[(label == 23)] = 2
+
+            label[(label >= 5)] = 0
+
+        elif oldSegmentationType == "SegmentLevel" and newSegmentationType == "ArteryLevelWithLM":
+            # Combines all lesions in each artery to one group
+            # RCA
+            label[(label >= 4) & (label <= 7)] = 4
+
+            # LAD
+            label[(label >= 14) & (label <= 17)] = 2
+
+            # LCX
+            label[(label >= 19) & (label <= 22)] = 3
+
+            # RIM
+            label[(label == 23)] = 2
+
+            # LM
+            label[(label >= 9) & (label <= 12)] = 5
+
+            label[(label >= 6)] = 0
+
+        elif oldSegmentationType == "ArteryLevelWithLM" and newSegmentationType == "ArteryLevel":
+            # LM
+            label[label == 5] = 2
+            label[(label > 5)] = 0
+
+        elif oldSegmentationType == "SegmentLevel" and newSegmentationType == "SegmentLevelDLNExport":
+            label[label == 4] = 104  # RCA PROX
+            label[label == 5] = 105  # RCA MID
+            label[label == 6] = 106  # RCA DIST
+            label[label == 7] = 107  # RCA SIDE
+
+            label[label == 14] = 114  # LAD PROX
+            label[label == 15] = 115  # LAD MID
+            label[label == 16] = 116  # LAD DIST
+            label[label == 17] = 117  # LAD SIDE
+
+            label[label == 19] = 119  # LCX PROX
+            label[label == 20] = 120  # LCX MID
+            label[label == 21] = 121  # LCX DIST
+            label[label == 22] = 122  # LCX SIDE
+
+            #convert ids
+            label[(label >= 9) & (label <= 12)] = 2 # LM
+
+            label[label == 114] = 3  # LAD PROX
+            label[label == 115] = 4  # LAD MID
+            label[label == 116] = 5  # LAD DIST
+            label[label == 117] = 6  # LAD SIDE
+
+            label[label == 119] = 7  # LCX PROX
+            label[label == 120] = 8  # LCX MID
+            label[label == 121] = 9  # LCX DIST
+            label[label == 122] = 10  # LCX SIDE
+
+            label[label == 104] = 11  # RCA PROX
+            label[label == 105] = 12  # RCA MID
+            label[label == 106] = 13  # RCA DIST
+            label[label == 107] = 14  # RCA SIDE
+
+            label[label == 23] = 15  # RIM
+
+            label[(label >= 16)] = 0  # LM
+
+        elif oldSegmentationType == "SegmentLevelDLNExport" and newSegmentationType == "ArteryLevelWithLM":
+            label[label == 2] = 102  # LM
+
+            label[label == 3] = 103  # LAD PROX
+            label[label == 4] = 104  # LAD MID
+            label[label == 5] = 105  # LAD DIST
+            label[label == 6] = 106  # LAD SIDE
+
+            label[label == 7] = 107  # LCX PROX
+            label[label == 8] = 108  # LCX MID
+            label[label == 9] = 109  # LCX DIST
+            label[label == 10] = 110  # LCX SIDE
+
+            label[label == 11] = 111  # RCA PROX
+            label[label == 12] = 112  # RCA MID
+            label[label == 13] = 113  # RCA DIST
+            label[label == 14] = 114  # RCA SIDE
+
+            label[label == 15] = 115  # RIM
+
+            # Combines all lesions in each artery to one group
+            # RCA
+            label[(label >= 111) & (label <= 114)] = 4
+
+            # LAD
+            label[(label >= 103) & (label <= 106)] = 2
+
+            # LCX
+            label[(label >= 107) & (label <= 110)] = 3
+
+            # RIM
+            label[(label == 115)] = 2
+
+            # LM
+            label[label == 102] = 5
+
+            label[(label >= 6)] = 0
+
+        elif oldSegmentationType == "SegmentLevelDLNExport" and newSegmentationType == "ArteryLevel":
+            label[label == 2] = 102  # LM
+
+            label[label == 3] = 103  # LAD PROX
+            label[label == 4] = 104  # LAD MID
+            label[label == 5] = 105  # LAD DIST
+            label[label == 6] = 106  # LAD SIDE
+
+            label[label == 7] = 107  # LCX PROX
+            label[label == 8] = 108  # LCX MID
+            label[label == 9] = 109  # LCX DIST
+            label[label == 10] = 110  # LCX SIDE
+
+            label[label == 11] = 111  # RCA PROX
+            label[label == 12] = 112  # RCA MID
+            label[label == 13] = 113  # RCA DIST
+            label[label == 14] = 114  # RCA SIDE
+
+            label[label == 15] = 115  # RIM
+
+            # Combines all lesions in each artery to one group
+            # RCA
+            label[(label >= 111) & (label <= 114)] = 4
+
+            # LAD
+            label[(label >= 103) & (label <= 106)] = 2
+
+            # LCX
+            label[(label >= 107) & (label <= 110)] = 3
+
+            # RIM
+            label[(label == 115)] = 2
+
+            # LM
+            label[label == 102] = 2
+
+            label[(label >= 5)] = 0
+
+        return label
 
     # onCompareButton
 
