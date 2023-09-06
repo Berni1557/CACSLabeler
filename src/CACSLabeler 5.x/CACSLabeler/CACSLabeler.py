@@ -13,6 +13,9 @@ import SimpleITK as sitk
 import numpy
 import json
 
+import vtk
+import random
+
 import sys
 
 from scipy.ndimage import label
@@ -113,7 +116,6 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.ui.saveButton.connect('clicked(bool)', self.onSaveButton)
         self.ui.compareLabelsButton.connect('clicked(bool)', self.onCompareLabelsButton)
 
-
         self.topLevelPath = Path(__file__).absolute().parent.parent.parent.parent
         self.dataPath = os.path.join(Path(__file__).absolute().parent.parent.parent.parent, "data")
 
@@ -170,6 +172,8 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.createColorTable()
 
         self.ui.embeddedSegmentEditorWidget.setHidden(True)
+        self.ui.compareObserversEditor.setHidden(True)
+
         self.ui.saveButton.setHidden(True)
 
         self.selectedExportType = self.settings["exportType"]
@@ -178,6 +182,18 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.ui.exportTypeComboBox.clear()
         self.ui.exportTypeComboBox.addItems(self.availableExportTypes)
         self.ui.exportTypeComboBox.setCurrentText(self.selectedExportType)
+
+        #Init Comparison
+        self.comparisonObserver1 = None
+        self.comparisonObserver2 = None
+
+        self.ui.comparisonSelectNextImageButton.connect('clicked(bool)', self.onComparisonSelectNextImage)
+        self.ui.comparisonSelectNextImageToLoadButton.connect('clicked(bool)', self.onComparisonSelectImageToLoad)
+
+        self.createCompareObserversBox()
+
+        self.ui.CompareObserver1Selector.connect("currentIndexChanged(int)", self.onComparisonChangeFirstObserver)
+        self.ui.CompareObserver2Selector.connect("currentIndexChanged(int)", self.onComparisonChangeSecondObserver)
 
     def checkIfDependenciesAreInstalled(self):
         dependencies = ["pandas"]
@@ -252,6 +268,7 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             self.compareObserverComboBoxEventBlocked = False
 
     def loadVolumeToSlice(self, filename, imagesPath):
+        self.changeViewCreateView()
         self.ui.embeddedSegmentEditorWidget.setHidden(True)
         self.ui.saveButton.setHidden(True)
 
@@ -282,8 +299,7 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
     def onSelectNextUnlabeledImage(self):
         self.clearCurrentViewedNode(True)
-        imageList = self.logic.getImageList(self.selectedDatasetAndObserverSetting())
-
+        imageList = self.getImageList(self.selectedDatasetAndObserverSetting())
 
         dataset = self.settings["savedDatasetAndObserverSelection"]["dataset"]
         imagesPath = self.settings["datasets"][dataset]["imagesPath"]
@@ -386,7 +402,7 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.currentLoadedNode = None
 
     def progressBarUpdate(self):
-        images = self.logic.getImageList(self.selectedDatasetAndObserverSetting())
+        images = self.getImageList(self.selectedDatasetAndObserverSetting())
         self.ui.progressBar.minimum = 0
         self.ui.progressBar.maximum = len(images["allImages"])
         self.ui.progressBar.value = len(images["allImages"]) - len(images["unlabeledImages"])
@@ -419,7 +435,8 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                                     "labelsPath": "",
                                     "segmentationMode": "",
                                     "labelFileSuffix": ""
-                                }
+                                },
+                                "includedImageFilter" :""
                             }
                         }
                     }
@@ -438,15 +455,15 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                         },
                         "RCA_PROXIMAL": {
                             "value": 4,
-                            "color": "#cc0000"
+                            "color": "#ffaa00"
                         },
                         "RCA_MID": {
                             "value": 5,
-                            "color": "#f5b207"
+                            "color": "#feda00"
                         },
                         "RCA_DISTAL": {
                             "value": 6,
-                            "color": "#ff7c80"
+                            "color": "#ffe4a5"
                         },
                         "RCA_SIDE_BRANCH": {
                             "value": 7,
@@ -470,19 +487,19 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                         },
                         "LAD_PROXIMAL": {
                             "value": 14,
-                            "color": "#ff641c"
+                            "color": "#0050fd"
                         },
                         "LAD_MID": {
                             "value": 15,
-                            "color": "#ff8c00"
+                            "color": "#00ffff"
                         },
                         "LAD_DISTAL": {
                             "value": 16,
-                            "color": "#ffe51e"
+                            "color": "#91ffff"
                         },
                         "LAD_SIDE_BRANCH": {
                             "value": 17,
-                            "color": "#0bfdf4"
+                            "color": "#00b3ff"
                         },
                         "LCX_PROXIMAL": {
                             "value": 19,
@@ -1375,7 +1392,357 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
         return label
 
-    # onCompareButton
+    def changeViewCreateView(self):
+        layoutManager = slicer.app.layoutManager()
+        layoutManager.setLayout(6)
+
+## code for comparison
+
+    def changeToComparisonView(self):
+        ## create custom view
+        threeViewLayout = """
+               <layout type="horizontal">
+                 <item>
+                      <view class="vtkMRMLSliceNode" singletontag="Red">
+                           <property name="orientation" action="default">Axial</property>
+                           <property name="viewlabel" action="default">R</property>"
+                           <property name="viewcolor" action="default">#F34A33</property>"
+                     </view>
+                 </item>
+                 <item>
+                      <view class="vtkMRMLSliceNode" singletontag="Yellow">
+                           <property name="orientation" action="default">Axial</property>
+                           <property name="viewlabel" action="default">Y</property>"
+                           <property name="viewcolor" action="default">#EDD54C</property>"
+                     </view>
+                 </item>
+                 <item>
+                      <view class="vtkMRMLSliceNode" singletontag="Green">
+                           <property name="orientation" action="default">Axial</property>
+                           <property name="viewlabel" action="default">G</property>"
+                           <property name="viewcolor" action="default">#6EB04B</property>"
+                     </view>
+                 </item>
+               </layout>
+               """
+
+        # Built-in layout IDs are all below 100, so you can choose any large random number
+        # for your custom layout ID.
+        threeViewLayoutId = 200
+
+        layoutManager = slicer.app.layoutManager()
+        layoutManager.layoutLogic().GetLayoutNode().AddLayoutDescription(threeViewLayoutId, threeViewLayout)
+
+        layoutManager.setLayout(threeViewLayoutId)
+
+        nodes = slicer.util.getNodes("vtkMRMLSliceNode*")
+
+        for node in nodes.values():
+            node.SetOrientationToAxial()
+
+    def createCompareObserversBox(self):
+        currentSelectedDataset = self.settings["savedDatasetAndObserverSelection"]["dataset"]
+        currentSelectedObserver = self.settings["savedDatasetAndObserverSelection"]["observer"]
+
+        allObserversList = list(self.settings["datasets"][currentSelectedDataset]["observers"].keys())
+        allObserversList.remove(currentSelectedObserver)
+
+        self.ui.CompareObserver1Selector.clear()
+        self.ui.CompareObserver1Selector.addItems(allObserversList)
+        self.ui.CompareObserver1Selector.setCurrentText(allObserversList[0])
+        self.comparisonObserver1 = allObserversList[0]
+
+        secondObserverList = allObserversList
+        secondObserverList.remove(self.comparisonObserver1)
+
+        self.ui.CompareObserver2Selector.clear()
+        self.ui.CompareObserver2Selector.addItems(secondObserverList)
+        self.ui.CompareObserver2Selector.setCurrentText(secondObserverList[0])
+        self.comparisonObserver2 = secondObserverList[0]
+
+    def onComparisonChangeFirstObserver(self, id=None):
+        currentSelectedDataset = self.settings["savedDatasetAndObserverSelection"]["dataset"]
+        availableObservers = list(self.settings["datasets"][currentSelectedDataset]["observers"].keys())
+        availableObservers.remove(self.settings["savedDatasetAndObserverSelection"]["observer"])
+
+        self.comparisonObserver1 = availableObservers[id]
+
+        secondObserverList = availableObservers
+        secondObserverList.remove(self.comparisonObserver1)
+
+        self.ui.CompareObserver2Selector.clear()
+        self.ui.CompareObserver2Selector.addItems(secondObserverList)
+        self.ui.CompareObserver2Selector.setCurrentText(secondObserverList[0])
+        self.comparisonObserver2 = secondObserverList[0]
+
+    def onComparisonChangeSecondObserver(self, id=None):
+        currentSelectedDataset = self.settings["savedDatasetAndObserverSelection"]["dataset"]
+        availableObservers = list(self.settings["datasets"][currentSelectedDataset]["observers"].keys())
+        availableObservers.remove(self.settings["savedDatasetAndObserverSelection"]["observer"])
+        availableObservers.remove( self.comparisonObserver1)
+
+        self.comparisonObserver2 = availableObservers[id]
+
+    def onComparisonSelectNextImage(self):
+        self.loadImageToCompare("test")
+
+    def onComparisonSelectImageToLoad(self):
+        dataset = self.settings["savedDatasetAndObserverSelection"]["dataset"]
+        imagesPath = self.settings["datasets"][dataset]["imagesPath"]
+
+        # opens file selection window
+        filepath = qt.QFileDialog.getOpenFileName(self.parent, 'Open files', imagesPath, "Files(*.mhd)")
+        filename = filepath.split("/")[-1]
+
+        self.loadImageToCompare(filename)
+
+    def loadImageToCompare(self, filename):
+        dataset = self.settings["savedDatasetAndObserverSelection"]["dataset"]
+        imagesPath = self.settings["datasets"][dataset]["imagesPath"]
+
+        self.clearCurrentViewedNode(True)
+        self.ui.compareObserversEditor.setHidden(False)
+
+        self.createColorTable()
+        properties = {'Name': "CT_IMAGE"}
+
+        self.currentLoadedNode = slicer.util.loadVolume(os.path.join(imagesPath, filename), properties=properties)
+        self.currentLoadedNode.SetName(filename)
+
+        slicer.util.setSliceViewerLayers(background=self.currentLoadedNode)
+        self.currentLoadedNode.GetScalarVolumeDisplayNode().AutoWindowLevelOff()
+        self.currentLoadedNode.GetScalarVolumeDisplayNode().SetWindowLevel(800, 180)
+
+        self.loadComparisonLabels()
+        self.changeToComparisonView()
+        self.disableSegmentationInSpecificViews()
+
+    def disableSegmentationInSpecificViews(self):
+        observer1Segmentation = slicer.util.getNode(("Observer1Segmentation_" + self.comparisonObserver1))
+        observer2Segmentation = slicer.util.getNode(("Observer2Segmentation_" + self.comparisonObserver2))
+        comparisonSegmentation = slicer.util.getNode("Comparison")
+
+        comparisonSegmentation.GetDisplayNode().SetDisplayableOnlyInView("vtkMRMLSliceNodeRed")
+        observer1Segmentation.GetDisplayNode().SetDisplayableOnlyInView("vtkMRMLSliceNodeYellow")
+        observer2Segmentation.GetDisplayNode().SetDisplayableOnlyInView("vtkMRMLSliceNodeGreen")
+
+        # Set linked slice views  in all existing slice composite nodes and in the default node
+        sliceCompositeNodes = slicer.util.getNodesByClass("vtkMRMLSliceCompositeNode")
+        defaultSliceCompositeNode = slicer.mrmlScene.GetDefaultNodeByClass("vtkMRMLSliceCompositeNode")
+        if not defaultSliceCompositeNode:
+            defaultSliceCompositeNode = slicer.mrmlScene.CreateNodeByClass("vtkMRMLSliceCompositeNode")
+            defaultSliceCompositeNode.UnRegister(
+                None)  # CreateNodeByClass is factory method, need to unregister the result to prevent memory leaks
+            slicer.mrmlScene.AddDefaultNode(defaultSliceCompositeNode)
+        sliceCompositeNodes.append(defaultSliceCompositeNode)
+        for sliceCompositeNode in sliceCompositeNodes:
+            sliceCompositeNode.SetLinkedControl(True)
+
+
+    def loadComparisonLabels(self):
+        dataset = self.settings["savedDatasetAndObserverSelection"]["dataset"]
+        imageNodeName = self.currentLoadedNode.GetName()
+        patientFileName = imageNodeName.split(".mhd")[0]
+
+        observer1LabelPath = os.path.join(
+            self.settings["datasets"][dataset]["observers"][self.comparisonObserver1]["labelsPath"],
+            patientFileName + self.settings["datasets"][dataset]["observers"][self.comparisonObserver1]["labelFileSuffix"] + ".nrrd")
+
+        observer2LabelPath = os.path.join(
+            self.settings["datasets"][dataset]["observers"][self.comparisonObserver2]["labelsPath"],
+            patientFileName + self.settings["datasets"][dataset]["observers"][self.comparisonObserver2][
+                "labelFileSuffix"] + ".nrrd")
+
+        self.loadLabelFromPath(observer1LabelPath, ("Observer1Segmentation_" + self.comparisonObserver1))
+        self.loadLabelFromPath(observer2LabelPath, ("Observer2Segmentation_" + self.comparisonObserver2))
+
+        # generate comparison mask
+        # import labels
+        observer1SegmentationArray = sitk.GetArrayFromImage(sitk.ReadImage(observer1LabelPath))
+        observer2SegmentationArray = sitk.GetArrayFromImage(sitk.ReadImage(observer2LabelPath))
+
+        # Compare labels
+        observer1SegmentationType = self.settings["datasets"][dataset]["observers"][self.comparisonObserver1]["segmentationMode"]
+        observer2SegmentationType = self.settings["datasets"][dataset]["observers"][self.comparisonObserver2]["segmentationMode"]
+
+        if observer1SegmentationType == observer2SegmentationType:
+            observer1Segmentation = self.processSegmentationLabels(observer1SegmentationArray, observer1SegmentationType,
+                                                                  observer1SegmentationType)
+            observer2Segmentation = self.processSegmentationLabels(observer2SegmentationArray, observer2SegmentationType,
+                                                                  observer1SegmentationType)
+
+            self.createComparisonLabel(observer1Segmentation, observer2Segmentation)
+        else:
+            print("Segmentation Types not matching!")
+
+    def createComparisonLabel(self, observer1Segmentation, observer2Segmentation):
+        #selecting one observer randomly!
+        randomObserverSelector = random.randint(1, 2)
+
+        if randomObserverSelector == 1:
+            comparisonSegmentation = numpy.copy(observer1Segmentation)
+        if randomObserverSelector == 2:
+            comparisonSegmentation = numpy.copy(observer2Segmentation)
+
+        #finding differences using binary label
+        binaryLabel = numpy.where(numpy.equal(observer1Segmentation, observer2Segmentation) == True, 2, 1)
+
+        observer1Background = numpy.where(observer1Segmentation == 0, 0, 1)
+        observer2Background = numpy.where(observer2Segmentation == 0, 0, -1)
+
+        binaryLabel[numpy.equal(observer1Background, observer2Background) == True] = 0
+
+        #add label to segmentation
+        comparisonSegmentation[binaryLabel == 1] = 100
+
+        imageNode = slicer.util.getNode(self.currentLoadedNode.GetName())
+
+        segmentationNode = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLSegmentationNode")
+        segmentationNode.SetName("Comparison")
+        segmentationNode.CreateDefaultDisplayNodes()  # only needed for display
+        segmentationNode.SetReferenceImageGeometryParameterFromVolumeNode(imageNode)
+
+        segmentation = segmentationNode.GetSegmentation()
+        displayNode = segmentationNode.GetDisplayNode()
+
+        labelDescription = self.settings["labels"]["SegmentLevel"]
+
+        labelDescription["MISMATCH"] = {
+            'value': 100,
+            'color': "#c8ff00"
+        }
+
+        print(labelDescription)
+
+        for key in self.settings["labels"]["SegmentLevel"]:
+            color = self.settings["labels"]["SegmentLevel"][key]["color"]
+
+            if segmentation.GetSegment(key) is None:
+                segmentation.AddEmptySegment(key)
+
+            segment = segmentation.GetSegment(key)
+
+            r, g, b = ImageColor.getcolor(color, "RGB")
+            segment.SetColor(r / 255, g / 255, b / 255)  # red
+            displayNode.SetSegmentOpacity3D(key, 1)  # Set opacity of a single segment
+
+            value = self.settings["labels"]["SegmentLevel"][key]["value"]
+            print(key, value)
+
+
+
+
+            #if key == "OTHER" and not os.path.isfile(labelPath):
+            segmentId = segmentationNode.GetSegmentation().GetSegmentIdBySegmentName(key)
+            segmentArray = slicer.util.arrayFromSegmentBinaryLabelmap(segmentationNode, key, imageNode)
+            segmentArray[comparisonSegmentation == value] = 1  # create segment by simple thresholding of an image
+            slicer.util.updateSegmentBinaryLabelmapFromArray(segmentArray, segmentationNode, segmentId, imageNode)
+
+        #names = {
+        #    "Different label": {
+        #        "id": 1,
+        #        "color": "#ff0000"
+        #    },
+        #    "Same label": {
+        #        "id": 2,
+        #        "color": "#00ff00"
+        #    },
+        #}
+
+        #for key in names:
+        #    color = names[key]["color"]
+        #    id = names[key]["id"]
+
+        #    if segmentation.GetSegment(key) is None:
+        #        segmentation.AddEmptySegment(key)
+
+            # segment = segmentation.GetSegment(key)
+            # r, g, b = ImageColor.getcolor(color, "RGB")
+            # segment.SetColor(r / 255, g / 255, b / 255)
+            # displayNode.SetSegmentOpacity3D(key, 1)  # Set opacity of a single segment
+            #
+            # segmentId = segmentationNode.GetSegmentation().GetSegmentIdBySegmentName(key)
+            # segmentArray = slicer.util.arrayFromSegmentBinaryLabelmap(segmentationNode, key, imageNode)
+            # segmentArray[binaryLabel == id] = 1  # create segment by simple thresholding of an image
+            # slicer.util.updateSegmentBinaryLabelmapFromArray(segmentArray, segmentationNode, segmentId, imageNode)
+
+
+    def loadLabelFromPath(self, labelPath, labelName):
+        imageNodeName = self.currentLoadedNode.GetName()
+        imageNode = slicer.util.getNode(imageNodeName)
+
+        loadedVolumeNode = slicer.util.loadVolume(labelPath, {"labelmap": True})
+        segmentationNode = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLSegmentationNode")
+        segmentationNode.SetName(labelName)
+        segmentationNode.SetReferenceImageGeometryParameterFromVolumeNode(imageNode)
+        loadedVolumeNode.GetDisplayNode().SetAndObserveColorNodeID(self.colorTableNode.GetID())
+        slicer.modules.segmentations.logic().ImportLabelmapToSegmentationNode(loadedVolumeNode, segmentationNode)
+
+        slicer.mrmlScene.RemoveNode(loadedVolumeNode)
+
+        segmentation = segmentationNode.GetSegmentation()
+        displayNode = segmentationNode.GetDisplayNode()
+
+        for key in self.settings["labels"]["SegmentLevel"]:
+            color = self.settings["labels"]["SegmentLevel"][key]["color"]
+
+            if segmentation.GetSegment(key) is None:
+                segmentation.AddEmptySegment(key)
+
+            segment = segmentation.GetSegment(key)
+
+            r, g, b = ImageColor.getcolor(color, "RGB")
+            segment.SetColor(r / 255, g / 255, b / 255)  # red
+            displayNode.SetSegmentOpacity3D(key, 1)  # Set opacity of a single segment
+
+            if key == "OTHER" and not os.path.isfile(labelPath):
+                segmentId = segmentationNode.GetSegmentation().GetSegmentIdBySegmentName(key)
+                segmentArray = slicer.util.arrayFromSegmentBinaryLabelmap(segmentationNode, key, imageNode)
+                segmentArray[slicer.util.arrayFromVolume(
+                    imageNode) >= lowerThresholdValue] = 1  # create segment by simple thresholding of an image
+                slicer.util.updateSegmentBinaryLabelmapFromArray(segmentArray, segmentationNode, segmentId, imageNode)
+
+    def getImageList(self, datasetSettings):
+        imagesPath, labelsPath, segmentationMode, sliceStepFile, exportFolder, dataset, observer, labelFileSuffix = datasetSettings
+
+        filterActive = False
+        allFiles = []
+        if self.settings["datasets"][dataset]["observers"][observer]["includedImageFilter"] != "":
+            filterActive = True
+            csv = pandas.read_csv(self.settings["datasets"][dataset]["observers"][observer]["includedImageFilter"])
+            allFiles = csv['Filename'].tolist()
+
+        files = {"allImages": [], "unlabeledImages": []}
+        references = []
+
+        for referenceFileName in sorted(filter(lambda x: os.path.isfile(os.path.join(labelsPath, x)),os.listdir(labelsPath))):
+            name, extension = os.path.splitext(referenceFileName)
+            if extension == ".nrrd" and os.path.isfile(os.path.join(imagesPath, name.split(labelFileSuffix)[0] + ".mhd")):
+               references.append(name.split(labelFileSuffix)[0])
+
+        for imageFileName in sorted(filter(lambda x: os.path.isfile(os.path.join(imagesPath, x)),os.listdir(imagesPath))):
+            name, extension = os.path.splitext(imageFileName)
+            if extension == ".mhd":
+                if filterActive:
+                    fileName = name + extension
+
+                    if fileName in allFiles:
+                        files["allImages"].append(name)
+
+                        try:
+                            references.index(name)
+                        except ValueError:
+                            files["unlabeledImages"].append(name)
+
+                else:
+                    files["allImages"].append(name)
+
+                    try:
+                        references.index(name)
+                    except ValueError:
+                        files["unlabeledImages"].append(name)
+
+        return files
 
 #
 # CACSLabelerLogic
@@ -1492,29 +1859,6 @@ class CACSLabelerLogic(ScriptedLoadableModuleLogic):
             segmentEditorNode = slicer.mrmlScene.AddNode(segmentEditorNode)
         return segmentEditorNode
 
-    def getImageList(self, datasetSettings):
-        imagesPath, labelsPath, segmentationMode, sliceStepFile, exportFolder, dataset, observer, labelFileSuffix = datasetSettings
-
-        files = {"allImages": [], "unlabeledImages": []}
-        references = []
-
-        for referenceFileName in sorted(filter(lambda x: os.path.isfile(os.path.join(labelsPath, x)),os.listdir(labelsPath))):
-            name, extension = os.path.splitext(referenceFileName)
-            if extension == ".nrrd" and os.path.isfile(os.path.join(imagesPath, name.split(labelFileSuffix)[0] + ".mhd")):
-               references.append(name.split(labelFileSuffix)[0])
-
-        for imageFileName in sorted(filter(lambda x: os.path.isfile(os.path.join(imagesPath, x)),os.listdir(imagesPath))):
-            name, extension = os.path.splitext(imageFileName)
-            if extension == ".mhd":
-                files["allImages"].append(name)
-
-                try:
-                    references.index(name)
-                except ValueError:
-                    files["unlabeledImages"].append(name)
-
-        return files
-
 class ScoreExport():
     def __init__(self, datasetInformation, settings):
         imagesPath, labelsPath, segmentationMode, sliceStepFile, exportFolder, dataset, observer = datasetInformation
@@ -1607,14 +1951,10 @@ class ScoreExport():
     def exportFromReferenceFolder(self):
         sliceStepDataframe = self.pandas.read_csv(self.filepaths["sliceStepFile"], dtype={'patient_id': 'string'})
 
-        #total = timeit.default_timer()
-
         with concurrent.futures.ThreadPoolExecutor() as executor:
             [executor.submit(self.processImages, filename, sliceStepDataframe)
              for filename in sorted(filter(lambda x: os.path.isfile(os.path.join(self.filepaths["referenceFolder"], x)),
                                            os.listdir(self.filepaths["referenceFolder"])))]
-
-        #print("total", timeit.default_timer() - total)
 
     def processFilename(self, filepath):
         if self.dataset == "DISCHARGE" or self.dataset == "CADMAN":
