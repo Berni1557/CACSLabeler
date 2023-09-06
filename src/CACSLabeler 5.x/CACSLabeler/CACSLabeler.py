@@ -160,19 +160,16 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             self.ui.settingsCollapsibleButton.setHidden(True)
             self.ui.errorText.text = "Settings file error! \n Change settings in JSON file!"
 
-        self.ui.embeddedSegmentEditorWidget.setMRMLScene(slicer.mrmlScene)
-        self.ui.embeddedSegmentEditorWidget.setSegmentationNodeSelectorVisible(False)
-        self.ui.embeddedSegmentEditorWidget.setSourceVolumeNodeSelectorVisible(False)
-        self.ui.embeddedSegmentEditorWidget.setEffectNameOrder(['Paint', 'Erase'])
-        self.ui.embeddedSegmentEditorWidget.unorderedEffectsVisible = False
-        self.ui.embeddedSegmentEditorWidget.setMRMLSegmentEditorNode(self.logic.getSegmentEditorNode())
-        self.ui.embeddedSegmentEditorWidget.setSwitchToSegmentationsButtonVisible(False)
-
         self.colorTableNode = None
         self.createColorTable()
 
-        self.ui.embeddedSegmentEditorWidget.setHidden(True)
-        self.ui.compareObserversEditor.setHidden(True)
+        self.createEditorWidget(self.ui.embeddedSegmentEditorWidget, "createEditor")
+        self.createEditorWidget(self.ui.compareObserversEditor, "compareEditor")
+
+        self.ui.comparisonLine1.setHidden(True)
+        self.ui.comparisonLine2.setHidden(True)
+        self.ui.comparisonSaveButton.setHidden(True)
+
 
         self.ui.saveButton.setHidden(True)
 
@@ -194,6 +191,8 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
         self.ui.CompareObserver1Selector.connect("currentIndexChanged(int)", self.onComparisonChangeFirstObserver)
         self.ui.CompareObserver2Selector.connect("currentIndexChanged(int)", self.onComparisonChangeSecondObserver)
+
+        self.ui.comparisonSaveButton.connect('clicked(bool)', self.onSaveComparisonLabel)
 
     def checkIfDependenciesAreInstalled(self):
         dependencies = ["pandas"]
@@ -220,6 +219,28 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         Called each time the user opens a different module.
         """
         pass
+
+    def createEditorWidget(self, editorObject, editorName):
+        editorObject.setMRMLScene(slicer.mrmlScene)
+        editorObject.setSegmentationNodeSelectorVisible(False)
+        editorObject.setSourceVolumeNodeSelectorVisible(False)
+        editorObject.setEffectNameOrder(['Paint', 'Erase'])
+        editorObject.unorderedEffectsVisible = False
+        editorObject.setMRMLSegmentEditorNode(self.getSegmentEditorNode(editorName))
+        editorObject.setSwitchToSegmentationsButtonVisible(False)
+        editorObject.setHidden(True)
+
+    def getSegmentEditorNode(self, segmentEditorSingletonTag):
+        # Use the Segment Editor module's parameter node for the embedded segment editor widget.
+        # This ensures that if the user switches to the Segment Editor then the selected
+        # segmentation node, volume node, etc. are the same.
+        segmentEditorNode = slicer.mrmlScene.GetSingletonNode(segmentEditorSingletonTag, "vtkMRMLSegmentEditorNode")
+        if segmentEditorNode is None:
+            segmentEditorNode = slicer.mrmlScene.CreateNodeByClass("vtkMRMLSegmentEditorNode")
+            segmentEditorNode.UnRegister(None)
+            segmentEditorNode.SetSingletonTag(segmentEditorSingletonTag)
+            segmentEditorNode = slicer.mrmlScene.AddNode(segmentEditorNode)
+        return segmentEditorNode
 
     def onChangeExportType(self, exportTypeId=None):
         if not self.exportTypeComboBoxEventBlocked:
@@ -283,7 +304,6 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.currentLoadedNode.GetScalarVolumeDisplayNode().SetWindowLevel(800, 180)
 
         # Activate buttons
-        self.ui.annotateCollapsible.enabled = True
         self.ui.compareCollapsibleButton.enabled = True
 
         self.ui.RadioButton120keV.enabled = True
@@ -348,8 +368,8 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.currentLoadedReferenceNode = slicer.util.getNode(labelName)
 
         self.ui.embeddedSegmentEditorWidget.setSegmentationNode(slicer.util.getNode(labelName))
-        self.logic.getSegmentEditorNode().SetMasterVolumeIntensityMask(True)
-        self.logic.getSegmentEditorNode().SetSourceVolumeIntensityMaskRange(float(lowerThresholdValue), 10000.0)
+        self.getSegmentEditorNode("createEditor").SetMasterVolumeIntensityMask(True)
+        self.getSegmentEditorNode("createEditor").SetSourceVolumeIntensityMaskRange(float(lowerThresholdValue), 10000.0)
 
         self.ui.embeddedSegmentEditorWidget.setHidden(False)
         self.ui.saveButton.setHidden(False)
@@ -455,7 +475,7 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                         },
                         "RCA_PROXIMAL": {
                             "value": 4,
-                            "color": "#ffaa00"
+                            "color": "#fc5000"
                         },
                         "RCA_MID": {
                             "value": 5,
@@ -483,7 +503,7 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                         },
                         "LM_BRANCH": {
                             "value": 12,
-                            "color": "#ffce79"
+                            "color": "#d8ffcd"
                         },
                         "LAD_PROXIMAL": {
                             "value": 14,
@@ -519,7 +539,7 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                         },
                         "RIM": {
                             "value": 23,
-                            "color": "#fc0303"
+                            "color": "#edfc9f"
                         },
                         "AORTA_ASC": {
                             "value": 26,
@@ -909,8 +929,6 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
     def mainUIHidden(self, hide):
         self.ui.inputCollapsibleButton.setHidden(hide)
         self.ui.exportCollapsibleButton.setHidden(hide)
-        self.ui.annotateCollapsible.setHidden(hide)
-        self.ui.annotateCollapsible.setHidden(hide)
         self.ui.compareCollapsibleButton.setHidden(hide)
 
         self.ui.datasetComboBox.setHidden(hide)
@@ -1271,48 +1289,21 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
             label[(label >= 6)] = 0
 
+        elif oldSegmentationType == "SegmentLevel" and newSegmentationType == "SegmentLevelOnlyArteries":
+            label[label == self.getLabelIdByName(oldSegmentationType, "AORTA_ASC")] = 0
+            label[label == self.getLabelIdByName(oldSegmentationType, "AORTA_DSC")] = 0
+            label[label == self.getLabelIdByName(oldSegmentationType, "AORTA_ARC")] = 0
+            label[label == self.getLabelIdByName(oldSegmentationType, "VALVE_AORTIC")] = 0
+            label[label == self.getLabelIdByName(oldSegmentationType, "VALVE_PULMONIC")] = 0
+            label[label == self.getLabelIdByName(oldSegmentationType, "VALVE_TRICUSPID")] = 0
+            label[label == self.getLabelIdByName(oldSegmentationType, "VALVE_MITRAL")] = 0
+            label[label == self.getLabelIdByName(oldSegmentationType, "PAPILLAR_MUSCLE")] = 0
+            label[label == self.getLabelIdByName(oldSegmentationType, "NFS_CACS")] = 0
+
         elif oldSegmentationType == "ArteryLevelWithLM" and newSegmentationType == "ArteryLevel":
             # LM
             label[label == 5] = 2
             label[(label > 5)] = 0
-
-        elif oldSegmentationType == "SegmentLevel" and newSegmentationType == "SegmentLevelDLNExport":
-            label[label == 4] = 104  # RCA PROX
-            label[label == 5] = 105  # RCA MID
-            label[label == 6] = 106  # RCA DIST
-            label[label == 7] = 107  # RCA SIDE
-
-            label[label == 14] = 114  # LAD PROX
-            label[label == 15] = 115  # LAD MID
-            label[label == 16] = 116  # LAD DIST
-            label[label == 17] = 117  # LAD SIDE
-
-            label[label == 19] = 119  # LCX PROX
-            label[label == 20] = 120  # LCX MID
-            label[label == 21] = 121  # LCX DIST
-            label[label == 22] = 122  # LCX SIDE
-
-            #convert ids
-            label[(label >= 9) & (label <= 12)] = 2 # LM
-
-            label[label == 114] = 3  # LAD PROX
-            label[label == 115] = 4  # LAD MID
-            label[label == 116] = 5  # LAD DIST
-            label[label == 117] = 6  # LAD SIDE
-
-            label[label == 119] = 7  # LCX PROX
-            label[label == 120] = 8  # LCX MID
-            label[label == 121] = 9  # LCX DIST
-            label[label == 122] = 10  # LCX SIDE
-
-            label[label == 104] = 11  # RCA PROX
-            label[label == 105] = 12  # RCA MID
-            label[label == 106] = 13  # RCA DIST
-            label[label == 107] = 14  # RCA SIDE
-
-            label[label == 23] = 15  # RIM
-
-            label[(label >= 16)] = 0  # LM
 
         elif oldSegmentationType == "SegmentLevelDLNExport" and newSegmentationType == "ArteryLevelWithLM":
             label[label == 2] = 102  # LM
@@ -1484,7 +1475,9 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.comparisonObserver2 = availableObservers[id]
 
     def onComparisonSelectNextImage(self):
-        self.loadImageToCompare("test")
+        slicer.mrmlScene.Clear()
+        imageList = self.getImageList(self.selectedDatasetAndObserverSetting())
+        self.loadImageToCompare(imageList["unlabeledImages"][0] + ".mhd")
 
     def onComparisonSelectImageToLoad(self):
         dataset = self.settings["savedDatasetAndObserverSelection"]["dataset"]
@@ -1502,6 +1495,9 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
         self.clearCurrentViewedNode(True)
         self.ui.compareObserversEditor.setHidden(False)
+        self.ui.comparisonLine1.setHidden(False)
+        self.ui.comparisonLine2.setHidden(False)
+        self.ui.comparisonSaveButton.setHidden(False)
 
         self.createColorTable()
         properties = {'Name': "CT_IMAGE"}
@@ -1517,14 +1513,23 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.changeToComparisonView()
         self.disableSegmentationInSpecificViews()
 
+        self.ui.compareObserversEditor.setSegmentationNode(slicer.util.getNode("Comparison"))
+        self.getSegmentEditorNode("compareEditor").SetMasterVolumeIntensityMask(True)
+        self.getSegmentEditorNode("compareEditor").SetSourceVolumeIntensityMaskRange(float(lowerThresholdValue), 10000.0)
+
     def disableSegmentationInSpecificViews(self):
         observer1Segmentation = slicer.util.getNode(("Observer1Segmentation_" + self.comparisonObserver1))
         observer2Segmentation = slicer.util.getNode(("Observer2Segmentation_" + self.comparisonObserver2))
         comparisonSegmentation = slicer.util.getNode("Comparison")
 
         comparisonSegmentation.GetDisplayNode().SetDisplayableOnlyInView("vtkMRMLSliceNodeRed")
-        observer1Segmentation.GetDisplayNode().SetDisplayableOnlyInView("vtkMRMLSliceNodeYellow")
-        observer2Segmentation.GetDisplayNode().SetDisplayableOnlyInView("vtkMRMLSliceNodeGreen")
+
+        if random.randint(1, 2) == 1:
+            observer1Segmentation.GetDisplayNode().SetDisplayableOnlyInView("vtkMRMLSliceNodeYellow")
+            observer2Segmentation.GetDisplayNode().SetDisplayableOnlyInView("vtkMRMLSliceNodeGreen")
+        else:
+            observer1Segmentation.GetDisplayNode().SetDisplayableOnlyInView("vtkMRMLSliceNodeGreen")
+            observer2Segmentation.GetDisplayNode().SetDisplayableOnlyInView("vtkMRMLSliceNodeYellow")
 
         # Set linked slice views  in all existing slice composite nodes and in the default node
         sliceCompositeNodes = slicer.util.getNodesByClass("vtkMRMLSliceCompositeNode")
@@ -1538,7 +1543,6 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         for sliceCompositeNode in sliceCompositeNodes:
             sliceCompositeNode.SetLinkedControl(True)
 
-
     def loadComparisonLabels(self):
         dataset = self.settings["savedDatasetAndObserverSelection"]["dataset"]
         imageNodeName = self.currentLoadedNode.GetName()
@@ -1546,15 +1550,13 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
         observer1LabelPath = os.path.join(
             self.settings["datasets"][dataset]["observers"][self.comparisonObserver1]["labelsPath"],
-            patientFileName + self.settings["datasets"][dataset]["observers"][self.comparisonObserver1]["labelFileSuffix"] + ".nrrd")
+            patientFileName + self.settings["datasets"][dataset]["observers"][self.comparisonObserver1][
+                "labelFileSuffix"] + ".nrrd")
 
         observer2LabelPath = os.path.join(
             self.settings["datasets"][dataset]["observers"][self.comparisonObserver2]["labelsPath"],
             patientFileName + self.settings["datasets"][dataset]["observers"][self.comparisonObserver2][
                 "labelFileSuffix"] + ".nrrd")
-
-        self.loadLabelFromPath(observer1LabelPath, ("Observer1Segmentation_" + self.comparisonObserver1))
-        self.loadLabelFromPath(observer2LabelPath, ("Observer2Segmentation_" + self.comparisonObserver2))
 
         # generate comparison mask
         # import labels
@@ -1562,27 +1564,35 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         observer2SegmentationArray = sitk.GetArrayFromImage(sitk.ReadImage(observer2LabelPath))
 
         # Compare labels
-        observer1SegmentationType = self.settings["datasets"][dataset]["observers"][self.comparisonObserver1]["segmentationMode"]
-        observer2SegmentationType = self.settings["datasets"][dataset]["observers"][self.comparisonObserver2]["segmentationMode"]
+        observer1SegmentationType = self.settings["datasets"][dataset]["observers"][self.comparisonObserver1][
+            "segmentationMode"]
+        observer2SegmentationType = self.settings["datasets"][dataset]["observers"][self.comparisonObserver2][
+            "segmentationMode"]
+
+        print(observer1SegmentationType, observer2SegmentationType)
 
         if observer1SegmentationType == observer2SegmentationType:
-            observer1Segmentation = self.processSegmentationLabels(observer1SegmentationArray, observer1SegmentationType,
-                                                                  observer1SegmentationType)
-            observer2Segmentation = self.processSegmentationLabels(observer2SegmentationArray, observer2SegmentationType,
-                                                                  observer1SegmentationType)
+            if observer1SegmentationType == "SegmentLevel":
+                observer1Segmentation = self.processSegmentationLabels(observer1SegmentationArray,
+                                                                       observer1SegmentationType,
+                                                                       "SegmentLevelOnlyArteries")
+                observer2Segmentation = self.processSegmentationLabels(observer2SegmentationArray,
+                                                                       observer2SegmentationType,
+                                                                       "SegmentLevelOnlyArteries")
 
-            self.createComparisonLabel(observer1Segmentation, observer2Segmentation)
+                self.loadLabelFromArray(observer1SegmentationArray, ("Observer1Segmentation_" + self.comparisonObserver1), observer1SegmentationType)
+                self.loadLabelFromArray(observer2SegmentationArray, ("Observer2Segmentation_" + self.comparisonObserver2), observer2SegmentationType)
+                self.createComparisonLabel(observer1Segmentation, observer2Segmentation)
+
+
+            else:
+                #TODO: Implement for all Segmentation Types
+                print("Function only implemented for SegmentLevel")
         else:
             print("Segmentation Types not matching!")
 
     def createComparisonLabel(self, observer1Segmentation, observer2Segmentation):
-        #selecting one observer randomly!
-        randomObserverSelector = random.randint(1, 2)
-
-        if randomObserverSelector == 1:
-            comparisonSegmentation = numpy.copy(observer1Segmentation)
-        if randomObserverSelector == 2:
-            comparisonSegmentation = numpy.copy(observer2Segmentation)
+        comparisonSegmentation = numpy.copy(observer1Segmentation)
 
         #finding differences using binary label
         binaryLabel = numpy.where(numpy.equal(observer1Segmentation, observer2Segmentation) == True, 2, 1)
@@ -1605,17 +1615,31 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         segmentation = segmentationNode.GetSegmentation()
         displayNode = segmentationNode.GetDisplayNode()
 
-        labelDescription = self.settings["labels"]["SegmentLevel"]
+        labelDescription = self.settings["labels"]["SegmentLevel"].copy()
 
         labelDescription["MISMATCH"] = {
             'value': 100,
-            'color': "#c8ff00"
+            'color': "#ff0000"
         }
 
-        print(labelDescription)
+        elementsToRemove = [
+            "AORTA_ASC",
+            "AORTA_DSC",
+            "AORTA_ARC",
+            "VALVE_AORTIC",
+            "VALVE_PULMONIC",
+            "VALVE_TRICUSPID",
+            "VALVE_MITRAL",
+            "PAPILLAR_MUSCLE",
+            "NFS_CACS",
+        ]
 
-        for key in self.settings["labels"]["SegmentLevel"]:
-            color = self.settings["labels"]["SegmentLevel"][key]["color"]
+        for element in elementsToRemove:
+            labelDescription.pop(element)
+
+        for key in labelDescription:
+            color = labelDescription[key]["color"]
+            value = labelDescription[key]["value"]
 
             if segmentation.GetSegment(key) is None:
                 segmentation.AddEmptySegment(key)
@@ -1626,65 +1650,30 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             segment.SetColor(r / 255, g / 255, b / 255)  # red
             displayNode.SetSegmentOpacity3D(key, 1)  # Set opacity of a single segment
 
-            value = self.settings["labels"]["SegmentLevel"][key]["value"]
-            print(key, value)
-
-
-
-
-            #if key == "OTHER" and not os.path.isfile(labelPath):
             segmentId = segmentationNode.GetSegmentation().GetSegmentIdBySegmentName(key)
             segmentArray = slicer.util.arrayFromSegmentBinaryLabelmap(segmentationNode, key, imageNode)
+
+            if key == "OTHER":
+                segmentArray[slicer.util.arrayFromVolume(imageNode) >= lowerThresholdValue] = 1
+                segmentArray[comparisonSegmentation > self.settings["labels"]["SegmentLevel"][key]["value"]] = 0
+
             segmentArray[comparisonSegmentation == value] = 1  # create segment by simple thresholding of an image
             slicer.util.updateSegmentBinaryLabelmapFromArray(segmentArray, segmentationNode, segmentId, imageNode)
 
-        #names = {
-        #    "Different label": {
-        #        "id": 1,
-        #        "color": "#ff0000"
-        #    },
-        #    "Same label": {
-        #        "id": 2,
-        #        "color": "#00ff00"
-        #    },
-        #}
+    def loadLabelFromArray(self, labelArray, labelName, segmentationType):
+        imageNode = slicer.util.getNode(self.currentLoadedNode.GetName())
 
-        #for key in names:
-        #    color = names[key]["color"]
-        #    id = names[key]["id"]
-
-        #    if segmentation.GetSegment(key) is None:
-        #        segmentation.AddEmptySegment(key)
-
-            # segment = segmentation.GetSegment(key)
-            # r, g, b = ImageColor.getcolor(color, "RGB")
-            # segment.SetColor(r / 255, g / 255, b / 255)
-            # displayNode.SetSegmentOpacity3D(key, 1)  # Set opacity of a single segment
-            #
-            # segmentId = segmentationNode.GetSegmentation().GetSegmentIdBySegmentName(key)
-            # segmentArray = slicer.util.arrayFromSegmentBinaryLabelmap(segmentationNode, key, imageNode)
-            # segmentArray[binaryLabel == id] = 1  # create segment by simple thresholding of an image
-            # slicer.util.updateSegmentBinaryLabelmapFromArray(segmentArray, segmentationNode, segmentId, imageNode)
-
-
-    def loadLabelFromPath(self, labelPath, labelName):
-        imageNodeName = self.currentLoadedNode.GetName()
-        imageNode = slicer.util.getNode(imageNodeName)
-
-        loadedVolumeNode = slicer.util.loadVolume(labelPath, {"labelmap": True})
         segmentationNode = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLSegmentationNode")
         segmentationNode.SetName(labelName)
+        segmentationNode.CreateDefaultDisplayNodes()  # only needed for display
         segmentationNode.SetReferenceImageGeometryParameterFromVolumeNode(imageNode)
-        loadedVolumeNode.GetDisplayNode().SetAndObserveColorNodeID(self.colorTableNode.GetID())
-        slicer.modules.segmentations.logic().ImportLabelmapToSegmentationNode(loadedVolumeNode, segmentationNode)
-
-        slicer.mrmlScene.RemoveNode(loadedVolumeNode)
 
         segmentation = segmentationNode.GetSegmentation()
         displayNode = segmentationNode.GetDisplayNode()
 
-        for key in self.settings["labels"]["SegmentLevel"]:
-            color = self.settings["labels"]["SegmentLevel"][key]["color"]
+        for key in self.settings["labels"][segmentationType]:
+            color = self.settings["labels"][segmentationType][key]["color"]
+            value = self.settings["labels"][segmentationType][key]["value"]
 
             if segmentation.GetSegment(key) is None:
                 segmentation.AddEmptySegment(key)
@@ -1695,14 +1684,20 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             segment.SetColor(r / 255, g / 255, b / 255)  # red
             displayNode.SetSegmentOpacity3D(key, 1)  # Set opacity of a single segment
 
-            if key == "OTHER" and not os.path.isfile(labelPath):
-                segmentId = segmentationNode.GetSegmentation().GetSegmentIdBySegmentName(key)
-                segmentArray = slicer.util.arrayFromSegmentBinaryLabelmap(segmentationNode, key, imageNode)
-                segmentArray[slicer.util.arrayFromVolume(
-                    imageNode) >= lowerThresholdValue] = 1  # create segment by simple thresholding of an image
-                slicer.util.updateSegmentBinaryLabelmapFromArray(segmentArray, segmentationNode, segmentId, imageNode)
+            segmentId = segmentationNode.GetSegmentation().GetSegmentIdBySegmentName(key)
+            segmentArray = slicer.util.arrayFromSegmentBinaryLabelmap(segmentationNode, key, imageNode)
+
+            if key == "OTHER":
+                segmentArray[slicer.util.arrayFromVolume(imageNode) >= lowerThresholdValue] = 1
+                segmentArray[labelArray > self.settings["labels"][segmentationType][key]["value"]] = 0
+
+            segmentArray[labelArray == value] = 1  # create segment by simple thresholding of an image
+            slicer.util.updateSegmentBinaryLabelmapFromArray(segmentArray, segmentationNode, segmentId, imageNode)
 
     def getImageList(self, datasetSettings):
+        self.checkIfDependenciesAreInstalled()
+        pandas = importlib.import_module('pandas')
+
         imagesPath, labelsPath, segmentationMode, sliceStepFile, exportFolder, dataset, observer, labelFileSuffix = datasetSettings
 
         filterActive = False
@@ -1743,6 +1738,42 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                         files["unlabeledImages"].append(name)
 
         return files
+
+    def onSaveComparisonLabel(self):
+        #check if label is complete!
+        imageNode = slicer.util.getNode(self.currentLoadedNode.GetName())
+        segmentationNode = slicer.util.getNode("Comparison")
+        segmentId = segmentationNode.GetSegmentation().GetSegmentIdBySegmentName("MISMATCH")
+
+        segmentArray = slicer.util.arrayFromSegmentBinaryLabelmap(segmentationNode, segmentId, imageNode)
+
+        if len(numpy.unique(segmentArray)) == 1:
+            dataset = self.settings["savedDatasetAndObserverSelection"]["dataset"]
+            observer = self.settings["savedDatasetAndObserverSelection"]["observer"]
+            savePath = self.settings["datasets"][dataset]["observers"][observer]["labelsPath"]
+            filename = self.currentLoadedNode.GetName().split(".mhd")[0] + self.settings["datasets"][dataset]["observers"][observer]["labelFileSuffix"] +".nrrd"
+
+            segmentationNode = slicer.util.getNode("Comparison")
+
+            labelmapVolumeNode = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLLabelMapVolumeNode")
+            labelmapVolumeNode.SetName("temporaryExportLabel")
+            referenceVolumeNode = None  # it could be set to the master volume
+            segmentIds = segmentationNode.GetSegmentation().GetSegmentIDs()  # export all segments
+            slicer.modules.segmentations.logic().ExportSegmentsToLabelmapNode(segmentationNode,
+                                                                              segmentIds,
+                                                                              labelmapVolumeNode, referenceVolumeNode,
+                                                                              slicer.vtkSegmentation.EXTENT_REFERENCE_GEOMETRY,
+                                                                              self.colorTableNode)
+
+            volumeNode = slicer.mrmlScene.GetFirstNodeByClass('vtkMRMLLabelMapVolumeNode')
+            slicer.util.exportNode(volumeNode, os.path.join(savePath, filename))
+            slicer.mrmlScene.RemoveNode(labelmapVolumeNode)
+            self.progressBarUpdate()
+
+            print(f"Saved {filename}")
+
+        else:
+            print("Not all mismatched regions have been corrected! Check your segmentation for remaining red areas and try again!")
 
 #
 # CACSLabelerLogic
@@ -1845,19 +1876,6 @@ class CACSLabelerLogic(ScriptedLoadableModuleLogic):
 
         slicer.util.updateSegmentBinaryLabelmapFromArray(segmentArray, segmentationNode, segmentId, imageNode)
         slicer.util.updateSegmentBinaryLabelmapFromArray(otherArray, segmentationNode, otherId, imageNode)
-
-    def getSegmentEditorNode(self):
-        # Use the Segment Editor module's parameter node for the embedded segment editor widget.
-        # This ensures that if the user switches to the Segment Editor then the selected
-        # segmentation node, volume node, etc. are the same.
-        segmentEditorSingletonTag = "SegmentEditor"
-        segmentEditorNode = slicer.mrmlScene.GetSingletonNode(segmentEditorSingletonTag, "vtkMRMLSegmentEditorNode")
-        if segmentEditorNode is None:
-            segmentEditorNode = slicer.mrmlScene.CreateNodeByClass("vtkMRMLSegmentEditorNode")
-            segmentEditorNode.UnRegister(None)
-            segmentEditorNode.SetSingletonTag(segmentEditorSingletonTag)
-            segmentEditorNode = slicer.mrmlScene.AddNode(segmentEditorNode)
-        return segmentEditorNode
 
 class ScoreExport():
     def __init__(self, datasetInformation, settings):
@@ -2379,8 +2397,6 @@ class ScoreExport():
             print("Exported " + processedFilename[1])
             self.exportList.append(result)
             self.createExportFilesAndSaveContent(createJson=True)
-
-
 
     def densityFactor(self, maxDensity):
         if maxDensity >= 130 and maxDensity <= 199:

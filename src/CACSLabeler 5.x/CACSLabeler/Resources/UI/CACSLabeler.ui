@@ -10,6 +10,12 @@
     <height>1287</height>
    </rect>
   </property>
+  <property name="font">
+   <font>
+    <weight>50</weight>
+    <bold>false</bold>
+   </font>
+  </property>
   <layout class="QVBoxLayout" name="verticalLayout">
    <item>
     <widget class="QLabel" name="errorText">
@@ -140,7 +146,7 @@
       <enum>QTabWidget::Rounded</enum>
      </property>
      <property name="currentIndex">
-      <number>1</number>
+      <number>0</number>
      </property>
      <widget class="QWidget" name="createNewLabelTab">
       <attribute name="title">
@@ -156,122 +162,131 @@
           <item>
            <layout class="QHBoxLayout" name="horizontalLayout">
             <item>
+             <widget class="QPushButton" name="selectNextUnlabeledImageButton">
+              <property name="styleSheet">
+               <string notr="true">background:#9ae04f;</string>
+              </property>
+              <property name="text">
+               <string>Select next unlabeled image</string>
+              </property>
+             </widget>
+            </item>
+            <item>
              <widget class="QPushButton" name="loadVolumeButton">
               <property name="text">
                <string>Load volume</string>
               </property>
              </widget>
             </item>
-            <item>
-             <widget class="QPushButton" name="selectNextUnlabeledImageButton">
+           </layout>
+          </item>
+          <item>
+           <layout class="QGridLayout" name="gridLayout_2">
+            <item row="0" column="0">
+             <spacer name="horizontalSpacer">
+              <property name="orientation">
+               <enum>Qt::Horizontal</enum>
+              </property>
+              <property name="sizeHint" stdset="0">
+               <size>
+                <width>40</width>
+                <height>20</height>
+               </size>
+              </property>
+             </spacer>
+            </item>
+            <item row="0" column="2">
+             <widget class="QRadioButton" name="RadioButton120keV">
+              <property name="enabled">
+               <bool>false</bool>
+              </property>
               <property name="text">
-               <string>Select next unlabeled image</string>
+               <string>120 keV</string>
+              </property>
+              <property name="checked">
+               <bool>true</bool>
+              </property>
+             </widget>
+            </item>
+            <item row="0" column="1">
+             <widget class="QRadioButton" name="RadioButton80keV">
+              <property name="enabled">
+               <bool>false</bool>
+              </property>
+              <property name="text">
+               <string>80 keV</string>
               </property>
              </widget>
             </item>
            </layout>
           </item>
           <item>
-           <widget class="QPushButton" name="compareLoadSpecificImage">
-            <property name="text">
-             <string>Load next image</string>
-            </property>
-           </widget>
+           <layout class="QHBoxLayout" name="horizontalLayout_2">
+            <item>
+             <widget class="QLabel" name="selectedVolumeLabel">
+              <property name="enabled">
+               <bool>false</bool>
+              </property>
+              <property name="text">
+               <string>Selected volume:</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QLineEdit" name="selectedVolumeTextField">
+              <property name="autoFillBackground">
+               <bool>false</bool>
+              </property>
+              <property name="text">
+               <string/>
+              </property>
+              <property name="maxLength">
+               <number>100</number>
+              </property>
+              <property name="frame">
+               <bool>false</bool>
+              </property>
+              <property name="cursorPosition">
+               <number>0</number>
+              </property>
+              <property name="dragEnabled">
+               <bool>false</bool>
+              </property>
+              <property name="readOnly">
+               <bool>true</bool>
+              </property>
+             </widget>
+            </item>
+           </layout>
           </item>
-         </layout>
-        </widget>
-       </item>
-       <item>
-        <widget class="ctkCollapsibleButton" name="annotateCollapsible">
-         <property name="enabled">
-          <bool>true</bool>
-         </property>
-         <property name="text">
-          <string>Annotate</string>
-         </property>
-         <property name="collapsed">
-          <bool>false</bool>
-         </property>
-         <layout class="QGridLayout" name="gridLayout">
-          <item row="15" column="1" colspan="3">
-           <widget class="QLineEdit" name="availableLabelType">
-            <property name="enabled">
-             <bool>false</bool>
-            </property>
-            <property name="frame">
-             <bool>false</bool>
-            </property>
-            <property name="readOnly">
-             <bool>true</bool>
-            </property>
-           </widget>
+          <item>
+           <layout class="QHBoxLayout" name="horizontalLayout_9">
+            <item>
+             <widget class="QLabel" name="availableLabel">
+              <property name="enabled">
+               <bool>false</bool>
+              </property>
+              <property name="text">
+               <string>Available label:</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QLineEdit" name="availableLabelType">
+              <property name="enabled">
+               <bool>false</bool>
+              </property>
+              <property name="frame">
+               <bool>false</bool>
+              </property>
+              <property name="readOnly">
+               <bool>true</bool>
+              </property>
+             </widget>
+            </item>
+           </layout>
           </item>
-          <item row="14" column="0">
-           <widget class="QLabel" name="selectedVolumeLabel">
-            <property name="enabled">
-             <bool>false</bool>
-            </property>
-            <property name="text">
-             <string>Selected volume:</string>
-            </property>
-           </widget>
-          </item>
-          <item row="16" column="3">
-           <widget class="QRadioButton" name="RadioButton80keV">
-            <property name="enabled">
-             <bool>false</bool>
-            </property>
-            <property name="text">
-             <string>80 keV</string>
-            </property>
-           </widget>
-          </item>
-          <item row="20" column="0" colspan="4">
-           <widget class="QPushButton" name="saveButton">
-            <property name="styleSheet">
-             <string notr="true"/>
-            </property>
-            <property name="text">
-             <string>Save</string>
-            </property>
-           </widget>
-          </item>
-          <item row="14" column="1" colspan="3">
-           <widget class="QLineEdit" name="selectedVolumeTextField">
-            <property name="autoFillBackground">
-             <bool>false</bool>
-            </property>
-            <property name="text">
-             <string/>
-            </property>
-            <property name="maxLength">
-             <number>100</number>
-            </property>
-            <property name="frame">
-             <bool>false</bool>
-            </property>
-            <property name="cursorPosition">
-             <number>0</number>
-            </property>
-            <property name="dragEnabled">
-             <bool>false</bool>
-            </property>
-            <property name="readOnly">
-             <bool>true</bool>
-            </property>
-           </widget>
-          </item>
-          <item row="15" column="0">
-           <widget class="QLabel" name="availableLabel">
-            <property name="enabled">
-             <bool>false</bool>
-            </property>
-            <property name="text">
-             <string>Available label:</string>
-            </property>
-           </widget>
-          </item>
-          <item row="17" column="0" colspan="4">
+          <item>
            <widget class="QPushButton" name="thresholdVolumeButton">
             <property name="enabled">
              <bool>false</bool>
@@ -281,27 +296,31 @@
             </property>
            </widget>
           </item>
-          <item row="16" column="2">
-           <widget class="QRadioButton" name="RadioButton120keV">
-            <property name="enabled">
-             <bool>false</bool>
-            </property>
-            <property name="text">
-             <string>120 keV</string>
-            </property>
-            <property name="checked">
-             <bool>true</bool>
-            </property>
-           </widget>
-          </item>
-          <item row="18" column="0" colspan="4">
-           <widget class="qMRMLSegmentEditorWidget" name="embeddedSegmentEditorWidget">
-            <property name="effectColumnCount">
-             <number>1</number>
-            </property>
-           </widget>
-          </item>
          </layout>
+        </widget>
+       </item>
+       <item>
+        <widget class="qMRMLSegmentEditorWidget" name="embeddedSegmentEditorWidget">
+         <property name="effectColumnCount">
+          <number>1</number>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QPushButton" name="saveButton">
+         <property name="font">
+          <font>
+           <weight>50</weight>
+           <bold>false</bold>
+           <kerning>true</kerning>
+          </font>
+         </property>
+         <property name="styleSheet">
+          <string notr="true">background: #feda00;</string>
+         </property>
+         <property name="text">
+          <string>Save</string>
+         </property>
         </widget>
        </item>
        <item>
@@ -491,54 +510,88 @@
       </attribute>
       <layout class="QVBoxLayout" name="verticalLayout_2">
        <item>
-        <widget class="ctkCollapsibleButton" name="inputCollapsibleButton_2">
-         <property name="text">
-          <string>Input selection</string>
+        <layout class="QHBoxLayout" name="horizontalLayout_8">
+         <item>
+          <widget class="QLabel" name="ObserversToCompareLabel">
+           <property name="text">
+            <string>Observers to compare:</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QComboBox" name="CompareObserver1Selector"/>
+         </item>
+         <item>
+          <widget class="QComboBox" name="CompareObserver2Selector"/>
+         </item>
+        </layout>
+       </item>
+       <item>
+        <layout class="QHBoxLayout" name="horizontalLayout_12">
+         <item>
+          <widget class="QPushButton" name="comparisonSelectNextImageButton">
+           <property name="font">
+            <font>
+             <weight>50</weight>
+             <bold>false</bold>
+             <stylestrategy>PreferDefault</stylestrategy>
+            </font>
+           </property>
+           <property name="styleSheet">
+            <string notr="true">background:#9ae04f;</string>
+           </property>
+           <property name="text">
+            <string>Select next image</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="comparisonSelectNextImageToLoadButton">
+           <property name="text">
+            <string>Select image to load</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </item>
+       <item>
+        <widget class="Line" name="comparisonLine1">
+         <property name="enabled">
+          <bool>true</bool>
          </property>
-         <layout class="QVBoxLayout" name="verticalLayout_5">
-          <item>
-           <layout class="QHBoxLayout" name="horizontalLayout_8">
-            <item>
-             <widget class="QLabel" name="ObserversToCompareLabel">
-              <property name="text">
-               <string>Observers to compare:</string>
-              </property>
-             </widget>
-            </item>
-            <item>
-             <widget class="QComboBox" name="CompareObserver1Selector"/>
-            </item>
-            <item>
-             <widget class="QComboBox" name="CompareObserver2Selector"/>
-            </item>
-           </layout>
-          </item>
-          <item>
-           <layout class="QHBoxLayout" name="horizontalLayout_12">
-            <item>
-             <widget class="QPushButton" name="comparisonSelectNextImageToLoadButton">
-              <property name="text">
-               <string>Select image to load</string>
-              </property>
-             </widget>
-            </item>
-            <item>
-             <widget class="QPushButton" name="comparisonSelectNextImageButton">
-              <property name="text">
-               <string>Select next image</string>
-              </property>
-             </widget>
-            </item>
-           </layout>
-          </item>
-          <item>
-           <widget class="qMRMLSegmentEditorWidget" name="compareObserversEditor">
-            <property name="defaultTerminologyEntrySettingsKey">
-             <string notr="true"/>
-            </property>
-           </widget>
-          </item>
-         </layout>
+         <property name="orientation">
+          <enum>Qt::Horizontal</enum>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="qMRMLSegmentEditorWidget" name="compareObserversEditor">
+         <property name="defaultTerminologyEntrySettingsKey">
+          <string notr="true"/>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="Line" name="comparisonLine2">
+         <property name="orientation">
+          <enum>Qt::Horizontal</enum>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QPushButton" name="comparisonSaveButton">
+         <property name="font">
+          <font>
+           <weight>50</weight>
+           <bold>false</bold>
+          </font>
+         </property>
+         <property name="styleSheet">
+          <string notr="true">background: #feda00;</string>
+         </property>
+         <property name="text">
+          <string>Save</string>
+         </property>
         </widget>
        </item>
        <item>
@@ -578,6 +631,9 @@
      </property>
      <property name="text">
       <string>Export</string>
+     </property>
+     <property name="collapsed">
+      <bool>true</bool>
      </property>
      <layout class="QFormLayout" name="formLayout">
       <item row="0" column="0">
