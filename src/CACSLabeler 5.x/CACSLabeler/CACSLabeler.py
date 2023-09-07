@@ -1524,8 +1524,8 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.getSegmentEditorNode("compareEditor").SetSourceVolumeIntensityMaskRange(float(lowerThresholdValue), 10000.0)
 
     def disableSegmentationInSpecificViews(self):
-        observer1Segmentation = slicer.util.getNode(("Observer1Segmentation_" + self.comparisonObserver1))
-        observer2Segmentation = slicer.util.getNode(("Observer2Segmentation_" + self.comparisonObserver2))
+        observer1Segmentation = slicer.util.getNode("Observer1")
+        observer2Segmentation = slicer.util.getNode("Observer2")
         comparisonSegmentation = slicer.util.getNode("Comparison")
 
         comparisonSegmentation.GetDisplayNode().SetDisplayableOnlyInView("vtkMRMLSliceNodeRed")
@@ -1605,8 +1605,8 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                                                                        observer2SegmentationType,
                                                                        "SegmentLevelOnlyArteries")
 
-                self.loadLabelFromArray(observer1SegmentationArray, ("Observer1Segmentation_" + self.comparisonObserver1), labelDescription)
-                self.loadLabelFromArray(observer2SegmentationArray, ("Observer2Segmentation_" + self.comparisonObserver2), labelDescription)
+                self.loadLabelFromArray(observer1SegmentationArray, "Observer1", labelDescription)
+                self.loadLabelFromArray(observer2SegmentationArray, "Observer2", labelDescription)
 
                 labelDescription["MISMATCH"] = {
                     'value': 100,
