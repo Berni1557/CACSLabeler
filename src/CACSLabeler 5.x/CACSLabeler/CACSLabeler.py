@@ -1782,12 +1782,21 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             volumeNode = slicer.mrmlScene.GetFirstNodeByClass('vtkMRMLLabelMapVolumeNode')
             slicer.util.exportNode(volumeNode, os.path.join(savePath, filename))
             slicer.mrmlScene.RemoveNode(labelmapVolumeNode)
-            self.progressBarUpdate()
+
 
             print(f"Saved {filename}")
 
+
+            self.progressBarUpdate()
+            self.clearCurrentViewedNode(False)
+            self.ui.compareObserversEditor.setHidden(True)
+            self.ui.comparisonLine1.setHidden(True)
+            self.ui.comparisonLine2.setHidden(True)
+            self.ui.comparisonSaveButton.setHidden(True)
+
         else:
             print("Not all mismatched regions have been corrected! Check your segmentation for remaining red areas and try again!")
+            slicer.util.infoDisplay("Not all mismatched regions have been corrected!\nCheck your segmentation for remaining red areas and try again!")
 
 #
 # CACSLabelerLogic
