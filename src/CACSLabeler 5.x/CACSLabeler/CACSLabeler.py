@@ -23,7 +23,8 @@ from scipy import ndimage as ndi
 
 import importlib
 
-import timeit
+import time
+import threading
 
 class NpEncoder(json.JSONEncoder):
     def default(self, obj):
@@ -1290,15 +1291,10 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             label[(label >= 6)] = 0
 
         elif oldSegmentationType == "SegmentLevel" and newSegmentationType == "SegmentLevelOnlyArteries":
-            label[label == self.getLabelIdByName(oldSegmentationType, "AORTA_ASC")] = 0
-            label[label == self.getLabelIdByName(oldSegmentationType, "AORTA_DSC")] = 0
-            label[label == self.getLabelIdByName(oldSegmentationType, "AORTA_ARC")] = 0
-            label[label == self.getLabelIdByName(oldSegmentationType, "VALVE_AORTIC")] = 0
-            label[label == self.getLabelIdByName(oldSegmentationType, "VALVE_PULMONIC")] = 0
-            label[label == self.getLabelIdByName(oldSegmentationType, "VALVE_TRICUSPID")] = 0
-            label[label == self.getLabelIdByName(oldSegmentationType, "VALVE_MITRAL")] = 0
-            label[label == self.getLabelIdByName(oldSegmentationType, "PAPILLAR_MUSCLE")] = 0
-            label[label == self.getLabelIdByName(oldSegmentationType, "NFS_CACS")] = 0
+            label[label >= self.getLabelIdByName(oldSegmentationType, "AORTA_ASC")] = 0
+            label[label == self.getLabelIdByName(oldSegmentationType, "LM_BIF_LAD_LCX")] = self.getLabelIdByName(oldSegmentationType, "LM_BRANCH")
+            label[label == self.getLabelIdByName(oldSegmentationType, "LM_BIF_LAD")] = self.getLabelIdByName(oldSegmentationType, "LM_BRANCH")
+            label[label == self.getLabelIdByName(oldSegmentationType, "LM_BIF_LCX")] = self.getLabelIdByName(oldSegmentationType, "LM_BRANCH")
 
         elif oldSegmentationType == "ArteryLevelWithLM" and newSegmentationType == "ArteryLevel":
             # LM
@@ -1569,21 +1565,45 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         observer2SegmentationType = self.settings["datasets"][dataset]["observers"][self.comparisonObserver2][
             "segmentationMode"]
 
-        print(observer1SegmentationType, observer2SegmentationType)
-
         if observer1SegmentationType == observer2SegmentationType:
             if observer1SegmentationType == "SegmentLevel":
+                labelDescription = self.settings["labels"]["SegmentLevel"].copy()
+
+                elementsToRemove = [
+                    "LM_BIF_LAD_LCX",
+                    "LM_BIF_LAD",
+                    "LM_BIF_LCX",
+                    "AORTA_ASC",
+                    "AORTA_DSC",
+                    "AORTA_ARC",
+                    "VALVE_AORTIC",
+                    "VALVE_PULMONIC",
+                    "VALVE_TRICUSPID",
+                    "VALVE_MITRAL",
+                    "PAPILLAR_MUSCLE",
+                    "NFS_CACS",
+                ]
+
+                for element in elementsToRemove:
+                    labelDescription.pop(element)
+
                 observer1Segmentation = self.processSegmentationLabels(observer1SegmentationArray,
                                                                        observer1SegmentationType,
                                                                        "SegmentLevelOnlyArteries")
+
                 observer2Segmentation = self.processSegmentationLabels(observer2SegmentationArray,
                                                                        observer2SegmentationType,
                                                                        "SegmentLevelOnlyArteries")
 
-                self.loadLabelFromArray(observer1SegmentationArray, ("Observer1Segmentation_" + self.comparisonObserver1), observer1SegmentationType)
-                self.loadLabelFromArray(observer2SegmentationArray, ("Observer2Segmentation_" + self.comparisonObserver2), observer2SegmentationType)
-                self.createComparisonLabel(observer1Segmentation, observer2Segmentation)
+                self.loadLabelFromArray(observer1SegmentationArray, ("Observer1Segmentation_" + self.comparisonObserver1), labelDescription)
+                self.loadLabelFromArray(observer2SegmentationArray, ("Observer2Segmentation_" + self.comparisonObserver2), labelDescription)
 
+                labelDescription["MISMATCH"] = {
+                    'value': 100,
+                    'color': "#ff0000"
+                }
+
+                self.createComparisonLabel(observer1Segmentation, observer2Segmentation, labelDescription)
 
             else:
                 #TODO: Implement for all Segmentation Types
@@ -1591,7 +1611,7 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         else:
             print("Segmentation Types not matching!")
 
-    def createComparisonLabel(self, observer1Segmentation, observer2Segmentation):
+    def createComparisonLabel(self, observer1Segmentation, observer2Segmentation, labelDescription):
         comparisonSegmentation = numpy.copy(observer1Segmentation)
 
         #finding differences using binary label
@@ -1615,40 +1635,18 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         segmentation = segmentationNode.GetSegmentation()
         displayNode = segmentationNode.GetDisplayNode()
 
-        labelDescription = self.settings["labels"]["SegmentLevel"].copy()
-
-        labelDescription["MISMATCH"] = {
-            'value': 100,
-            'color': "#ff0000"
-        }
-
-        elementsToRemove = [
-            "AORTA_ASC",
-            "AORTA_DSC",
-            "AORTA_ARC",
-            "VALVE_AORTIC",
-            "VALVE_PULMONIC",
-            "VALVE_TRICUSPID",
-            "VALVE_MITRAL",
-            "PAPILLAR_MUSCLE",
-            "NFS_CACS",
-        ]
-
-        for element in elementsToRemove:
-            labelDescription.pop(element)
-
         for key in labelDescription:
             color = labelDescription[key]["color"]
             value = labelDescription[key]["value"]
+            r, g, b = ImageColor.getcolor(color, "RGB")
 
             if segmentation.GetSegment(key) is None:
                 segmentation.AddEmptySegment(key)
 
             segment = segmentation.GetSegment(key)
 
-            r, g, b = ImageColor.getcolor(color, "RGB")
-            segment.SetColor(r / 255, g / 255, b / 255)  # red
-            displayNode.SetSegmentOpacity3D(key, 1)  # Set opacity of a single segment
+            segment.SetColor(r / 255, g / 255, b / 255)
+            displayNode.SetSegmentOpacity3D(key, 1)
 
             segmentId = segmentationNode.GetSegmentation().GetSegmentIdBySegmentName(key)
             segmentArray = slicer.util.arrayFromSegmentBinaryLabelmap(segmentationNode, key, imageNode)
@@ -1660,7 +1658,9 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             segmentArray[comparisonSegmentation == value] = 1  # create segment by simple thresholding of an image
             slicer.util.updateSegmentBinaryLabelmapFromArray(segmentArray, segmentationNode, segmentId, imageNode)
 
-    def loadLabelFromArray(self, labelArray, labelName, segmentationType):
+    def loadLabelFromArray(self, labelArray, labelName, labelDescription):
+        uniqueKeys = numpy.unique(labelArray)
+
         imageNode = slicer.util.getNode(self.currentLoadedNode.GetName())
 
         segmentationNode = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLSegmentationNode")
@@ -1668,31 +1668,35 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         segmentationNode.CreateDefaultDisplayNodes()  # only needed for display
         segmentationNode.SetReferenceImageGeometryParameterFromVolumeNode(imageNode)
 
+        segmentationNode = slicer.util.getNode(labelName)
         segmentation = segmentationNode.GetSegmentation()
         displayNode = segmentationNode.GetDisplayNode()
 
-        for key in self.settings["labels"][segmentationType]:
-            color = self.settings["labels"][segmentationType][key]["color"]
-            value = self.settings["labels"][segmentationType][key]["value"]
-
-            if segmentation.GetSegment(key) is None:
-                segmentation.AddEmptySegment(key)
-
-            segment = segmentation.GetSegment(key)
-
+        for key in labelDescription:
+            color = labelDescription[key]["color"]
+            value = labelDescription[key]["value"]
             r, g, b = ImageColor.getcolor(color, "RGB")
-            segment.SetColor(r / 255, g / 255, b / 255)  # red
-            displayNode.SetSegmentOpacity3D(key, 1)  # Set opacity of a single segment
 
-            segmentId = segmentationNode.GetSegmentation().GetSegmentIdBySegmentName(key)
-            segmentArray = slicer.util.arrayFromSegmentBinaryLabelmap(segmentationNode, key, imageNode)
+            #improves speed ! only transversing elements that a segmented!
+            if (value in uniqueKeys) or (key == "OTHER"):
+                if segmentation.GetSegment(key) is None:
+                    segmentation.AddEmptySegment(key)
 
-            if key == "OTHER":
-                segmentArray[slicer.util.arrayFromVolume(imageNode) >= lowerThresholdValue] = 1
-                segmentArray[labelArray > self.settings["labels"][segmentationType][key]["value"]] = 0
+                segment = segmentation.GetSegment(key)
 
-            segmentArray[labelArray == value] = 1  # create segment by simple thresholding of an image
-            slicer.util.updateSegmentBinaryLabelmapFromArray(segmentArray, segmentationNode, segmentId, imageNode)
+                segment.SetColor(r / 255, g / 255, b / 255)  # red
+                displayNode.SetSegmentOpacity3D(key, 1)  # Set opacity of a single segment
+
+                segmentId = segmentationNode.GetSegmentation().GetSegmentIdBySegmentName(key)
+                segmentArray = slicer.util.arrayFromSegmentBinaryLabelmap(segmentationNode, key, imageNode)
+
+                if key == "OTHER":
+                    segmentArray[slicer.util.arrayFromVolume(imageNode) >= lowerThresholdValue] = 1
+                    segmentArray[labelArray > labelDescription[key]["value"]] = 0
+
+                segmentArray[labelArray == value] = 1  # create segment by simple thresholding of an image
+
+                slicer.util.updateSegmentBinaryLabelmapFromArray(segmentArray, segmentationNode, segmentId, imageNode)
 
     def getImageList(self, datasetSettings):
         self.checkIfDependenciesAreInstalled()
