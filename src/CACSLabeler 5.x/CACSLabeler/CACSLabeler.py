@@ -194,6 +194,12 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.ui.CompareObserver2Selector.connect("currentIndexChanged(int)", self.onComparisonChangeSecondObserver)
 
         self.ui.comparisonSaveButton.connect('clicked(bool)', self.onSaveComparisonLabel)
+        self.ui.tabWidget.currentChanged.connect(self.onTabChange)
+        self.ui.tabWidget.setCurrentIndex(self.settings["tabOpen"])
+
+    def onTabChange(self, index):
+        self.settings["tabOpen"] = index
+        self.saveSettings()
 
     def checkIfDependenciesAreInstalled(self):
         dependencies = ["pandas"]
@@ -844,7 +850,8 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                         "LCX": "LCX",
                         "LM": "LM"
                     }
-                }
+                },
+                "tabOpen": 0
             }
 
             self.settings = defaultSettings
