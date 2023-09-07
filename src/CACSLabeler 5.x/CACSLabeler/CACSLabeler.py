@@ -273,6 +273,7 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             self.updateDatasetAndObserverDropdownSelection()
             self.saveSettings()
             self.initializeMainUI()
+            self.createCompareObserversBox()
 
             self.datasetComboBoxEventBlocked = False
             self.observerComboBoxEventBlocked = False
@@ -291,6 +292,7 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             self.initializeMainUI()
 
             self.createObserverAvailableList()
+            self.createCompareObserversBox()
 
             self.datasetComboBoxEventBlocked = False
             self.observerComboBoxEventBlocked = False
