@@ -232,6 +232,7 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         editorObject.setSegmentationNodeSelectorVisible(False)
         editorObject.setSourceVolumeNodeSelectorVisible(False)
         editorObject.setEffectNameOrder(['Paint', 'Erase'])
+        editorObject.setEffectColumnCount(1)
         editorObject.unorderedEffectsVisible = False
         editorObject.setMRMLSegmentEditorNode(self.getSegmentEditorNode(editorName))
         editorObject.setSwitchToSegmentationsButtonVisible(False)
