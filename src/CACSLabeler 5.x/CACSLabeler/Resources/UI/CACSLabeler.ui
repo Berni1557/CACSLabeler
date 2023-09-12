@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>650</width>
-    <height>1287</height>
+    <height>1102</height>
    </rect>
   </property>
   <property name="font">
@@ -17,16 +17,6 @@
    </font>
   </property>
   <layout class="QVBoxLayout" name="verticalLayout">
-   <item>
-    <widget class="QLabel" name="errorText">
-     <property name="text">
-      <string>Error text placeholder</string>
-     </property>
-     <property name="alignment">
-      <set>Qt::AlignCenter</set>
-     </property>
-    </widget>
-   </item>
    <item>
     <widget class="ctkCollapsibleButton" name="settingsCollapsibleButton">
      <property name="text">

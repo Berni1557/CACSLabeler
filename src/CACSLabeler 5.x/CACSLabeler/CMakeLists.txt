@@ -4,6 +4,8 @@ set(MODULE_NAME CACSLabeler)
 #-----------------------------------------------------------------------------
 set(MODULE_PYTHON_SCRIPTS
   ${MODULE_NAME}.py
+  ${MODULE_NAME}Lib/__init__.py
+  ${MODULE_NAME}Lib/SettingsHandler.py
   )
 
 set(MODULE_PYTHON_RESOURCES
@@ -18,6 +20,10 @@ slicerMacroBuildScriptedModule(
   RESOURCES ${MODULE_PYTHON_RESOURCES}
   WITH_GENERIC_TESTS
   )
+
+#-----------------------------------------------------------------------------
+# Configure extension
+add_subdirectory(CACSLabelerLib)
 
 #-----------------------------------------------------------------------------
 if(BUILD_TESTING)

@@ -1,4 +1,3 @@
-import logging
 import os
 from pathlib import Path
 import qt
@@ -8,7 +7,6 @@ from slicer.ScriptedLoadableModule import *
 from slicer.util import VTKObservationMixin
 from PIL import ImageColor
 
-import concurrent.futures
 import SimpleITK as sitk
 import numpy
 import json
@@ -23,18 +21,9 @@ from scipy import ndimage as ndi
 
 import importlib
 
-import time
-import threading
-
-class NpEncoder(json.JSONEncoder):
-    def default(self, obj):
-        if isinstance(obj, numpy.integer):
-            return int(obj)
-        if isinstance(obj, numpy.floating):
-            return float(obj)
-        if isinstance(obj, numpy.ndarray):
-            return obj.tolist()
-        return super(NpEncoder, self).default(obj)
+#Processing and exporting calcium scores
+from CACSLabelerLib.CalciumScore import CalciumScore
+from CACSLabelerLib.SettingsHandler import SettingsHandler
 
 #
 # CACSLabeler
@@ -79,17 +68,27 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         """
         ScriptedLoadableModuleWidget.__init__(self, parent)
         VTKObservationMixin.__init__(self)  # needed for parameter node observation
-        self.logic = None
 
         #clears screen on reload
         slicer.mrmlScene.Clear(0)
 
-    def setup(self):
-        """
-        Called when the user opens the module the first time and the widget is initialized.
-        """
-        ScriptedLoadableModuleWidget.setup(self)
+        self.reload()
 
+    def reload(self):
+        # on load!
+        import CACSLabelerLib.SettingsHandler
+        import CACSLabelerLib.CalciumScore
+
+        importlib.reload(CACSLabelerLib.CalciumScore)
+        importlib.reload(CACSLabelerLib.SettingsHandler)
+
+        from CACSLabelerLib.CalciumScore import CalciumScore
+        from CACSLabelerLib.SettingsHandler import SettingsHandler
+
+        # Now you can use the reloaded class
+        self.settingsHandler = SettingsHandler()
+
+    def initializeUI(self):
         # Load widget from .ui file (created by Qt Designer).
         # Additional widgets can be instantiated manually and added to self.layout.
         uiWidget = slicer.util.loadUI(self.resourcePath('UI/CACSLabeler.ui'))
@@ -101,14 +100,10 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         # "setMRMLScene(vtkMRMLScene*)" slot.
         uiWidget.setMRMLScene(slicer.mrmlScene)
 
-        # Create logic class. Logic implements all computations that should be possible to run
-        # in batch mode, without a graphical user interface.
-        self.logic = CACSLabelerLogic()
+        self.defaultUI()
+        self.connectUIEvents()
 
-        # Default UI Status
-        self.mainUIHidden(True)
-        self.ui.errorText.setHidden(True)
-
+    def connectUIEvents(self):
         self.ui.exportFromReferenceFolder.connect('clicked(bool)', self.onExportFromReferenceFolderButtonClicked)
         self.ui.exportFromJsonFile.connect('clicked(bool)', self.onExportFromJSONFileButtonClicked)
         self.ui.loadVolumeButton.connect('clicked(bool)', self.onLoadButton)
@@ -117,23 +112,41 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.ui.saveButton.connect('clicked(bool)', self.onSaveButton)
         self.ui.compareLabelsButton.connect('clicked(bool)', self.onCompareLabelsButton)
 
-        self.topLevelPath = Path(__file__).absolute().parent.parent.parent.parent
-        self.dataPath = os.path.join(Path(__file__).absolute().parent.parent.parent.parent, "data")
+    def createMessagePopup(self, message):
+        slicer.util.infoDisplay(message)
 
-        # Loads Settings
-        self.settingsPath = os.path.join(self.dataPath, "settings_CACSLabeler5.x.json")
-        self.settings = None
-        self.availableDatasetsAndObservers = {}
+    def defaultUI(self):
+        pass
+        #self.ui.settingsCollapsibleButton.setHidden(False)
+        #self.ui.tabWidget.setHidden(True)
+        #self.ui.exportCollapsibleButton.setHidden(True)
 
-        self.loadSettings()
-        self.loadDatasetSettings()
+        # self.ui.inputCollapsibleButton.setHidden(hide)
+        # self.ui.exportCollapsibleButton.setHidden(hide)
+        # self.ui.compareCollapsibleButton.setHidden(hide)
+        #
+        # self.ui.datasetComboBox.setHidden(hide)
+        # self.ui.datasetLabel.setHidden(hide)
+        # self.ui.observerComboBox.setHidden(hide)
+        # self.ui.observerLabel.setHidden(hide)
 
+    def setup(self):
+        """
+        Called when the user opens the module the first time and the widget is initialized.
+        """
+        ScriptedLoadableModuleWidget.setup(self)
+
+        #used to add dependencies that are not shipped with 3dSlicer!
         self.checkIfDependenciesAreInstalled()
 
-        if self.availableDatasetsAndObservers:
-            self.selectDatasetAndObserver()
-            self.saveSettings()
-            self.mainUIHidden(False)
+        self.initializeUI()
+
+        #loading and processing settings json
+        #All interaction with the settings is handled through the handler
+        self.settingsHandler = SettingsHandler()
+
+        if self.settingsHandler.getAvailableDatasetsAndObservers():
+            self.changeSelectedDatasetAndObserver()
             self.updateDatasetAndObserverDropdownSelection()
 
             # after first updateDatasetAndObserverDropdownSelection to prevent call on automatic selection
@@ -156,10 +169,7 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             self.currentLoadedReferenceNode = None
             self.initializeMainUI()
         else:
-            print("Settings file error! Change settings in JSON file!")
-            self.ui.errorText.setHidden(False)
-            self.ui.settingsCollapsibleButton.setHidden(True)
-            self.ui.errorText.text = "Settings file error! \n Change settings in JSON file!"
+            self.createMessagePopup("Settings file error!\nChange settings in JSON file!")
 
         self.colorTableNode = None
         self.createColorTable()
@@ -171,15 +181,13 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.ui.comparisonLine2.setHidden(True)
         self.ui.comparisonSaveButton.setHidden(True)
 
-
         self.ui.saveButton.setHidden(True)
 
-        self.selectedExportType = self.settings["exportType"]
-        self.availableExportTypes = list(self.settings["exportedLabels"].keys())
+        self.availableExportTypes = list(self.settingsHandler.getContentByKeys(["exportedLabels"]).keys()) #TODO!
 
         self.ui.exportTypeComboBox.clear()
         self.ui.exportTypeComboBox.addItems(self.availableExportTypes)
-        self.ui.exportTypeComboBox.setCurrentText(self.selectedExportType)
+        self.ui.exportTypeComboBox.setCurrentText(self.settingsHandler.getContentByKeys(["exportType"]))
 
         #Init Comparison
         self.comparisonObserver1 = None
@@ -195,11 +203,10 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
         self.ui.comparisonSaveButton.connect('clicked(bool)', self.onSaveComparisonLabel)
         self.ui.tabWidget.currentChanged.connect(self.onTabChange)
-        self.ui.tabWidget.setCurrentIndex(self.settings["tabOpen"])
+        self.ui.tabWidget.setCurrentIndex(self.settingsHandler.getContentByKeys(["tabOpen"]))
 
     def onTabChange(self, index):
-        self.settings["tabOpen"] = index
-        self.saveSettings()
+        self.settingsHandler.changeContentByKey(["tabOpen"], index)
 
     def checkIfDependenciesAreInstalled(self):
         dependencies = ["pandas"]
@@ -254,8 +261,7 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         if not self.exportTypeComboBoxEventBlocked:
             self.exportTypeComboBoxEventBlocked = True
 
-            self.settings["exportType"] = self.availableExportTypes[exportTypeId]
-            self.saveSettings()
+            self.settingsHandler.changeContentByKey(["exportType"], self.availableExportTypes[exportTypeId])
 
             self.exportTypeComboBoxEventBlocked = False
 
@@ -268,10 +274,9 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             self.observerComboBoxEventBlocked = True
             self.compareObserverComboBoxEventBlocked = True
 
-            newDataset = list(self.availableDatasetsAndObservers.keys())[datasetListId]
-            self.selectDatasetAndObserver(newDataset)
+            newDataset = list(self.settingsHandler.getAvailableDatasetsAndObservers().keys())[datasetListId]
+            self.changeSelectedDatasetAndObserver(newDataset)
             self.updateDatasetAndObserverDropdownSelection()
-            self.saveSettings()
             self.initializeMainUI()
             self.createCompareObserversBox()
 
@@ -287,8 +292,8 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             self.observerComboBoxEventBlocked = True
             self.compareObserverComboBoxEventBlocked = True
 
-            self.selectDatasetAndObserver(self.settings["savedDatasetAndObserverSelection"]["dataset"], self.availableDatasetsAndObservers[self.settings["savedDatasetAndObserverSelection"]["dataset"]][item])
-            self.saveSettings()
+            self.changeSelectedDatasetAndObserver(self.settingsHandler.getContentByKeys(["savedDatasetAndObserverSelection", "dataset"]),
+                                                  self.settingsHandler.getAvailableDatasetsAndObservers()[self.settingsHandler.getContentByKeys(["savedDatasetAndObserverSelection", "dataset"])][item])
             self.initializeMainUI()
 
             self.createObserverAvailableList()
@@ -331,16 +336,16 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.clearCurrentViewedNode(True)
         imageList = self.getImageList(self.selectedDatasetAndObserverSetting())
 
-        dataset = self.settings["savedDatasetAndObserverSelection"]["dataset"]
-        imagesPath = self.settings["datasets"][dataset]["imagesPath"]
+        dataset = self.settingsHandler.getContentByKeys(["savedDatasetAndObserverSelection", "dataset"])
+        imagesPath = self.settingsHandler.getContentByKeys(["datasets", dataset, "imagesPath"])
         filename = imageList["unlabeledImages"][0] + ".mhd"
 
         if os.path.isfile(os.path.join(imagesPath, filename)):
             self.loadVolumeToSlice(filename, imagesPath)
 
     def onLoadButton(self):
-        dataset = self.settings["savedDatasetAndObserverSelection"]["dataset"]
-        imagesPath = self.settings["datasets"][dataset]["imagesPath"]
+        dataset = self.settingsHandler.getContentByKeys(["savedDatasetAndObserverSelection", "dataset"])
+        imagesPath = self.settingsHandler.getContentByKeys(["datasets", dataset, "imagesPath"])
 
         self.clearCurrentViewedNode(True)
 
@@ -374,7 +379,7 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
         differentLabelType = self.differentLabelType()
 
-        self.logic.runThreshold(inputVolumeName, labelName, segmentationMode, self.settings, labelsPath, self.colorTableNode, differentLabelType)
+        self.runThreshold(inputVolumeName, labelName, segmentationMode, labelsPath, self.colorTableNode, differentLabelType)
         self.currentLoadedReferenceNode = slicer.util.getNode(labelName)
 
         self.ui.embeddedSegmentEditorWidget.setSegmentationNode(slicer.util.getNode(labelName))
@@ -389,14 +394,13 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         differentLabelType = None
 
         # check if other labels exist
-        if "differentSegmentationModeLabels" in self.settings["datasets"][dataset]["observers"][observer]:
-            if "labelsPath" in self.settings["datasets"][dataset]["observers"][observer][
-                "differentSegmentationModeLabels"] and "segmentationMode" in \
-                    self.settings["datasets"][dataset]["observers"][observer]["differentSegmentationModeLabels"]:
+        if "differentSegmentationModeLabels" in self.settingsHandler.getContentByKeys(["datasets", dataset, "observers", observer]):
+            if "labelsPath" in self.settingsHandler.getContentByKeys(["datasets", dataset, "observers", observer, "differentSegmentationModeLabels"])\
+                    and "segmentationMode" in self.settingsHandler.getContentByKeys(["datasets", dataset, "observers", observer, "differentSegmentationModeLabels"]):
                 differentLabelType = {
-                    "labelPath": self.settings["datasets"][dataset]["observers"][observer]["differentSegmentationModeLabels"]["labelsPath"],
-                    "labelSegmentationMode": self.settings["datasets"][dataset]["observers"][observer]["differentSegmentationModeLabels"]["segmentationMode"],
-                    "labelFileSuffix": self.settings["datasets"][dataset]["observers"][observer]["differentSegmentationModeLabels"]["labelFileSuffix"]
+                    "labelPath": self.settingsHandler.getContentByKeys(["datasets", dataset, "observers", observer, "differentSegmentationModeLabels", "labelsPath"]),
+                    "labelSegmentationMode": self.settingsHandler.getContentByKeys(["datasets", dataset, "observers", observer, "differentSegmentationModeLabels", "segmentationMode"]),
+                    "labelFileSuffix": self.settingsHandler.getContentByKeys(["datasets", dataset, "observers", observer, "differentSegmentationModeLabels", "labelFileSuffix"])
                 }
 
         return differentLabelType
@@ -405,10 +409,10 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.clearCurrentViewedNode()
         self.progressBarUpdate()
 
-        observer = self.settings["savedDatasetAndObserverSelection"]["observer"]
-        dataset = self.settings["savedDatasetAndObserverSelection"]["dataset"]
+        observer = self.settingsHandler.getContentByKeys(["savedDatasetAndObserverSelection", "observer"])
+        dataset = self.settingsHandler.getContentByKeys(["savedDatasetAndObserverSelection", "dataset"])
         self.ui.currentObserverName.text = observer
-        self.ui.currentObserverSegmentationType.text = self.settings["datasets"][dataset]["observers"][observer]["segmentationMode"]
+        self.ui.currentObserverSegmentationType.text = self.settingsHandler.getContentByKeys(["datasets", dataset, "observers", observer, "segmentationMode"])
 
     def clearCurrentViewedNode(self, changeAlert = False):
         if changeAlert:
@@ -444,536 +448,78 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         else:
             self.ui.selectNextUnlabeledImageButton.enabled = False
 
-    def loadSettings(self):
-        if os.path.isfile(self.settingsPath):
-            with open(self.settingsPath, 'r', encoding='utf-8') as file:
-                self.settings = None
-                self.settings = json.load(file)
-        else:
-            #create default settings file
-            defaultSettings = {
-                "datasets": {
-                    "VAR_DATASET_NAME": {
-                        "imagesPath": "",
-                        "sliceStepFile": "",
-                        "observers": {
-                            "VAR_OBSERVER_NAME": {
-                                "labelsPath": "",
-                                "labelFileSuffix": "",
-                                "segmentationMode": "",
-                                "differentSegmentationModeLabels": {
-                                    "labelsPath": "",
-                                    "segmentationMode": "",
-                                    "labelFileSuffix": ""
-                                },
-                                "includedImageFilter" :""
-                            }
-                        }
-                    }
-                },
-                "exportType": "SegmentLevel",
-                "exportFolder": "",
-                "savedDatasetAndObserverSelection": {
-                    "dataset": "",
-                    "observer": ""
-                },
-                "labels": {
-                    "SegmentLevel": {
-                        "OTHER": {
-                            "value": 1,
-                            "color": "#00ff00"
-                        },
-                        "RCA_PROXIMAL": {
-                            "value": 4,
-                            "color": "#fc5000"
-                        },
-                        "RCA_MID": {
-                            "value": 5,
-                            "color": "#feda00"
-                        },
-                        "RCA_DISTAL": {
-                            "value": 6,
-                            "color": "#ffe4a5"
-                        },
-                        "RCA_SIDE_BRANCH": {
-                            "value": 7,
-                            "color": "#ffc2c2"
-                        },
-                        "LM_BIF_LAD_LCX": {
-                            "value": 9,
-                            "color": "#0bfde0"
-                        },
-                        "LM_BIF_LAD": {
-                            "value": 10,
-                            "color": "#1acbee"
-                        },
-                        "LM_BIF_LCX": {
-                            "value": 11,
-                            "color": "#208482"
-                        },
-                        "LM_BRANCH": {
-                            "value": 12,
-                            "color": "#d8ffcd"
-                        },
-                        "LAD_PROXIMAL": {
-                            "value": 14,
-                            "color": "#0050fd"
-                        },
-                        "LAD_MID": {
-                            "value": 15,
-                            "color": "#00ffff"
-                        },
-                        "LAD_DISTAL": {
-                            "value": 16,
-                            "color": "#91ffff"
-                        },
-                        "LAD_SIDE_BRANCH": {
-                            "value": 17,
-                            "color": "#00b3ff"
-                        },
-                        "LCX_PROXIMAL": {
-                            "value": 19,
-                            "color": "#ff00ff"
-                        },
-                        "LCX_MID": {
-                            "value": 20,
-                            "color": "#ff66ff"
-                        },
-                        "LCX_DISTAL": {
-                            "value": 21,
-                            "color": "#ff99ff"
-                        },
-                        "LCX_SIDE_BRANCH": {
-                            "value": 22,
-                            "color": "#ffccff"
-                        },
-                        "RIM": {
-                            "value": 23,
-                            "color": "#edfc9f"
-                        },
-                        "AORTA_ASC": {
-                            "value": 26,
-                            "color": "#483fff"
-                        },
-                        "AORTA_DSC": {
-                            "value": 27,
-                            "color": "#0c00f6"
-                        },
-                        "AORTA_ARC": {
-                            "value": 28,
-                            "color": "#8b85ff"
-                        },
-                        "VALVE_AORTIC": {
-                            "value": 30,
-                            "color": "#caffa7"
-                        },
-                        "VALVE_PULMONIC": {
-                            "value": 31,
-                            "color": "#8dff4f"
-                        },
-                        "VALVE_TRICUSPID": {
-                            "value": 32,
-                            "color": "#009900"
-                        },
-                        "VALVE_MITRAL": {
-                            "value": 33,
-                            "color": "#5dcc80"
-                        },
-                        "PAPILLAR_MUSCLE": {
-                            "value": 34,
-                            "color": "#a7954b"
-                        },
-                        "NFS_CACS": {
-                            "value": 35,
-                            "color": "#d8cfa8"
-                        }
-                    },
-                    "SegmentLevelDLNExport":{
-                        "LM": {
-                            "value": 2,
-                            "color": "#feda00"
-                        },
-                        "LAD_PROXIMAL": {
-                            "value": 3,
-                            "color": "#4dff00"
-                        },
-                        "LAD_MID": {
-                            "value": 4,
-                            "color": "#d0ff85"
-                        },
-                        "LAD_DISTAL": {
-                            "value": 5,
-                            "color": "#03ad00"
-                        },
-                        "LAD_SIDE_BRANCH": {
-                            "value": 6,
-                            "color": "#0ec9fd"
-                        },
-                        "LCX_PROXIMAL": {
-                            "value": 7,
-                            "color": "#b300ff"
-                        },
-                        "LCX_MID": {
-                            "value": 8,
-                            "color": "#ff93b9"
-                        },
-                        "LCX_DISTAL": {
-                            "value": 9,
-                            "color": "#b8b3ff"
-                        },
-                        "LCX_SIDE_BRANCH": {
-                            "value": 10,
-                            "color": "#97d2ff"
-                        },
-                        "RCA_PROXIMAL": {
-                            "value": 11,
-                            "color": "#ff0000"
-                        },
-                        "RCA_MID": {
-                            "value": 12,
-                            "color": "#ff8989"
-                        },
-                        "RCA_DISTAL": {
-                            "value": 13,
-                            "color": "#ffe5c1"
-                        },
-                        "RCA_SIDE_BRANCH": {
-                            "value": 14,
-                            "color": "#e3ffb8"
-                        },
-                        "RIM": {
-                            "value": 15,
-                            "color": "#ffaa00"
-                        },
-                    },
-                    "ArteryLevel": {
-                        "OTHER": {
-                            "value": 1,
-                            "color": "#00ff00"
-                        },
-                        "LAD": {
-                            "value": 2,
-                            "color": "#ffcc66"
-                        },
-                        "LCX": {
-                            "value": 3,
-                            "color": "#ff00ff"
-                        },
-                        "RCA": {
-                            "value": 4,
-                            "color": "#cc0000"
-                        }
-                    },
-                    "ArteryLevelWithLM": {
-                        "OTHER": {
-                            "value": 1,
-                            "color": "#00ff00"
-                        },
-                        "LAD": {
-                            "value": 2,
-                            "color": "#ffcc66"
-                        },
-                        "LCX": {
-                            "value": 3,
-                            "color": "#ff00ff"
-                        },
-                        "RCA": {
-                            "value": 4,
-                            "color": "#cc0000"
-                        },
-                        "LM": {
-                            "value": 5,
-                            "color": "#00c3ff"
-                        }
-                    }
-                },
-                "exportedLabels": {
-                    "SegmentLevel": {
-                        "CC": [
-                            "RCA_PROXIMAL",
-                            "RCA_MID",
-                            "RCA_DISTAL",
-                            "RCA_SIDE_BRANCH",
-                            "LM_BIF_LAD_LCX",
-                            "LM_BIF_LAD",
-                            "LM_BIF_LCX",
-                            "LM_BRANCH",
-                            "LAD_PROXIMAL",
-                            "LAD_MID",
-                            "LAD_DISTAL",
-                            "LAD_SIDE_BRANCH",
-                            "LCX_PROXIMAL",
-                            "LCX_MID",
-                            "LCX_DISTAL",
-                            "LCX_SIDE_BRANCH",
-                            "RIM"
-                        ],
-                        "RCA": [
-                            "RCA_PROXIMAL",
-                            "RCA_MID",
-                            "RCA_DISTAL",
-                            "RCA_SIDE_BRANCH"
-                        ],
-                        "RCA_PROXIMAL": "RCA_PROXIMAL",
-                        "RCA_MID": "RCA_MID",
-                        "RCA_DISTAL": "RCA_DISTAL",
-                        "RCA_SIDE_BRANCH": "RCA_SIDE_BRANCH",
-                        "LM": [
-                            "LM_BIF_LAD_LCX",
-                            "LM_BIF_LAD",
-                            "LM_BIF_LCX",
-                            "LM_BRANCH"
-                        ],
-                        "LM_BIF_LAD_LCX": "LM_BIF_LAD_LCX",
-                        "LM_BIF_LAD": "LM_BIF_LAD",
-                        "LM_BIF_LCX": "LM_BIF_LCX",
-                        "LM_BRANCH": "LM_BRANCH",
-                        "LAD": [
-                            "LAD_PROXIMAL",
-                            "LAD_MID",
-                            "LAD_DISTAL",
-                            "LAD_SIDE_BRANCH"
-                        ],
-                        "LAD_PROXIMAL": "LAD_PROXIMAL",
-                        "LAD_MID": "LAD_MID",
-                        "LAD_DISTAL": "LAD_DISTAL",
-                        "LAD_SIDE_BRANCH": "LAD_SIDE_BRANCH",
-                        "LCX": [
-                            "LCX_PROXIMAL",
-                            "LCX_MID",
-                            "LCX_DISTAL",
-                            "LCX_SIDE_BRANCH"
-                        ],
-                        "LCX_PROXIMAL": "LCX_PROXIMAL",
-                        "LCX_MID": "LCX_MID",
-                        "LCX_DISTAL": "LCX_DISTAL",
-                        "LCX_SIDE_BRANCH": "LCX_SIDE_BRANCH",
-                        "RIM": "RIM",
-                        "NCC": [
-                            "AORTA_ASC",
-                            "AORTA_DSC",
-                            "AORTA_ARC",
-                            "VALVE_AORTIC",
-                            "VALVE_PULMONIC",
-                            "VALVE_TRICUSPID",
-                            "VALVE_MITRAL",
-                            "NFS_CACS",
-                            "PAPILLAR_MUSCLE"
-                        ],
-                        "AORTA": [
-                            "AORTA_ASC",
-                            "AORTA_DSC",
-                            "AORTA_ARC"
-                        ],
-                        "AORTA_ASC": "AORTA_ASC",
-                        "AORTA_DSC": "AORTA_DSC",
-                        "AORTA_ARC": "AORTA_ARC",
-                        "VALVES": [
-                            "VALVE_AORTIC",
-                            "VALVE_PULMONIC",
-                            "VALVE_TRICUSPID",
-                            "VALVE_MITRAL"
-                        ],
-                        "VALVE_AORTIC": "VALVE_AORTIC",
-                        "VALVE_PULMONIC": "VALVE_PULMONIC",
-                        "VALVE_TRICUSPID": "VALVE_TRICUSPID",
-                        "VALVE_MITRAL": "VALVE_MITRAL",
-                        "PAPILLAR_MUSCLE": "PAPILLAR_MUSCLE",
-                        "NFS_CACS": "NFS_CACS"
-                    },
-                    "SegmentLevelDLNExport": {
-                        "CC": [
-                            "LM",
-                            "LAD_PROXIMAL",
-                            "LAD_MID",
-                            "LAD_DISTAL",
-                            "LAD_SIDE_BRANCH",
-                            "LCX_PROXIMAL",
-                            "LCX_MID",
-                            "LCX_DISTAL",
-                            "LCX_SIDE_BRANCH",
-                            "RCA_PROXIMAL",
-                            "RCA_MID",
-                            "RCA_DISTAL",
-                            "RCA_SIDE_BRANCH",
-                            "RIM"
-                        ],
-                        "LM": "LM",
-                        "LAD": [
-                            "LAD_PROXIMAL",
-                            "LAD_MID",
-                            "LAD_DISTAL",
-                            "LAD_SIDE_BRANCH"
-                        ],
-                        "LAD_PROXIMAL": "LAD_PROXIMAL",
-                        "LAD_MID": "LAD_MID",
-                        "LAD_DISTAL": "LAD_DISTAL",
-                        "LAD_SIDE_BRANCH": "LAD_SIDE_BRANCH",
-                        "RCA": [
-                            "RCA_PROXIMAL",
-                            "RCA_MID",
-                            "RCA_DISTAL",
-                            "RCA_SIDE_BRANCH"
-                        ],
-                        "RCA_PROXIMAL": "RCA_PROXIMAL",
-                        "RCA_MID": "RCA_MID",
-                        "RCA_DISTAL": "RCA_DISTAL",
-                        "RCA_SIDE_BRANCH": "RCA_SIDE_BRANCH",
-                        "LCX": [
-                            "LCX_PROXIMAL",
-                            "LCX_MID",
-                            "LCX_DISTAL",
-                            "LCX_SIDE_BRANCH"
-                        ],
-                        "LCX_PROXIMAL": "LCX_PROXIMAL",
-                        "LCX_MID": "LCX_MID",
-                        "LCX_DISTAL": "LCX_DISTAL",
-                        "LCX_SIDE_BRANCH": "LCX_SIDE_BRANCH",
-                        "RIM": "RIM"
-                    },
-                    "ArteryLevel": {
-                        "CC": [
-                            "LAD",
-                            "RCA",
-                            "LCX"
-                        ],
-                        "LAD": "LAD",
-                        "RCA": "RCA",
-                        "LCX": "LCX"
-                    },
-                    "ArteryLevelWithLM": {
-                        "CC": [
-                            "LAD",
-                            "RCA",
-                            "LCX",
-                            "LM"
-                        ],
-                        "LAD": "LAD",
-                        "RCA": "RCA",
-                        "LCX": "LCX",
-                        "LM": "LM"
-                    }
-                },
-                "tabOpen": 0
-            }
-
-            self.settings = defaultSettings
-            self.saveSettings()
-
-    def saveSettings(self):
-        with open(self.settingsPath, 'w', encoding='utf-8') as file:
-            # explicit copy to prevent race condition
-            json.dump(self.settings, file, ensure_ascii=False, indent=4, cls=NpEncoder)
-
-    def loadDatasetSettings(self):
-        for dataset in self.settings["datasets"]:
-            if self.settings["datasets"][dataset]:
-                if self.settings["datasets"][dataset]["imagesPath"] and os.path.isdir(self.settings["datasets"][dataset]["imagesPath"]):
-
-                    if dataset not in self.availableDatasetsAndObservers:
-                        self.availableDatasetsAndObservers[dataset] = []
-
-                    for observer in self.settings["datasets"][dataset]["observers"]:
-                        if os.path.isdir(self.settings["datasets"][dataset]["observers"][observer]["labelsPath"]):
-
-                            # Options: ArteryLevel, SegmentLevel, ArteryLevelWithLM, SegmentLevelDLNExport
-                            if self.settings["datasets"][dataset]["observers"][observer]["segmentationMode"] == "ArteryLevel" \
-                                    or self.settings["datasets"][dataset]["observers"][observer]["segmentationMode"] == "SegmentLevel" \
-                                    or self.settings["datasets"][dataset]["observers"][observer]["segmentationMode"] == "SegmentLevelDLNExport" \
-                                    or self.settings["datasets"][dataset]["observers"][observer]["segmentationMode"] == "ArteryLevelWithLM":
-                                self.availableDatasetsAndObservers[dataset].append(observer)
-
-                            else:
-                                print(f"Observer [{observer}] missing segmentationMode")
-                        else:
-                            print(f"Observer [{observer}] missing labels folder path")
-                else:
-                    print(f"Dataset [{dataset}] missing images folder path")
-            else:
-                print(f"Dataset [{dataset}] settings empty")
-
-    def selectDatasetAndObserver(self, dataset = None, observer = None):
+    def changeSelectedDatasetAndObserver(self, dataset = None, observer = None):
         if dataset is None and observer is None:
-            if ("savedDatasetAndObserverSelection" in self.settings) \
-                    and (self.settings["savedDatasetAndObserverSelection"]) \
-                    and ("dataset" in self.settings["savedDatasetAndObserverSelection"]) \
-                    and ("observer" in self.settings["savedDatasetAndObserverSelection"]):
+            if (self.settingsHandler.getContentByKeys(["savedDatasetAndObserverSelection"])) \
+                and ("dataset" in self.settingsHandler.getContentByKeys(["savedDatasetAndObserverSelection"])) \
+                and ("observer" in self.settingsHandler.getContentByKeys(["savedDatasetAndObserverSelection"])):
 
-                if self.settings["savedDatasetAndObserverSelection"]["dataset"] in self.availableDatasetsAndObservers:
+                if self.settingsHandler.getContentByKeys(["savedDatasetAndObserverSelection", "dataset"]) in self.settingsHandler.getAvailableDatasetsAndObservers():
                     try:
-                        self.availableDatasetsAndObservers[self.settings["savedDatasetAndObserverSelection"]["dataset"]].index(self.settings["savedDatasetAndObserverSelection"]["observer"])
+                        self.settingsHandler.getAvailableDatasetsAndObservers()[self.settingsHandler.getContentByKeys(["savedDatasetAndObserverSelection", "dataset"])].index(self.settingsHandler.getContentByKeys(["savedDatasetAndObserverSelection", "observer"]))
                         return
                     except ValueError:
                         pass
         else:
-            if dataset in self.availableDatasetsAndObservers:
-                self.settings["savedDatasetAndObserverSelection"]["dataset"] = dataset
+            if dataset in self.settingsHandler.getAvailableDatasetsAndObservers():
+                self.settingsHandler.changeContentByKey(["savedDatasetAndObserverSelection", "dataset"], dataset)
                 try:
-                    self.availableDatasetsAndObservers[dataset].index(observer)
-                    self.settings["savedDatasetAndObserverSelection"]["observer"] = observer
+                    self.settingsHandler.getAvailableDatasetsAndObservers()[dataset].index(observer)
+                    self.settingsHandler.changeContentByKey(["savedDatasetAndObserverSelection","observer"], observer)
                     return
                 except ValueError:
                     #if no observer selected select first available
-                    self.settings["savedDatasetAndObserverSelection"]["observer"] = self.availableDatasetsAndObservers[dataset][0]
+                    self.settingsHandler.changeContentByKey(["savedDatasetAndObserverSelection", "observer"], self.settingsHandler.getAvailableDatasetsAndObservers()[dataset][0])
                     return
 
         # if not already selected in settings selecting first element
-        firstDataset = list(self.availableDatasetsAndObservers.keys())[0]
-        firstObserver = self.availableDatasetsAndObservers[firstDataset][0]
+        firstDataset = list(self.settingsHandler.getAvailableDatasetsAndObservers().keys())[0]
+        firstObserver = self.settingsHandler.getAvailableDatasetsAndObservers()[firstDataset][0]
 
-        self.settings["savedDatasetAndObserverSelection"]["dataset"] = firstDataset
-        self.settings["savedDatasetAndObserverSelection"]["observer"] = firstObserver
+        self.settingsHandler.changeContentByKey(["savedDatasetAndObserverSelection", "dataset"], firstDataset)
+        self.settingsHandler.changeContentByKey(["savedDatasetAndObserverSelection", "observer"], firstObserver)
 
     def selectedDatasetAndObserverSetting(self):
-        dataset = self.settings["savedDatasetAndObserverSelection"]["dataset"]
-        observer = self.settings["savedDatasetAndObserverSelection"]["observer"]
+        dataset = self.settingsHandler.getContentByKeys(["savedDatasetAndObserverSelection", "dataset"])
+        observer = self.settingsHandler.getContentByKeys(["savedDatasetAndObserverSelection", "observer"])
 
-        imagesPath = self.settings["datasets"][dataset]["imagesPath"]
-        labelsPath = self.settings["datasets"][dataset]["observers"][observer]["labelsPath"]
-        segmentationMode = self.settings["datasets"][dataset]["observers"][observer]["segmentationMode"]
-        sliceStepFile = self.settings["datasets"][dataset]["sliceStepFile"]
-        exportFolder = self.settings["exportFolder"]
-        labelFileSuffix = self.settings["datasets"][dataset]["observers"][observer]["labelFileSuffix"]
+        imagesPath = self.settingsHandler.getContentByKeys(["datasets", dataset, "imagesPath"])
+        labelsPath = self.settingsHandler.getContentByKeys(["datasets", dataset, "observers", observer, "labelsPath"])
+        segmentationMode = self.settingsHandler.getContentByKeys(["datasets", dataset, "observers", observer, "segmentationMode"])
+        sliceStepFile = self.settingsHandler.getContentByKeys(["datasets", dataset, "sliceStepFile"])
+        exportFolder = self.settingsHandler.getContentByKeys(["exportFolder"])
+        labelFileSuffix = self.settingsHandler.getContentByKeys(["datasets", dataset, "observers", observer, "labelFileSuffix"])
 
         return imagesPath, labelsPath, segmentationMode, sliceStepFile, exportFolder, dataset, observer, labelFileSuffix
 
-    def mainUIHidden(self, hide):
-        self.ui.inputCollapsibleButton.setHidden(hide)
-        self.ui.exportCollapsibleButton.setHidden(hide)
-        self.ui.compareCollapsibleButton.setHidden(hide)
-
-        self.ui.datasetComboBox.setHidden(hide)
-        self.ui.datasetLabel.setHidden(hide)
-        self.ui.observerComboBox.setHidden(hide)
-        self.ui.observerLabel.setHidden(hide)
-
     def updateDatasetAndObserverDropdownSelection(self):
         self.ui.datasetComboBox.clear()
-        self.ui.datasetComboBox.addItems(list(self.availableDatasetsAndObservers.keys()))
-        self.ui.datasetComboBox.setCurrentText(self.settings["savedDatasetAndObserverSelection"]["dataset"])
+        self.ui.datasetComboBox.addItems(list(self.settingsHandler.getAvailableDatasetsAndObservers().keys()))
+
+        self.ui.datasetComboBox.setCurrentText(self.settingsHandler.getContentByKeys(["savedDatasetAndObserverSelection", "dataset"]))
 
         self.ui.observerComboBox.clear()
-        self.ui.observerComboBox.addItems(self.availableDatasetsAndObservers[self.settings["savedDatasetAndObserverSelection"]["dataset"]])
-        self.ui.observerComboBox.setCurrentText(self.settings["savedDatasetAndObserverSelection"]["observer"])
+        self.ui.observerComboBox.addItems(self.settingsHandler.getAvailableDatasetsAndObservers()[self.settingsHandler.getContentByKeys(["savedDatasetAndObserverSelection", "dataset"])])
+        self.ui.observerComboBox.setCurrentText(self.settingsHandler.getContentByKeys(["savedDatasetAndObserverSelection", "observer"]))
 
         self.createObserverAvailableList()
 
     def onExportFromReferenceFolderButtonClicked(self):
-        exporter = ScoreExport(self.selectedDatasetAndObserverSetting(), self.settings)
+        exporter = CalciumScore(self.selectedDatasetAndObserverSetting(), self.settings)
         exporter.exportFromReferenceFolder()
 
     def onExportFromJSONFileButtonClicked(self):
-        exporter = ScoreExport(self.selectedDatasetAndObserverSetting(), self.settings)
+        exporter = CalciumScore(self.selectedDatasetAndObserverSetting(), self.settings)
         exporter.exportFromJSONFile()
 
     def createColorTable(self):
         imagesPath, labelsPath, segmentationMode, sliceStepFile, exportFolder, dataset, observer, labelFileSuffix = self.selectedDatasetAndObserverSetting()
         segmentNamesToLabels = []
 
-        for key in self.settings["labels"][segmentationMode]:
+        for key in self.settingsHandler.getContentByKeys(["labels", segmentationMode]):
 
-            value = self.settings["labels"][segmentationMode][key]["value"]
-            color = self.settings["labels"][segmentationMode][key]["color"]
+            value = self.settingsHandler.getContentByKeys(["labels", segmentationMode, key, "value"])
+            color = self.settingsHandler.getContentByKeys(["labels", segmentationMode, key, "color"])
 
             segmentNamesToLabels.append((key, value, color))
 
@@ -1018,12 +564,12 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             self.updateSecondObserverSegmentationTypeLabel(self.selectedComparableObserver)
 
     def updateSecondObserverSegmentationTypeLabel(self, observer):
-        currentDataset = self.settings["savedDatasetAndObserverSelection"]["dataset"]
-        segmentationType = self.settings["datasets"][currentDataset]["observers"][observer]["segmentationMode"]
+        currentDataset = self.settingsHandler.getContentByKeys(["savedDatasetAndObserverSelection", "dataset"])
+        segmentationType = self.settingsHandler.getContentByKeys(["datasets", currentDataset, "observers", observer, "segmentationMode"])
 
         self.ui.secondObserverSegmentationType.text = segmentationType
 
-        self.checkForComparableLabelSegmentationTypes(self.settings["savedDatasetAndObserverSelection"]["observer"], observer)
+        self.checkForComparableLabelSegmentationTypes(self.settingsHandler.getContentByKeys(["savedDatasetAndObserverSelection", "observer"]), observer)
 
     def createObserverAvailableList(self):
         self.ui.compareObserverComboBox.clear()
@@ -1047,15 +593,15 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             self.ui.secondObserverSegmentationType.enabled = False
 
     def compareObserverAvailableList(self):
-        currentDataset = self.settings["savedDatasetAndObserverSelection"]["dataset"]
-        currentObserver = self.settings["savedDatasetAndObserverSelection"]["observer"]
-        currentSegmentationType = self.settings["datasets"][currentDataset]["observers"][currentObserver]["segmentationMode"]
+        currentDataset = self.settingsHandler.getContentByKeys(["savedDatasetAndObserverSelection", "dataset"])
+        currentObserver = self.settingsHandler.getContentByKeys(["savedDatasetAndObserverSelection", "observer"])
+        currentSegmentationType = self.settingsHandler.getContentByKeys(["datasets", currentDataset, "observers", currentObserver, "segmentationMode"])
 
         comparableObservers = []
 
-        for observer in self.settings["datasets"][currentDataset]["observers"]:
+        for observer in self.settingsHandler.getContentByKeys(["datasets", currentDataset, "observers"]):
             if observer != currentObserver:
-                segmentationModeOfObserver = self.settings["datasets"][currentDataset]["observers"][observer]["segmentationMode"]
+                segmentationModeOfObserver = self.settingsHandler.getContentByKeys(["datasets", currentDataset, "observers", observer, "segmentationMode"])
 
                 if (currentSegmentationType == "SegmentLevel") and (segmentationModeOfObserver == "SegmentLevel" or segmentationModeOfObserver == "SegmentLevelDLNExport"):
                     comparableObservers.append(observer)
@@ -1067,9 +613,9 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
     def checkIfLabelCanBeCompared(self, filename):
         file = filename.split(".mhd")[0]
-        currentDataset = self.settings["savedDatasetAndObserverSelection"]["dataset"]
-        labelsPath = self.settings["datasets"][currentDataset]["observers"][self.selectedComparableObserver]["labelsPath"]
-        labelFileSuffix = self.settings["datasets"][currentDataset]["observers"][self.selectedComparableObserver]["labelFileSuffix"]
+        currentDataset = self.settingsHandler.getContentByKeys(["savedDatasetAndObserverSelection", "dataset"])
+        labelsPath = self.settingsHandler.getContentByKeys(["datasets", currentDataset, "observers", self.selectedComparableObserver, "labelsPath"])
+        labelFileSuffix = self.settingsHandler.getContentByKeys(["datasets", currentDataset, "observers", self.selectedComparableObserver, "labelFileSuffix"])
 
         fullLabelFilename = file + labelFileSuffix + ".nrrd"
 
@@ -1088,9 +634,9 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         return segmentationTypes[:segmentationTypes.index(segmentationType)+1]
 
     def checkForComparableLabelSegmentationTypes(self, firstObserver, secondObserver):
-        currentDataset = self.settings["savedDatasetAndObserverSelection"]["dataset"]
-        firstSegmentationType = self.settings["datasets"][currentDataset]["observers"][firstObserver]["segmentationMode"]
-        secondSegmentationType = self.settings["datasets"][currentDataset]["observers"][secondObserver]["segmentationMode"]
+        currentDataset = self.settingsHandler.getContentByKeys(["savedDatasetAndObserverSelection", "dataset"])
+        firstSegmentationType = self.settingsHandler.getContentByKeys(["datasets", currentDataset, "observers", firstObserver, "segmentationMode"])
+        secondSegmentationType = self.settingsHandler.getContentByKeys(["datasets", currentDataset, "observers", secondObserver, "segmentationMode"])
 
         list = []
 
@@ -1114,14 +660,14 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
     def onCompareLabelsButton(self):
         file = self.currentLoadedNode.GetName().split(".mhd")[0]
-        currentDataset = self.settings["savedDatasetAndObserverSelection"]["dataset"]
-        currentObserver = self.settings["savedDatasetAndObserverSelection"]["observer"]
+        currentDataset = self.settingsHandler.getContentByKeys(["savedDatasetAndObserverSelection", "dataset"])
+        currentObserver = self.settingsHandler.getContentByKeys(["savedDatasetAndObserverSelection", "observer"])
 
-        currentObserverLabelpath = self.settings["datasets"][currentDataset]["observers"][currentObserver]["labelsPath"]
-        currentObserverlabelFileSuffix = self.settings["datasets"][currentDataset]["observers"][currentObserver]["labelFileSuffix"]
+        currentObserverLabelpath = self.settingsHandler.getContentByKeys(["datasets", currentDataset, "observers", currentObserver, "labelsPath"])
+        currentObserverlabelFileSuffix = self.settingsHandler.getContentByKeys(["datasets", currentDataset, "observers", currentObserver, "labelFileSuffix"])
 
-        compareObserverLabelpath = self.settings["datasets"][currentDataset]["observers"][self.selectedComparableObserver]["labelsPath"]
-        compareObserverlabelFileSuffix = self.settings["datasets"][currentDataset]["observers"][self.selectedComparableObserver]["labelFileSuffix"]
+        compareObserverLabelpath = self.settingsHandler.getContentByKeys(["datasets", currentDataset, "observers", self.selectedComparableObserver, "labelsPath"])
+        compareObserverlabelFileSuffix = self.settingsHandler.getContentByKeys(["datasets", currentDataset, "observers", self.selectedComparableObserver, "labelFileSuffix"])
 
         currentObserverFilePath = os.path.join(currentObserverLabelpath, (file + currentObserverlabelFileSuffix + ".nrrd"))
         compareObserverFilePath = os.path.join(compareObserverLabelpath, (file + compareObserverlabelFileSuffix + ".nrrd"))
@@ -1131,8 +677,8 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         labelCompareObserver = sitk.GetArrayFromImage(sitk.ReadImage(compareObserverFilePath))
 
         #Compare labels
-        currentObserverSegmentationType = self.settings["datasets"][currentDataset]["observers"][currentObserver]["segmentationMode"]
-        compareObserverSegmentationType = self.settings["datasets"][currentDataset]["observers"][self.selectedComparableObserver]["segmentationMode"]
+        currentObserverSegmentationType = self.settingsHandler.getContentByKeys(["datasets", currentDataset, "observers", currentObserver, "segmentationMode"])
+        compareObserverSegmentationType = self.settingsHandler.getContentByKeys(["datasets", currentDataset, "observers", self.selectedComparableObserver, "segmentationMode"])
 
 
         labelCurrentObserver = self.processSegmentationLabels(labelCurrentObserver, currentObserverSegmentationType, self.comparisonSegmentationType)
@@ -1188,7 +734,7 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
 
     def getLabelIdByName(self, segmentationType, name):
-        return self.settings["labels"][segmentationType][name]["value"]
+        return self.settingsHandler.getContentByKeys(["labels", segmentationType, name, "value"])
 
     def processSegmentationLabels(self, label, oldSegmentationType, newSegmentationType):
         if oldSegmentationType == "SegmentLevelDLNExport":
@@ -1438,10 +984,10 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             node.SetOrientationToAxial()
 
     def createCompareObserversBox(self):
-        currentSelectedDataset = self.settings["savedDatasetAndObserverSelection"]["dataset"]
-        currentSelectedObserver = self.settings["savedDatasetAndObserverSelection"]["observer"]
+        currentSelectedDataset = self.settingsHandler.getContentByKeys(["savedDatasetAndObserverSelection", "dataset"])
+        currentSelectedObserver = self.settingsHandler.getContentByKeys(["savedDatasetAndObserverSelection", "observer"])
 
-        allObserversList = list(self.settings["datasets"][currentSelectedDataset]["observers"].keys())
+        allObserversList = list(self.settingsHandler.getContentByKeys(["datasets", currentSelectedDataset, "observers"]).keys())
         allObserversList.remove(currentSelectedObserver)
 
         self.ui.CompareObserver1Selector.clear()
@@ -1458,9 +1004,9 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.comparisonObserver2 = secondObserverList[0]
 
     def onComparisonChangeFirstObserver(self, id=None):
-        currentSelectedDataset = self.settings["savedDatasetAndObserverSelection"]["dataset"]
-        availableObservers = list(self.settings["datasets"][currentSelectedDataset]["observers"].keys())
-        availableObservers.remove(self.settings["savedDatasetAndObserverSelection"]["observer"])
+        currentSelectedDataset = self.settingsHandler.getContentByKeys(["savedDatasetAndObserverSelection", "dataset"])
+        availableObservers = list(self.settingsHandler.getContentByKeys(["datasets", currentSelectedDataset, "observers"]).keys())
+        availableObservers.remove(self.settingsHandler.getContentByKeys(["savedDatasetAndObserverSelection", "observer"]))
 
         self.comparisonObserver1 = availableObservers[id]
 
@@ -1473,9 +1019,9 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.comparisonObserver2 = secondObserverList[0]
 
     def onComparisonChangeSecondObserver(self, id=None):
-        currentSelectedDataset = self.settings["savedDatasetAndObserverSelection"]["dataset"]
-        availableObservers = list(self.settings["datasets"][currentSelectedDataset]["observers"].keys())
-        availableObservers.remove(self.settings["savedDatasetAndObserverSelection"]["observer"])
+        currentSelectedDataset = self.settingsHandler.getContentByKeys(["savedDatasetAndObserverSelection", "dataset"])
+        availableObservers = list(self.settingsHandler.getContentByKeys(["datasets", currentSelectedDataset, "observers"]).keys())
+        availableObservers.remove(self.settingsHandler.getContentByKeys(["savedDatasetAndObserverSelection", "observer"]))
         availableObservers.remove( self.comparisonObserver1)
 
         self.comparisonObserver2 = availableObservers[id]
@@ -1486,8 +1032,8 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.loadImageToCompare(imageList["unlabeledImages"][0] + ".mhd")
 
     def onComparisonSelectImageToLoad(self):
-        dataset = self.settings["savedDatasetAndObserverSelection"]["dataset"]
-        imagesPath = self.settings["datasets"][dataset]["imagesPath"]
+        dataset = self.settingsHandler.getContentByKeys(["savedDatasetAndObserverSelection", "dataset"])
+        imagesPath = self.settingsHandler.getContentByKeys(["datasets", dataset, "imagesPath"])
 
         # opens file selection window
         filepath = qt.QFileDialog.getOpenFileName(self.parent, 'Open files', imagesPath, "Files(*.mhd)")
@@ -1496,8 +1042,8 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.loadImageToCompare(filename)
 
     def loadImageToCompare(self, filename):
-        dataset = self.settings["savedDatasetAndObserverSelection"]["dataset"]
-        imagesPath = self.settings["datasets"][dataset]["imagesPath"]
+        dataset = self.settingsHandler.getContentByKeys(["savedDatasetAndObserverSelection", "dataset"])
+        imagesPath = self.settingsHandler.getContentByKeys(["datasets", dataset, "imagesPath"])
 
         self.clearCurrentViewedNode(True)
         self.ui.compareObserversEditor.setHidden(False)
@@ -1550,19 +1096,17 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             sliceCompositeNode.SetLinkedControl(True)
 
     def loadComparisonLabels(self):
-        dataset = self.settings["savedDatasetAndObserverSelection"]["dataset"]
+        dataset = self.settingsHandler.getContentByKeys(["savedDatasetAndObserverSelection", "dataset"])
         imageNodeName = self.currentLoadedNode.GetName()
         patientFileName = imageNodeName.split(".mhd")[0]
 
         observer1LabelPath = os.path.join(
-            self.settings["datasets"][dataset]["observers"][self.comparisonObserver1]["labelsPath"],
-            patientFileName + self.settings["datasets"][dataset]["observers"][self.comparisonObserver1][
-                "labelFileSuffix"] + ".nrrd")
+            self.settingsHandler.getContentByKeys(["datasets", dataset, "observers", self.comparisonObserver1, "labelsPath"]),
+            patientFileName + self.settingsHandler.getContentByKeys(["datasets", dataset, "observers", self.comparisonObserver1, "labelFileSuffix"]) + ".nrrd")
 
         observer2LabelPath = os.path.join(
-            self.settings["datasets"][dataset]["observers"][self.comparisonObserver2]["labelsPath"],
-            patientFileName + self.settings["datasets"][dataset]["observers"][self.comparisonObserver2][
-                "labelFileSuffix"] + ".nrrd")
+            self.settingsHandler.getContentByKeys(["datasets", dataset, "observers", self.comparisonObserver2, "labelsPath"]),
+            patientFileName + self.settingsHandler.getContentByKeys(["datasets", dataset, "observers", self.comparisonObserver2, "labelFileSuffix"]) + ".nrrd")
 
         # generate comparison mask
         # import labels
@@ -1570,14 +1114,12 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         observer2SegmentationArray = sitk.GetArrayFromImage(sitk.ReadImage(observer2LabelPath))
 
         # Compare labels
-        observer1SegmentationType = self.settings["datasets"][dataset]["observers"][self.comparisonObserver1][
-            "segmentationMode"]
-        observer2SegmentationType = self.settings["datasets"][dataset]["observers"][self.comparisonObserver2][
-            "segmentationMode"]
+        observer1SegmentationType = self.settingsHandler.getContentByKeys(["datasets", dataset, "observers", self.comparisonObserver1, "segmentationMode"])
+        observer2SegmentationType = self.settingsHandler.getContentByKeys(["datasets", dataset, "observers", self.comparisonObserver2, "segmentationMode"])
 
         if observer1SegmentationType == observer2SegmentationType:
             if observer1SegmentationType == "SegmentLevel":
-                labelDescription = self.settings["labels"]["SegmentLevel"].copy()
+                labelDescription = self.settingsHandler.getContentByKeys(["labels", "SegmentLevel"]).copy()
 
                 elementsToRemove = [
                     "LM_BIF_LAD_LCX",
@@ -1663,7 +1205,7 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
             if key == "OTHER":
                 segmentArray[slicer.util.arrayFromVolume(imageNode) >= lowerThresholdValue] = 1
-                segmentArray[comparisonSegmentation > self.settings["labels"]["SegmentLevel"][key]["value"]] = 0
+                segmentArray[comparisonSegmentation > self.settingsHandler.getContentByKeys(["labels", "SegmentLevel", key, "value"])] = 0
 
             segmentArray[comparisonSegmentation == value] = 1  # create segment by simple thresholding of an image
             slicer.util.updateSegmentBinaryLabelmapFromArray(segmentArray, segmentationNode, segmentId, imageNode)
@@ -1716,9 +1258,9 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
         filterActive = False
         allFiles = []
-        if self.settings["datasets"][dataset]["observers"][observer]["includedImageFilter"] != "":
+        if self.settingsHandler.getContentByKeys(["datasets", dataset, "observers", observer, "includedImageFilter"]) != "":
             filterActive = True
-            csv = pandas.read_csv(self.settings["datasets"][dataset]["observers"][observer]["includedImageFilter"])
+            csv = pandas.read_csv(self.settingsHandler.getContentByKeys(["datasets", dataset, "observers", observer, "includedImageFilter"]))
             allFiles = csv['Filename'].tolist()
 
         files = {"allImages": [], "unlabeledImages": []}
@@ -1762,10 +1304,10 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         segmentArray = slicer.util.arrayFromSegmentBinaryLabelmap(segmentationNode, segmentId, imageNode)
 
         if len(numpy.unique(segmentArray)) == 1:
-            dataset = self.settings["savedDatasetAndObserverSelection"]["dataset"]
-            observer = self.settings["savedDatasetAndObserverSelection"]["observer"]
-            savePath = self.settings["datasets"][dataset]["observers"][observer]["labelsPath"]
-            filename = self.currentLoadedNode.GetName().split(".mhd")[0] + self.settings["datasets"][dataset]["observers"][observer]["labelFileSuffix"] +".nrrd"
+            dataset = self.settingsHandler.getContentByKeys(["savedDatasetAndObserverSelection", "dataset"])
+            observer = self.settingsHandler.getContentByKeys(["savedDatasetAndObserverSelection", "observer"])
+            savePath = self.settingsHandler.getContentByKeys(["datasets", dataset, "observers", observer, "labelsPath"])
+            filename = self.currentLoadedNode.GetName().split(".mhd")[0] + self.settingsHandler.getContentByKeys(["datasets", dataset, "observers", observer, "labelFileSuffix"]) +".nrrd"
 
             segmentationNode = slicer.util.getNode("Comparison")
 
@@ -1798,36 +1340,8 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             print("Not all mismatched regions have been corrected! Check your segmentation for remaining red areas and try again!")
             slicer.util.infoDisplay("Not all mismatched regions have been corrected!\nCheck your segmentation for remaining red areas and try again!")
 
-#
-# CACSLabelerLogic
-#
-
-class CACSLabelerLogic(ScriptedLoadableModuleLogic):
-    """This class should implement all the actual
-    computation done by your module.  The interface
-    should be such that other python code can import
-    this class and make use of the functionality without
-    requiring an instance of the Widget.
-    Uses ScriptedLoadableModuleLogic base class, available at:
-    https://github.com/Slicer/Slicer/blob/master/Base/Python/slicer/ScriptedLoadableModule.py
-    """
-
-    def __init__(self):
-        """
-        Called when the logic class is instantiated. Can be used for initializing member variables.
-        """
-        ScriptedLoadableModuleLogic.__init__(self)
-
-    def setDefaultParameters(self, parameterNode):
-        """
-        Initialize parameter node with default settings.
-        """
-        if not parameterNode.GetParameter("Threshold"):
-            parameterNode.SetParameter("Threshold", "100.0")
-        if not parameterNode.GetParameter("Invert"):
-            parameterNode.SetParameter("Invert", "false")
-
-    def runThreshold(self, inputVolumeName, labelName, segmentationMode, settings, labelsPath, colorTableNode, differentLabelType):
+    def runThreshold(self, inputVolumeName, labelName, segmentationMode, labelsPath, colorTableNode,
+                     differentLabelType):
         node = slicer.util.getFirstNodeByName(labelName)
         if node is None:
             print('----- Thresholding -----')
@@ -1838,14 +1352,18 @@ class CACSLabelerLogic(ScriptedLoadableModuleLogic):
             segmentationNode = None
             segmentation = None
 
-            #file exists
+            # file exists
             if os.path.isfile(os.path.join(labelsPath, labelName + '.nrrd')):
-                loadedVolumeNode = slicer.util.loadVolume(os.path.join(labelsPath, labelName + '.nrrd'), {"labelmap": True})
-                segmentationNode = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLSegmentationNode")  # import into new segmentation node
+                loadedVolumeNode = slicer.util.loadVolume(os.path.join(labelsPath, labelName + '.nrrd'),
+                                                          {"labelmap": True})
+                segmentationNode = slicer.mrmlScene.AddNewNodeByClass(
+                    "vtkMRMLSegmentationNode")  # import into new segmentation node
                 segmentationNode.SetName(labelName)
                 segmentationNode.SetReferenceImageGeometryParameterFromVolumeNode(imageNode)
-                loadedVolumeNode.GetDisplayNode().SetAndObserveColorNodeID(colorTableNode.GetID())  # just in case the custom color table has not been already associated with the labelmap volume
-                slicer.modules.segmentations.logic().ImportLabelmapToSegmentationNode(loadedVolumeNode, segmentationNode)
+                loadedVolumeNode.GetDisplayNode().SetAndObserveColorNodeID(
+                    colorTableNode.GetID())  # just in case the custom color table has not been already associated with the labelmap volume
+                slicer.modules.segmentations.logic().ImportLabelmapToSegmentationNode(loadedVolumeNode,
+                                                                                      segmentationNode)
 
                 slicer.mrmlScene.RemoveNode(loadedVolumeNode)
             else:
@@ -1857,8 +1375,8 @@ class CACSLabelerLogic(ScriptedLoadableModuleLogic):
             segmentation = segmentationNode.GetSegmentation()
             displayNode = segmentationNode.GetDisplayNode()
 
-            for key in settings["labels"][segmentationMode]:
-                color = settings["labels"][segmentationMode][key]["color"]
+            for key in self.settingsHandler.getContentByKeys(["labels", segmentationMode]):
+                color = self.settingsHandler.getContentByKeys(["labels", segmentationMode, key, "color"])
 
                 if segmentation.GetSegment(key) is None:
                     segmentation.AddEmptySegment(key)
@@ -1866,14 +1384,16 @@ class CACSLabelerLogic(ScriptedLoadableModuleLogic):
                 segment = segmentation.GetSegment(key)
 
                 r, g, b = ImageColor.getcolor(color, "RGB")
-                segment.SetColor(r/255, g/255, b/255)  # red
+                segment.SetColor(r / 255, g / 255, b / 255)  # red
                 displayNode.SetSegmentOpacity3D(key, 1)  # Set opacity of a single segment
 
                 if key == "OTHER" and not os.path.isfile(os.path.join(labelsPath, labelName + '.nrrd')):
                     segmentId = segmentationNode.GetSegmentation().GetSegmentIdBySegmentName(key)
                     segmentArray = slicer.util.arrayFromSegmentBinaryLabelmap(segmentationNode, key, imageNode)
-                    segmentArray[slicer.util.arrayFromVolume(imageNode) >= lowerThresholdValue] = 1  # create segment by simple thresholding of an image
-                    slicer.util.updateSegmentBinaryLabelmapFromArray(segmentArray, segmentationNode, segmentId, imageNode)
+                    segmentArray[slicer.util.arrayFromVolume(
+                        imageNode) >= lowerThresholdValue] = 1  # create segment by simple thresholding of an image
+                    slicer.util.updateSegmentBinaryLabelmapFromArray(segmentArray, segmentationNode, segmentId,
+                                                                     imageNode)
 
             # converts label if other label is available
             if differentLabelType is not None and not os.path.isfile(os.path.join(labelsPath, labelName + '.nrrd')):
@@ -1881,7 +1401,8 @@ class CACSLabelerLogic(ScriptedLoadableModuleLogic):
                     label = sitk.ReadImage(os.path.join(differentLabelType["labelPath"], labelName + '.nrrd'))
                     labelArray = sitk.GetArrayFromImage(label)
 
-                    if differentLabelType["labelSegmentationMode"] == "ArteryLevelWithLM" and segmentationMode == "SegmentLevel":
+                    if differentLabelType[
+                        "labelSegmentationMode"] == "ArteryLevelWithLM" and segmentationMode == "SegmentLevel":
                         self.convertLabelType(labelArray, 5, 'LM_BRANCH', imageNode, segmentationNode)
                         self.convertLabelType(labelArray, 2, 'LAD_PROXIMAL', imageNode, segmentationNode)
                         self.convertLabelType(labelArray, 4, "RCA_PROXIMAL", imageNode, segmentationNode)
@@ -1899,534 +1420,3 @@ class CACSLabelerLogic(ScriptedLoadableModuleLogic):
 
         slicer.util.updateSegmentBinaryLabelmapFromArray(segmentArray, segmentationNode, segmentId, imageNode)
         slicer.util.updateSegmentBinaryLabelmapFromArray(otherArray, segmentationNode, otherId, imageNode)
-
-class ScoreExport():
-    def __init__(self, datasetInformation, settings):
-        imagesPath, labelsPath, segmentationMode, sliceStepFile, exportFolder, dataset, observer = datasetInformation
-
-        self.segmentationMode = segmentationMode
-        self.dataset = dataset
-
-        exportTypesOrder = ["ArteryLevel", "ArteryLevelWithLM", "SegmentLevelDLNExport", "SegmentLevel"]
-
-        if exportTypesOrder.index(segmentationMode) >= exportTypesOrder.index(settings["exportType"]):
-            self.exportType = settings["exportType"]
-
-        else:
-            self.exportType = segmentationMode
-
-        self.filepaths = {
-            "imageFolder": imagesPath,
-            "referenceFolder": labelsPath,
-            "sliceStepFile": sliceStepFile,
-            "exportFileCSV": os.path.join(exportFolder, dataset + "_" + observer + "_" + self.exportType + ".csv"),
-            "exportFileJSON": os.path.join(exportFolder, dataset + "_" + observer + "_" + self.exportType + ".json")
-        }
-
-        self.Items = self.createItems(settings)
-
-        self.arteryId = {}
-
-        for key in self.Items:
-            if isinstance(self.Items[key], int):
-                self.arteryId[self.Items[key]] = key
-
-        self.exportJson = {}
-        self.exportList = []
-
-        self.pandas = importlib.import_module('pandas')
-
-    def createItems(self, settings):
-        items = None
-
-        generatedItems = {}
-
-        for item in settings["exportedLabels"][self.exportType]:
-            itemContent = None
-
-            labelContent = settings["exportedLabels"][self.exportType][item]
-
-            if isinstance(labelContent, list):
-                itemContent = []
-
-                for groupElement in labelContent:
-                    itemContent.append(settings["labels"][self.exportType][groupElement]["value"])
-
-            else:
-                itemContent = settings["labels"][self.exportType][labelContent]["value"]
-                pass
-
-            generatedItems[item] = itemContent
-
-        return generatedItems
-
-    def exportFromJSONFile(self):
-        # Opening JSON file
-
-        with open(self.filepaths["exportFileJSON"], 'r', encoding='utf-8') as file:
-            # returns JSON object as
-            # a dictionary
-            self.exportJson = None
-            self.exportJson = json.load(file)
-
-            # Iterating through the json
-            # list
-            for patientId in self.exportJson:
-                for seriesInstanceUID in self.exportJson[patientId]:
-
-                    result = self.calculateScore(patientId, seriesInstanceUID)
-                    self.exportList.append(result)
-                    print("Exported", patientId, seriesInstanceUID)
-
-        self.createExportFilesAndSaveContent(createJson=False)
-
-    def createExportFilesAndSaveContent(self, createJson):
-        dataframe = self.pandas.DataFrame.from_records(self.exportList)
-        dataframe.to_csv(self.filepaths["exportFileCSV"], index=False, sep=';', float_format='%.3f')
-
-        if createJson:
-            with open(self.filepaths["exportFileJSON"], 'w', encoding='utf-8') as file:
-                #explicit copy to prevent race condition
-                json.dump(dict(self.exportJson), file, ensure_ascii=False, indent=4, cls=NpEncoder)
-
-    def exportFromReferenceFolder(self):
-        sliceStepDataframe = self.pandas.read_csv(self.filepaths["sliceStepFile"], dtype={'patient_id': 'string'})
-
-        with concurrent.futures.ThreadPoolExecutor() as executor:
-            [executor.submit(self.processImages, filename, sliceStepDataframe)
-             for filename in sorted(filter(lambda x: os.path.isfile(os.path.join(self.filepaths["referenceFolder"], x)),
-                                           os.listdir(self.filepaths["referenceFolder"])))]
-
-    def processFilename(self, filepath):
-        if self.dataset == "DISCHARGE" or self.dataset == "CADMAN":
-            fileName = filepath.split("/")[-1]
-            PatientID = fileName.split("_")[0]
-            fileId = PatientID + "_" + fileName.split("_")[1].split("-")[0]
-            SeriesInstanceUID = fileId.split("_")[1]
-
-        elif self.dataset == "OrCaScore":
-            fileName = filepath.split("/")[-1]
-            fileId = fileName.split("-")[0]
-            PatientID = fileId.split("_")[0]
-            SeriesInstanceUID = fileId.split("_")[1]
-
-        return fileName, fileId, PatientID, SeriesInstanceUID
-
-    def label(self, referenceTemporaryCopy, uniqueId, structureConnections2d, iterator, connectedElements2d):
-        labeled_array, num_features = ndi.label((referenceTemporaryCopy == uniqueId).astype(int),structure=structureConnections2d)
-        return numpy.where(labeled_array > 0, labeled_array + iterator, 0).astype(connectedElements2d.dtype)
-
-    def findLesions(self, reference):
-        # preprocessing label
-        reference[reference == 24] = 35
-
-        # Options: ArteryLevel, SegmentLevel, ArteryLevelWithLM, SegmentLevelDLNExport
-        if self.segmentationMode == "SegmentLevel" and self.exportType == "ArteryLevel":
-            # Combines all lesions in each artery to one group
-            # RCA
-            reference[(reference >= 4) & (reference <= 7)] = 4
-
-            # LM
-            reference[(reference >= 9) & (reference <= 12)] = 2
-
-            # LAD
-            reference[(reference >= 14) & (reference <= 17)] = 2
-
-            # LCX
-            reference[(reference >= 19) & (reference <= 22)] = 3
-
-            # RIM
-            reference[(reference == 23)] = 2
-
-            reference[(reference >= 5)] = 0
-        elif self.segmentationMode == "SegmentLevel" and self.exportType == "ArteryLevelWithLM":
-            # Combines all lesions in each artery to one group
-            # RCA
-            reference[(reference >= 4) & (reference <= 7)] = 4
-
-            # LAD
-            reference[(reference >= 14) & (reference <= 17)] = 2
-
-            # LCX
-            reference[(reference >= 19) & (reference <= 22)] = 3
-
-            # RIM
-            reference[(reference == 23)] = 2
-
-            # LM
-            reference[(reference >= 9) & (reference <= 12)] = 5
-
-            reference[(reference >= 6)] = 0
-        elif self.segmentationMode == "ArteryLevelWithLM" and self.exportType == "ArteryLevel":
-            # LM
-            reference[reference == 5] = 2
-            reference[(reference > 5)] = 0
-
-        elif self.segmentationMode == "SegmentLevel" and self.exportType == "SegmentLevelDLNExport":
-            reference[reference == 4] = 104  # RCA PROX
-            reference[reference == 5] = 105  # RCA MID
-            reference[reference == 6] = 106  # RCA DIST
-            reference[reference == 7] = 107  # RCA SIDE
-
-            reference[reference == 14] = 114  # LAD PROX
-            reference[reference == 15] = 115  # LAD MID
-            reference[reference == 16] = 116  # LAD DIST
-            reference[reference == 17] = 117  # LAD SIDE
-
-            reference[reference == 19] = 119  # LCX PROX
-            reference[reference == 20] = 120  # LCX MID
-            reference[reference == 21] = 121  # LCX DIST
-            reference[reference == 22] = 122  # LCX SIDE
-
-            #convert ids
-            reference[(reference >= 9) & (reference <= 12)] = 2 # LM
-
-            reference[reference == 114] = 3  # LAD PROX
-            reference[reference == 115] = 4  # LAD MID
-            reference[reference == 116] = 5  # LAD DIST
-            reference[reference == 117] = 6  # LAD SIDE
-
-            reference[reference == 119] = 7  # LCX PROX
-            reference[reference == 120] = 8  # LCX MID
-            reference[reference == 121] = 9  # LCX DIST
-            reference[reference == 122] = 10  # LCX SIDE
-
-            reference[reference == 104] = 11  # RCA PROX
-            reference[reference == 105] = 12  # RCA MID
-            reference[reference == 106] = 13  # RCA DIST
-            reference[reference == 107] = 14  # RCA SIDE
-
-            reference[reference == 23] = 15  # RIM
-
-            reference[(reference >= 16)] = 0  # LM
-
-        elif self.segmentationMode == "SegmentLevelDLNExport" and self.exportType == "ArteryLevelWithLM":
-            reference[reference == 2] = 102  # LM
-
-            reference[reference == 3] = 103  # LAD PROX
-            reference[reference == 4] = 104  # LAD MID
-            reference[reference == 5] = 105  # LAD DIST
-            reference[reference == 6] = 106  # LAD SIDE
-
-            reference[reference == 7] = 107  # LCX PROX
-            reference[reference == 8] = 108  # LCX MID
-            reference[reference == 9] = 109  # LCX DIST
-            reference[reference == 10] = 110  # LCX SIDE
-
-            reference[reference == 11] = 111  # RCA PROX
-            reference[reference == 12] = 112  # RCA MID
-            reference[reference == 13] = 113  # RCA DIST
-            reference[reference == 14] = 114  # RCA SIDE
-
-            reference[reference == 15] = 115  # RIM
-
-            # Combines all lesions in each artery to one group
-            # RCA
-            reference[(reference >= 111) & (reference <= 114)] = 4
-
-            # LAD
-            reference[(reference >= 103) & (reference <= 106)] = 2
-
-            # LCX
-            reference[(reference >= 107) & (reference <= 110)] = 3
-
-            # RIM
-            reference[(reference == 115)] = 2
-
-            # LM
-            reference[reference == 102] = 5
-
-            reference[(reference >= 6)] = 0
-
-        elif self.segmentationMode == "SegmentLevelDLNExport" and self.exportType == "ArteryLevel":
-            reference[reference == 2] = 102  # LM
-
-            reference[reference == 3] = 103  # LAD PROX
-            reference[reference == 4] = 104  # LAD MID
-            reference[reference == 5] = 105  # LAD DIST
-            reference[reference == 6] = 106  # LAD SIDE
-
-            reference[reference == 7] = 107  # LCX PROX
-            reference[reference == 8] = 108  # LCX MID
-            reference[reference == 9] = 109  # LCX DIST
-            reference[reference == 10] = 110  # LCX SIDE
-
-            reference[reference == 11] = 111  # RCA PROX
-            reference[reference == 12] = 112  # RCA MID
-            reference[reference == 13] = 113  # RCA DIST
-            reference[reference == 14] = 114  # RCA SIDE
-
-            reference[reference == 15] = 115  # RIM
-
-            # Combines all lesions in each artery to one group
-            # RCA
-            reference[(reference >= 111) & (reference <= 114)] = 4
-
-            # LAD
-            reference[(reference >= 103) & (reference <= 106)] = 2
-
-            # LCX
-            reference[(reference >= 107) & (reference <= 110)] = 3
-
-            # RIM
-            reference[(reference == 115)] = 2
-
-            # LM
-            reference[reference == 102] = 2
-
-            reference[(reference >= 5)] = 0
-
-        referenceTemporaryCopy = reference.copy()
-        referenceTemporaryCopy[referenceTemporaryCopy < 2] = 0
-
-
-        structure = numpy.array([[[0, 0, 0],
-                                   [0, 1, 0],
-                                   [0, 0, 0]],
-
-                                  [[0, 1, 0],
-                                   [1, 1, 1],
-                                   [0, 1, 0]],
-
-                                  [[0, 0, 0],
-                                   [0, 1, 0],
-                                   [0, 0, 0]]])
-
-        uniqueElements = numpy.unique(referenceTemporaryCopy)
-
-        connectedElements = numpy.zeros_like(referenceTemporaryCopy)
-        elementIterator = 0
-
-        with concurrent.futures.ThreadPoolExecutor() as executor:
-            results = [executor.submit(ndi.label, (referenceTemporaryCopy == uniqueId).astype(int),
-                                       structure=structure)
-                       for uniqueId in uniqueElements[1:]]
-
-            for future in concurrent.futures.as_completed(results):
-                label, elementCount = future.result()
-                connectedElements += numpy.where(label > 0, label + elementIterator, 0).astype(
-                    connectedElements.dtype)
-                elementIterator += elementCount
-
-        return connectedElements, len(numpy.unique(connectedElements)) - 1
-
-    def lesionPositionListEntry(self, connectedElements3d, index, image, reference):
-        positions = numpy.array(list(zip(*numpy.where(connectedElements3d[0] == index))))
-
-        newList = []
-
-        for element in positions:
-            attenuation = image[element[0], element[1], element[2]]
-            originalLabel = reference[element[0], element[1], element[2]]
-            element = numpy.concatenate((element, [attenuation, originalLabel]))
-            newList.append(element)
-
-        return numpy.array(newList)
-
-    def jsonLesionLoop(self, lesion, it, patientID,seriesInstanceUID):
-        self.exportJson[patientID][seriesInstanceUID]["lesions"][it] = {}
-        self.exportJson[patientID][seriesInstanceUID]["lesions"][it]["voxelCount3d"] = len(lesion)
-        self.exportJson[patientID][seriesInstanceUID]["lesions"][it]["slices"] = {}
-
-        slices = lesion[:, 0:1]
-        slice, voxelCount = numpy.unique(slices, return_counts=True)
-        slicesDict = dict(zip(slice, voxelCount))
-
-        sliceIterator = 0
-        for slice in slicesDict:
-            self.jsonSliceLoop(patientID, seriesInstanceUID, it, lesion, slice, sliceIterator, slicesDict)
-            sliceIterator += 1
-
-    def jsonSliceLoop(self, patientID, seriesInstanceUID, it, lesion, slice, sliceIterator, slicesDict):
-        sliceArray = lesion[numpy.in1d(lesion[:, 0], slice)]
-
-        #needed to check if lesions are seperated in 2d but connected in 3d
-        maxCoordinate = 513
-
-        tempComponentAnalysis = numpy.zeros(shape=(maxCoordinate,maxCoordinate))
-        tempAttenuation = numpy.zeros(shape=(maxCoordinate, maxCoordinate))
-        tempLabel = numpy.zeros(shape=(maxCoordinate, maxCoordinate))
-
-        for element in sliceArray:
-            row = element[1]
-            column = element[2]
-            tempComponentAnalysis[row, column] = 1
-            tempAttenuation[row, column] = element[3]
-            tempLabel[row, column] = element[4]
-
-        structureConnections2d = numpy.array([[0, 1, 0],
-                                               [1, 1, 1],
-                                               [0, 1, 0]])
-
-        connections, N = label(tempComponentAnalysis, structureConnections2d)
-
-        self.exportJson[patientID][seriesInstanceUID]["lesions"][it]["slices"][sliceIterator] = {}
-        self.exportJson[patientID][seriesInstanceUID]["lesions"][it]["slices"][sliceIterator]["voxelCount2D"] = slicesDict[slice]
-        self.exportJson[patientID][seriesInstanceUID]["lesions"][it]["slices"][sliceIterator]["labeledAs"] = {}
-        self.exportJson[patientID][seriesInstanceUID]["lesions"][it]["slices"][sliceIterator]["sliceNumber"] = slice
-
-        if N > 1:
-            labelsSummary = {}
-
-            for lesionId in range(1, N + 1):
-                positions = numpy.array(list(zip(*numpy.where(connections == lesionId))))
-                lesionSummary = {}
-
-                for position in positions:
-                    labelAtPosition = tempLabel[position[0],position[1]]
-                    attenuationAtPosition = tempAttenuation[position[0],position[1]]
-
-                    if self.arteryId[labelAtPosition] in lesionSummary:
-                        lesionSummary[self.arteryId[labelAtPosition]]["voxelCount"] = lesionSummary[self.arteryId[labelAtPosition]]["voxelCount"] + 1
-                        if attenuationAtPosition > lesionSummary[self.arteryId[labelAtPosition]]["maxAttenuation"]:
-                            lesionSummary[self.arteryId[labelAtPosition]]["maxAttenuation"] = attenuationAtPosition
-                    else:
-                        lesionSummary[self.arteryId[labelAtPosition]] = {}
-                        lesionSummary[self.arteryId[labelAtPosition]]["voxelCount"] = 1
-                        lesionSummary[self.arteryId[labelAtPosition]]["maxAttenuation"] = attenuationAtPosition
-
-                labelsSummary[lesionId] = lesionSummary
-
-            self.exportJson[patientID][seriesInstanceUID]["lesions"][it]["slices"][sliceIterator]["labeledAs"] = labelsSummary
-            self.exportJson[patientID][seriesInstanceUID]["lesions"][it]["slices"][sliceIterator]["maxAttenuation"] = None
-        else:
-            self.exportJson[patientID][seriesInstanceUID]["lesions"][it]["slices"][sliceIterator]["maxAttenuation"] = max(max(sliceArray[:, 3:4]))
-
-            arteryId = sliceArray[:, 4:5]
-            arteries, arteryCount = numpy.unique(arteryId, return_counts=True)
-            arteryDict = dict(zip(arteries, arteryCount))
-
-            for artery in arteryDict:
-                self.exportJson[patientID][seriesInstanceUID]["lesions"][it]["slices"][sliceIterator]["labeledAs"][self.arteryId[artery]] = arteryDict[artery]
-
-    def calculateLesions(self, image, reference, connectedElements3d, patientID, seriesInstanceUID):
-        lesionPositionList = []
-
-        with concurrent.futures.ThreadPoolExecutor() as executor:
-            results = [executor.submit(self.lesionPositionListEntry, connectedElements3d, index, image, reference) for index in range(1, connectedElements3d[1] + 1)]
-
-            for future in concurrent.futures.as_completed(results):
-                lesionPositionList.append(future.result())
-
-        it = 0
-        for lesion in lesionPositionList:
-            self.jsonLesionLoop(lesion, it, patientID, seriesInstanceUID)
-
-            it += 1
-
-    def agatstonScore(self, voxelLength, voxelCount, attenuation, ratio):
-        score = 0.0
-
-        if (voxelLength is not None) and (voxelCount is not None) and (attenuation is not None) and (ratio is not None):
-            voxelArea = voxelLength * voxelLength
-            lesionArea = voxelArea * voxelCount
-
-            if attenuation >= 130 and lesionArea > 1:
-                score = lesionArea * self.densityFactor(attenuation) * ratio
-
-        return score
-
-    def calculateScore(self, patientID, seriesInstanceUID):
-        total = {"PatientID": patientID, "SeriesInstanceUID": seriesInstanceUID}
-
-        for key in self.Items:
-            total[key] = 0.0
-
-        for lesionsJson in self.exportJson[patientID][seriesInstanceUID]["lesions"]:
-            for sliceJson in self.exportJson[patientID][seriesInstanceUID]["lesions"][lesionsJson]["slices"]:
-
-                sliceNumber = self.exportJson[patientID][seriesInstanceUID]["lesions"][lesionsJson]["slices"][sliceJson]["sliceNumber"]
-                if sliceNumber in self.exportJson[patientID][seriesInstanceUID]["countingSlices"]:
-                    attenuation = self.exportJson[patientID][seriesInstanceUID]["lesions"][lesionsJson]["slices"][sliceJson]["maxAttenuation"]
-
-                    if attenuation is not None:
-                        for arteryJson in self.exportJson[patientID][seriesInstanceUID]["lesions"][lesionsJson]["slices"][sliceJson]["labeledAs"]:
-                            voxelCount = self.exportJson[patientID][seriesInstanceUID]["lesions"][lesionsJson]["slices"][sliceJson]["labeledAs"][arteryJson]
-                            voxelLength = self.exportJson[patientID][seriesInstanceUID]["voxelLength"]
-
-                            score = self.agatstonScore(voxelLength, voxelCount, attenuation,self.exportJson[patientID][seriesInstanceUID]["sliceRatio"])
-
-                            if arteryJson in total:
-                                total[arteryJson] += score
-                            else:
-                                total[arteryJson] = score
-                    else:
-                        for subLabelId in self.exportJson[patientID][seriesInstanceUID]["lesions"][lesionsJson]["slices"][sliceJson]["labeledAs"]:
-                            for sublabelArtery in self.exportJson[patientID][seriesInstanceUID]["lesions"][lesionsJson]["slices"][sliceJson]["labeledAs"][subLabelId]:
-                                maxAttenuation = self.exportJson[patientID][seriesInstanceUID]["lesions"][lesionsJson]["slices"][sliceJson]["labeledAs"][subLabelId][sublabelArtery]["maxAttenuation"]
-                                voxelLength = self.exportJson[patientID][seriesInstanceUID]["voxelLength"]
-                                voxelCount = self.exportJson[patientID][seriesInstanceUID]["lesions"][lesionsJson]["slices"][sliceJson]["labeledAs"][subLabelId][sublabelArtery]["voxelCount"]
-
-                                score = self.agatstonScore(voxelLength, voxelCount, maxAttenuation, self.exportJson[patientID][seriesInstanceUID]["sliceRatio"])
-
-                                if sublabelArtery in total:
-                                    total[sublabelArtery] += score
-                                else:
-                                    total[sublabelArtery] = score
-
-        for key in self.Items:
-            if isinstance(self.Items[key], list):
-                sum = 0.0
-                for id in self.Items[key]:
-                    if id in self.arteryId and self.arteryId[id] in total:
-                        sum += total[self.arteryId[id]]
-
-                total[key] = sum
-
-        return total
-
-    def calculateScoreFromImage(self, image, reference, patientID, seriesInstanceUID):
-        connectedElements = self.findLesions(reference)
-
-        self.calculateLesions(image, reference, connectedElements, patientID, seriesInstanceUID)
-        return self.calculateScore(patientID, seriesInstanceUID)
-
-
-    def processImages(self, filename, sliceStepDataframe):
-        processedFilename = self.processFilename(os.path.join(self.filepaths["referenceFolder"], filename))
-
-        if os.path.isfile(os.path.join(self.filepaths["imageFolder"], processedFilename[1] + ".mhd")):
-            image = sitk.ReadImage(os.path.join(self.filepaths["imageFolder"], processedFilename[1] + ".mhd"))
-            label = sitk.ReadImage(os.path.join(self.filepaths["referenceFolder"], filename))
-
-            # Convert the image to a numpy array first and then shuffle the dimensions to get axis in the order z,y,x
-            imageArray = sitk.GetArrayFromImage(image)
-            labelArray = sitk.GetArrayFromImage(label)
-
-            # Read the spacing along each dimension
-            spacing = numpy.array(list(reversed(image.GetSpacing())))
-            sliceThickness = sliceStepDataframe.loc[(sliceStepDataframe['patient_id'] == processedFilename[2])].slice_thickness.item()
-            sliceStep = sliceStepDataframe.loc[(sliceStepDataframe['patient_id'] == processedFilename[2])].slice_step.item()
-
-            exportData = {"PatientID": processedFilename[2], "SeriesInstanceUID": processedFilename[3]}
-
-            self.exportJson[processedFilename[2]] = {}
-            self.exportJson[processedFilename[2]][processedFilename[3]] = {}
-            self.exportJson[processedFilename[2]][processedFilename[3]]["sliceRatio"] = sliceThickness / 3.0
-            self.exportJson[processedFilename[2]][processedFilename[3]]["voxelLength"] = spacing[1]  # voxel length in mm
-            self.exportJson[processedFilename[2]][processedFilename[3]]["lesions"] = {}
-            self.exportJson[processedFilename[2]][processedFilename[3]]["sliceCount"] = len(imageArray)
-            self.exportJson[processedFilename[2]][processedFilename[3]]["sliceStep"] = sliceStep
-
-            countingSlices = []
-
-            for sliceNumber in range(0, len(imageArray), sliceStep):
-                countingSlices.append(sliceNumber)
-
-            self.exportJson[processedFilename[2]][processedFilename[3]]["countingSlices"] = countingSlices
-
-            result = self.calculateScoreFromImage(imageArray, labelArray, processedFilename[2], processedFilename[3])
-
-            print("Exported " + processedFilename[1])
-            self.exportList.append(result)
-            self.createExportFilesAndSaveContent(createJson=True)
-
-    def densityFactor(self, maxDensity):
-        if maxDensity >= 130 and maxDensity <= 199:
-            return 1
-        if maxDensity >= 200 and maxDensity <= 299:
-            return 2
-        if maxDensity >= 300 and maxDensity <= 399:
-            return 3
-        if maxDensity >= 400:
-            return 4
