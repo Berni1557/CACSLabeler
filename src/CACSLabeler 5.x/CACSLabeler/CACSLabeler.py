@@ -281,8 +281,6 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
         # Activate buttons
         self.ui.compareCollapsibleButton.enabled = True
-
-        self.ui.RadioButton120keV.enabled = True
         self.ui.thresholdVolumeButton.enabled = True
         self.ui.selectedVolumeTextField.text = filename
         self.ui.selectedVolumeTextField.cursorPosition = 0
@@ -328,10 +326,6 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             self.ui.availableLabel.enabled = True
 
     def onThresholdVolume(self):
-        if not self.ui.RadioButton120keV.checked:
-            qt.QMessageBox.warning(slicer.util.mainWindow(),"Select KEV", "The KEV (80 or 120) must be selected to continue.")
-            return
-
         imagesPath, labelsPath, segmentationMode, sliceStepFile, exportFolder, dataset, observer, labelFileSuffix = self.selectedDatasetAndObserverSetting()
 
         #removes file extension
@@ -382,7 +376,6 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                     return
 
         slicer.mrmlScene.Clear(0)
-        self.ui.RadioButton120keV.enabled = False
         self.ui.thresholdVolumeButton.enabled = False
         self.ui.selectedVolumeTextField.text = ""
         self.ui.selectedVolumeTextField.cursorPosition = 0
