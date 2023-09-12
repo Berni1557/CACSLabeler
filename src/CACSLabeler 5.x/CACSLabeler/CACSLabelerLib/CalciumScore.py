@@ -9,6 +9,16 @@ from scipy import ndimage as ndi
 
 from .SettingsHandler import SettingsHandler
 
+class NumpyJsonEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, numpy.integer):
+            return int(obj)
+        if isinstance(obj, numpy.floating):
+            return float(obj)
+        if isinstance(obj, numpy.ndarray):
+            return obj.tolist()
+        return super(NumpyJsonEncoder, self).default(obj)
+
 class CalciumScore():
     def __init__(self, datasetInformation):
         imagesPath, labelsPath, segmentationMode, sliceStepFile, exportFolder, dataset, observer, fileSuffix = datasetInformation
@@ -73,7 +83,6 @@ class CalciumScore():
 
     def exportFromJSONFile(self):
         # Opening JSON file
-
         with open(self.filepaths["exportFileJSON"], 'r', encoding='utf-8') as file:
             # returns JSON object as
             # a dictionary
@@ -97,8 +106,8 @@ class CalciumScore():
 
         if createJson:
             with open(self.filepaths["exportFileJSON"], 'w', encoding='utf-8') as file:
-                #explicit copy to prevent race condition
-                json.dump(dict(self.exportJson), file, ensure_ascii=False, indent=4, cls=NpEncoder)
+                #Numpy encoder ensures that numpy types can be exported using dump!
+                json.dump(dict(self.exportJson), file, ensure_ascii=False, indent=4, cls=NumpyJsonEncoder)
 
     def exportFromReferenceFolder(self):
         sliceStepDataframe = self.pandas.read_csv(self.filepaths["sliceStepFile"], dtype={'patient_id': 'string'})
@@ -508,8 +517,6 @@ class CalciumScore():
             spacing = numpy.array(list(reversed(image.GetSpacing())))
             sliceThickness = sliceStepDataframe.loc[(sliceStepDataframe['patient_id'] == processedFilename[2])].slice_thickness.item()
             sliceStep = sliceStepDataframe.loc[(sliceStepDataframe['patient_id'] == processedFilename[2])].slice_step.item()
-
-            exportData = {"PatientID": processedFilename[2], "SeriesInstanceUID": processedFilename[3]}
 
             self.exportJson[processedFilename[2]] = {}
             self.exportJson[processedFilename[2]][processedFilename[3]] = {}
