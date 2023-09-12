@@ -462,11 +462,11 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.createObserverAvailableList()
 
     def onExportFromReferenceFolderButtonClicked(self):
-        exporter = CalciumScore(self.selectedDatasetAndObserverSetting(), self.settings)
+        exporter = CalciumScore(self.selectedDatasetAndObserverSetting())
         exporter.exportFromReferenceFolder()
 
     def onExportFromJSONFileButtonClicked(self):
-        exporter = CalciumScore(self.selectedDatasetAndObserverSetting(), self.settings)
+        exporter = CalciumScore(self.selectedDatasetAndObserverSetting())
         exporter.exportFromJSONFile()
 
     def createColorTable(self):

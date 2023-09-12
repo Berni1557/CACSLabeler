@@ -1,5 +1,4 @@
 import importlib
-#import pandas
 import os
 import json
 import numpy
@@ -8,17 +7,21 @@ import SimpleITK as sitk
 from scipy.ndimage import label
 from scipy import ndimage as ndi
 
+from .SettingsHandler import SettingsHandler
+
 class CalciumScore():
-    def __init__(self, datasetInformation, settings):
+    def __init__(self, datasetInformation):
         imagesPath, labelsPath, segmentationMode, sliceStepFile, exportFolder, dataset, observer, fileSuffix = datasetInformation
+
+        self.settingsHandler = SettingsHandler()
 
         self.segmentationMode = segmentationMode
         self.dataset = dataset
 
         exportTypesOrder = ["ArteryLevel", "ArteryLevelWithLM", "SegmentLevelDLNExport", "SegmentLevel"]
 
-        if exportTypesOrder.index(segmentationMode) >= exportTypesOrder.index(settings["exportType"]):
-            self.exportType = settings["exportType"]
+        if exportTypesOrder.index(segmentationMode) >= exportTypesOrder.index(self.settingsHandler.getContentByKeys(["exportType"])):
+            self.exportType = self.settingsHandler.getContentByKeys(["exportType"])
 
         else:
             self.exportType = segmentationMode
@@ -31,7 +34,7 @@ class CalciumScore():
             "exportFileJSON": os.path.join(exportFolder, dataset + "_" + observer + "_" + self.exportType + ".json")
         }
 
-        self.Items = self.createItems(settings)
+        self.Items = self.createItems()
 
         self.arteryId = {}
 
@@ -44,24 +47,24 @@ class CalciumScore():
 
         self.pandas = importlib.import_module('pandas')
 
-    def createItems(self, settings):
+    def createItems(self):
         items = None
 
         generatedItems = {}
 
-        for item in settings["exportedLabels"][self.exportType]:
+        for item in self.settingsHandler.getContentByKeys(["exportedLabels", self.exportType]):
             itemContent = None
 
-            labelContent = settings["exportedLabels"][self.exportType][item]
+            labelContent = self.settingsHandler.getContentByKeys(["exportedLabels", self.exportType, item])
 
             if isinstance(labelContent, list):
                 itemContent = []
 
                 for groupElement in labelContent:
-                    itemContent.append(settings["labels"][self.exportType][groupElement]["value"])
+                    itemContent.append(self.settingsHandler.getContentByKeys(["labels", self.exportType, groupElement, "value"]))
 
             else:
-                itemContent = settings["labels"][self.exportType][labelContent]["value"]
+                itemContent = self.settingsHandler.getContentByKeys(["labels", self.exportType, labelContent, "value"])
                 pass
 
             generatedItems[item] = itemContent
