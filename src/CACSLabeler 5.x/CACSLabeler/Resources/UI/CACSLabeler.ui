@@ -136,7 +136,7 @@
       <enum>QTabWidget::Rounded</enum>
      </property>
      <property name="currentIndex">
-      <number>0</number>
+      <number>1</number>
      </property>
      <widget class="QWidget" name="createNewLabelTab">
       <attribute name="title">
@@ -545,26 +545,9 @@
         </layout>
        </item>
        <item>
-        <widget class="Line" name="comparisonLine1">
-         <property name="enabled">
-          <bool>true</bool>
-         </property>
-         <property name="orientation">
-          <enum>Qt::Horizontal</enum>
-         </property>
-        </widget>
-       </item>
-       <item>
         <widget class="qMRMLSegmentEditorWidget" name="compareObserversEditor">
          <property name="defaultTerminologyEntrySettingsKey">
           <string notr="true"/>
-         </property>
-        </widget>
-       </item>
-       <item>
-        <widget class="Line" name="comparisonLine2">
-         <property name="orientation">
-          <enum>Qt::Horizontal</enum>
          </property>
         </widget>
        </item>
@@ -591,8 +574,8 @@
          </property>
          <property name="sizeHint" stdset="0">
           <size>
-           <width>20</width>
-           <height>40</height>
+           <width>10</width>
+           <height>10</height>
           </size>
          </property>
         </spacer>

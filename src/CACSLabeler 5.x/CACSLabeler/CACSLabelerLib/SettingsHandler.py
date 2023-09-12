@@ -55,7 +55,10 @@ class SettingsHandler():
         self.saveFile()
 
     def getCurrentDatasetAndObserver(self):
-        pass
+        dataset = self.getContentByKeys(["savedDatasetAndObserverSelection", "dataset"])
+        observer = self.getContentByKeys(["savedDatasetAndObserverSelection", "observer"])
+
+        return dataset, observer
 
     def getAvailableDatasetsAndObservers(self):
         array = {}

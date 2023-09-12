@@ -1,5 +1,4 @@
 import os
-from pathlib import Path
 import qt
 
 import slicer
@@ -9,15 +8,7 @@ from PIL import ImageColor
 
 import SimpleITK as sitk
 import numpy
-import json
-
-import vtk
 import random
-
-import sys
-
-from scipy.ndimage import label
-from scipy import ndimage as ndi
 
 import importlib
 
@@ -88,133 +79,29 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         # Now you can use the reloaded class
         self.settingsHandler = SettingsHandler()
 
-    def initializeUI(self):
-        # Load widget from .ui file (created by Qt Designer).
-        # Additional widgets can be instantiated manually and added to self.layout.
-        uiWidget = slicer.util.loadUI(self.resourcePath('UI/CACSLabeler.ui'))
-        self.layout.addWidget(uiWidget)
-        self.ui = slicer.util.childWidgetVariables(uiWidget)
-
-        # Set scene in MRML widgets. Make sure that in Qt designer the top-level qMRMLWidget's
-        # "mrmlSceneChanged(vtkMRMLScene*)" signal in is connected to each MRML widget's.
-        # "setMRMLScene(vtkMRMLScene*)" slot.
-        uiWidget.setMRMLScene(slicer.mrmlScene)
-
-        self.defaultUI()
-        self.connectUIEvents()
-
-    def connectUIEvents(self):
-        self.ui.exportFromReferenceFolder.connect('clicked(bool)', self.onExportFromReferenceFolderButtonClicked)
-        self.ui.exportFromJsonFile.connect('clicked(bool)', self.onExportFromJSONFileButtonClicked)
-        self.ui.loadVolumeButton.connect('clicked(bool)', self.onLoadButton)
-        self.ui.thresholdVolumeButton.connect('clicked(bool)', self.onThresholdVolume)
-        self.ui.selectNextUnlabeledImageButton.connect('clicked(bool)', self.onSelectNextUnlabeledImage)
-        self.ui.saveButton.connect('clicked(bool)', self.onSaveButton)
-        self.ui.compareLabelsButton.connect('clicked(bool)', self.onCompareLabelsButton)
-
-    def createMessagePopup(self, message):
-        slicer.util.infoDisplay(message)
-
-    def defaultUI(self):
-        pass
-        #self.ui.settingsCollapsibleButton.setHidden(False)
-        #self.ui.tabWidget.setHidden(True)
-        #self.ui.exportCollapsibleButton.setHidden(True)
-
-        # self.ui.inputCollapsibleButton.setHidden(hide)
-        # self.ui.exportCollapsibleButton.setHidden(hide)
-        # self.ui.compareCollapsibleButton.setHidden(hide)
-        #
-        # self.ui.datasetComboBox.setHidden(hide)
-        # self.ui.datasetLabel.setHidden(hide)
-        # self.ui.observerComboBox.setHidden(hide)
-        # self.ui.observerLabel.setHidden(hide)
-
     def setup(self):
         """
         Called when the user opens the module the first time and the widget is initialized.
         """
         ScriptedLoadableModuleWidget.setup(self)
 
-        #used to add dependencies that are not shipped with 3dSlicer!
-        self.checkIfDependenciesAreInstalled()
-
-        self.initializeUI()
-
-        #loading and processing settings json
-        #All interaction with the settings is handled through the handler
-        self.settingsHandler = SettingsHandler()
-
-        if self.settingsHandler.getAvailableDatasetsAndObservers():
-            self.changeSelectedDatasetAndObserver()
-            self.updateDatasetAndObserverDropdownSelection()
-
-            # after first updateDatasetAndObserverDropdownSelection to prevent call on automatic selection
-            self.datasetComboBoxEventBlocked = False
-            self.ui.datasetComboBox.connect("currentIndexChanged(int)", self.onChangeDataset)
-
-            self.observerComboBoxEventBlocked = False
-            self.ui.observerComboBox.connect("currentIndexChanged(int)", self.onChangeObserver)
-
-            self.exportTypeComboBoxEventBlocked = False
-            self.ui.exportTypeComboBox.connect("currentIndexChanged(int)", self.onChangeExportType)
-
-            self.compareObserverComboBoxEventBlocked = False
-            self.ui.compareObserverComboBox.connect("currentIndexChanged(int)", self.onCompareObserverComboBoxChange)
-
-            self.ui.comparableSegmentationTypes.connect("currentIndexChanged(int)",
-                                                        self.onComparisonSegmentationTypeChange)
-
-            self.currentLoadedNode = None
-            self.currentLoadedReferenceNode = None
-            self.initializeMainUI()
-        else:
-            self.createMessagePopup("Settings file error!\nChange settings in JSON file!")
+        #var TODO!
+        self.loadedVolumeNode = None
+        self.loadedSegmentationNode = None
+        self.comparisonObserver1 = None
+        self.comparisonObserver2 = None
 
         self.colorTableNode = None
         self.createColorTable()
 
-        self.createEditorWidget(self.ui.embeddedSegmentEditorWidget, "createEditor")
-        self.createEditorWidget(self.ui.compareObserversEditor, "compareEditor")
+        #used to add dependencies that are not shipped with 3dSlicer!
+        self.checkIfDependenciesAreInstalled()
 
-        self.ui.comparisonLine1.setHidden(True)
-        self.ui.comparisonLine2.setHidden(True)
-        self.ui.comparisonSaveButton.setHidden(True)
+        # loading and processing settings json
+        # All interaction with the settings is handled through the handler
+        self.settingsHandler = SettingsHandler()
 
-        self.ui.saveButton.setHidden(True)
-
-        self.availableExportTypes = list(self.settingsHandler.getContentByKeys(["exportedLabels"]).keys()) #TODO!
-
-        self.ui.exportTypeComboBox.clear()
-        self.ui.exportTypeComboBox.addItems(self.availableExportTypes)
-        self.ui.exportTypeComboBox.setCurrentText(self.settingsHandler.getContentByKeys(["exportType"]))
-
-        #Init Comparison
-        self.comparisonObserver1 = None
-        self.comparisonObserver2 = None
-
-        self.ui.comparisonSelectNextImageButton.connect('clicked(bool)', self.onComparisonSelectNextImage)
-        self.ui.comparisonSelectNextImageToLoadButton.connect('clicked(bool)', self.onComparisonSelectImageToLoad)
-
-        self.createCompareObserversBox()
-
-        self.ui.CompareObserver1Selector.connect("currentIndexChanged(int)", self.onComparisonChangeFirstObserver)
-        self.ui.CompareObserver2Selector.connect("currentIndexChanged(int)", self.onComparisonChangeSecondObserver)
-
-        self.ui.comparisonSaveButton.connect('clicked(bool)', self.onSaveComparisonLabel)
-        self.ui.tabWidget.currentChanged.connect(self.onTabChange)
-        self.ui.tabWidget.setCurrentIndex(self.settingsHandler.getContentByKeys(["tabOpen"]))
-
-    def onTabChange(self, index):
-        self.settingsHandler.changeContentByKey(["tabOpen"], index)
-
-    def checkIfDependenciesAreInstalled(self):
-        dependencies = ["pandas"]
-
-        for dependency in dependencies:
-            if importlib.util.find_spec(dependency) is None:
-                if slicer.util.confirmOkCancelDisplay("This module requires '" + dependency + "' Python package. Click OK to install it now."):
-                    slicer.util.pip_install(dependency)
+        self.createUI()
 
     def cleanup(self):
         """
@@ -234,6 +121,83 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         """
         pass
 
+    def onTabChange(self, index):
+        self.settingsHandler.changeContentByKey(["tabOpen"], index)
+
+    def checkIfDependenciesAreInstalled(self):
+        dependencies = ["pandas"]
+
+        for dependency in dependencies:
+            if importlib.util.find_spec(dependency) is None:
+                if slicer.util.confirmOkCancelDisplay("This module requires '" + dependency + "' Python package. Click OK to install it now."):
+                    slicer.util.pip_install(dependency)
+
+    def createUI(self):
+        # Load widget from .ui file (created by Qt Designer).
+        # Additional widgets can be instantiated manually and added to self.layout.
+        uiWidget = slicer.util.loadUI(self.resourcePath('UI/CACSLabeler.ui'))
+        self.layout.addWidget(uiWidget)
+        self.ui = slicer.util.childWidgetVariables(uiWidget)
+
+        # Set scene in MRML widgets. Make sure that in Qt designer the top-level qMRMLWidget's
+        # "mrmlSceneChanged(vtkMRMLScene*)" signal in is connected to each MRML widget's.
+        # "setMRMLScene(vtkMRMLScene*)" slot.
+        uiWidget.setMRMLScene(slicer.mrmlScene)
+
+        self.connectUIEvents()
+
+        #used to prevent onChange
+        self.datasetComboBoxEventBlocked = False
+        self.observerComboBoxEventBlocked = False
+        self.exportTypeComboBoxEventBlocked = False
+        self.compareObserverComboBoxEventBlocked = False
+
+        self.createEditorWidget(self.ui.embeddedSegmentEditorWidget, "createEditor")
+        self.createEditorWidget(self.ui.compareObserversEditor, "compareEditor")
+
+        self.ui.exportTypeComboBox.clear()
+        self.ui.exportTypeComboBox.addItems(list(self.settingsHandler.getContentByKeys(["exportedLabels"]).keys()))
+        self.ui.exportTypeComboBox.setCurrentText(self.settingsHandler.getContentByKeys(["exportType"]))
+
+        self.createCompareObserversBox()
+        self.ui.tabWidget.setCurrentIndex(self.settingsHandler.getContentByKeys(["tabOpen"]))
+
+        if self.settingsHandler.getAvailableDatasetsAndObservers():
+            self.changeSelectedDatasetAndObserver()
+            self.updateDatasetAndObserverDropdownSelection()
+
+            self.initializeMainUI()
+        else:
+            self.createMessagePopup("Settings file error!\nChange settings in JSON file!")
+
+    def connectUIEvents(self):
+        self.ui.exportFromReferenceFolder.connect('clicked(bool)', self.onExportFromReferenceFolderButtonClicked)
+        self.ui.exportFromJsonFile.connect('clicked(bool)', self.onExportFromJSONFileButtonClicked)
+        self.ui.loadVolumeButton.connect('clicked(bool)', self.onLoadButton)
+        self.ui.thresholdVolumeButton.connect('clicked(bool)', self.onThresholdVolume)
+        self.ui.selectNextUnlabeledImageButton.connect('clicked(bool)', self.onSelectNextUnlabeledImage)
+        self.ui.saveButton.connect('clicked(bool)', self.onSaveButton)
+        self.ui.compareLabelsButton.connect('clicked(bool)', self.onCompareLabelsButton)
+
+        self.ui.datasetComboBox.connect("currentIndexChanged(int)", self.onChangeDataset)
+        self.ui.observerComboBox.connect("currentIndexChanged(int)", self.onChangeObserver)
+        self.ui.exportTypeComboBox.connect("currentIndexChanged(int)", self.onChangeExportType)
+        self.ui.compareObserverComboBox.connect("currentIndexChanged(int)", self.onCompareObserverComboBoxChange)
+        self.ui.comparableSegmentationTypes.connect("currentIndexChanged(int)", self.onComparisonSegmentationTypeChange)
+
+        #tab Widget
+        self.ui.comparisonSelectNextImageButton.connect('clicked(bool)', self.onComparisonSelectNextImage)
+        self.ui.comparisonSelectNextImageToLoadButton.connect('clicked(bool)', self.onComparisonSelectImageToLoad)
+
+        self.ui.CompareObserver1Selector.connect("currentIndexChanged(int)", self.onComparisonChangeFirstObserver)
+        self.ui.CompareObserver2Selector.connect("currentIndexChanged(int)", self.onComparisonChangeSecondObserver)
+
+        self.ui.comparisonSaveButton.connect('clicked(bool)', self.onSaveComparisonLabel)
+        self.ui.tabWidget.currentChanged.connect(self.onTabChange)
+
+    def createMessagePopup(self, message):
+        slicer.util.infoDisplay(message)
+
     def createEditorWidget(self, editorObject, editorName):
         editorObject.setMRMLScene(slicer.mrmlScene)
         editorObject.setSegmentationNodeSelectorVisible(False)
@@ -243,7 +207,6 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         editorObject.unorderedEffectsVisible = False
         editorObject.setMRMLSegmentEditorNode(self.getSegmentEditorNode(editorName))
         editorObject.setSwitchToSegmentationsButtonVisible(False)
-        editorObject.setHidden(True)
 
     def getSegmentEditorNode(self, segmentEditorSingletonTag):
         # Use the Segment Editor module's parameter node for the embedded segment editor widget.
@@ -261,7 +224,7 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         if not self.exportTypeComboBoxEventBlocked:
             self.exportTypeComboBoxEventBlocked = True
 
-            self.settingsHandler.changeContentByKey(["exportType"], self.availableExportTypes[exportTypeId])
+            self.settingsHandler.changeContentByKey(["exportType"], list(self.settingsHandler.getContentByKeys(["exportedLabels"]).keys())[exportTypeId])
 
             self.exportTypeComboBoxEventBlocked = False
 
@@ -305,18 +268,16 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
     def loadVolumeToSlice(self, filename, imagesPath):
         self.changeViewCreateView()
-        self.ui.embeddedSegmentEditorWidget.setHidden(True)
-        self.ui.saveButton.setHidden(True)
 
         self.createColorTable()
         properties = {'Name': filename}
 
-        self.currentLoadedNode = slicer.util.loadVolume(os.path.join(imagesPath, filename), properties=properties)
-        self.currentLoadedNode.SetName(filename)
+        self.loadedVolumeNode = slicer.util.loadVolume(os.path.join(imagesPath, filename), properties=properties)
+        self.loadedVolumeNode.SetName(filename)
 
-        slicer.util.setSliceViewerLayers(background=self.currentLoadedNode)
-        self.currentLoadedNode.GetScalarVolumeDisplayNode().AutoWindowLevelOff()
-        self.currentLoadedNode.GetScalarVolumeDisplayNode().SetWindowLevel(800, 180)
+        slicer.util.setSliceViewerLayers(background=self.loadedVolumeNode)
+        self.loadedVolumeNode.GetScalarVolumeDisplayNode().AutoWindowLevelOff()
+        self.loadedVolumeNode.GetScalarVolumeDisplayNode().SetWindowLevel(800, 180)
 
         # Activate buttons
         self.ui.compareCollapsibleButton.enabled = True
@@ -374,20 +335,17 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         imagesPath, labelsPath, segmentationMode, sliceStepFile, exportFolder, dataset, observer, labelFileSuffix = self.selectedDatasetAndObserverSetting()
 
         #removes file extension
-        inputVolumeName = self.currentLoadedNode.GetName()
+        inputVolumeName = self.loadedVolumeNode.GetName()
         labelName = os.path.splitext(inputVolumeName)[0] + labelFileSuffix
 
         differentLabelType = self.differentLabelType()
 
         self.runThreshold(inputVolumeName, labelName, segmentationMode, labelsPath, self.colorTableNode, differentLabelType)
-        self.currentLoadedReferenceNode = slicer.util.getNode(labelName)
+        self.loadedSegmentationNode = slicer.util.getNode(labelName)
 
         self.ui.embeddedSegmentEditorWidget.setSegmentationNode(slicer.util.getNode(labelName))
         self.getSegmentEditorNode("createEditor").SetMasterVolumeIntensityMask(True)
         self.getSegmentEditorNode("createEditor").SetSourceVolumeIntensityMaskRange(float(lowerThresholdValue), 10000.0)
-
-        self.ui.embeddedSegmentEditorWidget.setHidden(False)
-        self.ui.saveButton.setHidden(False)
 
     def differentLabelType(self):
         imagesPath, labelsPath, segmentationMode, sliceStepFile, exportFolder, dataset, observer, labelFileSuffix = self.selectedDatasetAndObserverSetting()
@@ -409,14 +367,14 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.clearCurrentViewedNode()
         self.progressBarUpdate()
 
-        observer = self.settingsHandler.getContentByKeys(["savedDatasetAndObserverSelection", "observer"])
-        dataset = self.settingsHandler.getContentByKeys(["savedDatasetAndObserverSelection", "dataset"])
+        dataset, observer = self.settingsHandler.getCurrentDatasetAndObserver()
+
         self.ui.currentObserverName.text = observer
         self.ui.currentObserverSegmentationType.text = self.settingsHandler.getContentByKeys(["datasets", dataset, "observers", observer, "segmentationMode"])
 
     def clearCurrentViewedNode(self, changeAlert = False):
         if changeAlert:
-            if self.currentLoadedNode != None or len(slicer.util.getNodesByClass("vtkMRMLScalarVolumeNode")):
+            if self.loadedVolumeNode != None or len(slicer.util.getNodesByClass("vtkMRMLScalarVolumeNode")):
                 if not slicer.util.confirmOkCancelDisplay(
                         "This will close current scene.  Please make sure you have saved your current work.\n"
                         "Are you sure to continue?"
@@ -433,7 +391,7 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.ui.availableLabelType.text = ""
         self.ui.availableLabelType.cursorPosition = 0
         self.ui.availableLabel.enabled = False
-        self.currentLoadedNode = None
+        self.loadedVolumeNode = None
 
     def progressBarUpdate(self):
         images = self.getImageList(self.selectedDatasetAndObserverSetting())
@@ -480,8 +438,7 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.settingsHandler.changeContentByKey(["savedDatasetAndObserverSelection", "observer"], firstObserver)
 
     def selectedDatasetAndObserverSetting(self):
-        dataset = self.settingsHandler.getContentByKeys(["savedDatasetAndObserverSelection", "dataset"])
-        observer = self.settingsHandler.getContentByKeys(["savedDatasetAndObserverSelection", "observer"])
+        dataset, observer = self.settingsHandler.getCurrentDatasetAndObserver()
 
         imagesPath = self.settingsHandler.getContentByKeys(["datasets", dataset, "imagesPath"])
         labelsPath = self.settingsHandler.getContentByKeys(["datasets", dataset, "observers", observer, "labelsPath"])
@@ -543,13 +500,13 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         labelmapVolumeNode = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLLabelMapVolumeNode")
         labelmapVolumeNode.SetName("temporaryExportLabel")
         referenceVolumeNode = None  # it could be set to the master volume
-        segmentIds = self.currentLoadedReferenceNode.GetSegmentation().GetSegmentIDs()  # export all segments
-        slicer.modules.segmentations.logic().ExportSegmentsToLabelmapNode(self.currentLoadedReferenceNode, segmentIds,
-                                                                           labelmapVolumeNode, referenceVolumeNode,
-                                                                           slicer.vtkSegmentation.EXTENT_REFERENCE_GEOMETRY,
-                                                                           self.colorTableNode)
+        segmentIds = self.loadedSegmentationNode.GetSegmentation().GetSegmentIDs()  # export all segments
+        slicer.modules.segmentations.logic().ExportSegmentsToLabelmapNode(self.loadedSegmentationNode, segmentIds,
+                                                                          labelmapVolumeNode, referenceVolumeNode,
+                                                                          slicer.vtkSegmentation.EXTENT_REFERENCE_GEOMETRY,
+                                                                          self.colorTableNode)
 
-        filename = self.currentLoadedReferenceNode.GetName() + ".nrrd"
+        filename = self.loadedSegmentationNode.GetName() + ".nrrd"
 
         volumeNode = slicer.mrmlScene.GetFirstNodeByClass('vtkMRMLLabelMapVolumeNode')
         slicer.util.exportNode(volumeNode, os.path.join(labelsPath, filename))
@@ -593,8 +550,7 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             self.ui.secondObserverSegmentationType.enabled = False
 
     def compareObserverAvailableList(self):
-        currentDataset = self.settingsHandler.getContentByKeys(["savedDatasetAndObserverSelection", "dataset"])
-        currentObserver = self.settingsHandler.getContentByKeys(["savedDatasetAndObserverSelection", "observer"])
+        currentDataset, currentObserver = self.settingsHandler.getCurrentDatasetAndObserver()
         currentSegmentationType = self.settingsHandler.getContentByKeys(["datasets", currentDataset, "observers", currentObserver, "segmentationMode"])
 
         comparableObservers = []
@@ -659,9 +615,9 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.comparisonSegmentationType = self.availableComparisonSegmentationTypes[item]
 
     def onCompareLabelsButton(self):
-        file = self.currentLoadedNode.GetName().split(".mhd")[0]
-        currentDataset = self.settingsHandler.getContentByKeys(["savedDatasetAndObserverSelection", "dataset"])
-        currentObserver = self.settingsHandler.getContentByKeys(["savedDatasetAndObserverSelection", "observer"])
+        file = self.loadedVolumeNode.GetName().split(".mhd")[0]
+
+        currentDataset, currentObserver = self.settingsHandler.getCurrentDatasetAndObserver()
 
         currentObserverLabelpath = self.settingsHandler.getContentByKeys(["datasets", currentDataset, "observers", currentObserver, "labelsPath"])
         currentObserverlabelFileSuffix = self.settingsHandler.getContentByKeys(["datasets", currentDataset, "observers", currentObserver, "labelFileSuffix"])
@@ -694,7 +650,7 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
         comparison[numpy.equal(oneBackground, twoBackground) == True] = 0
 
-        imageNode = slicer.util.getNode(self.currentLoadedNode.GetName())
+        imageNode = slicer.util.getNode(self.loadedVolumeNode.GetName())
 
         segmentationNode = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLSegmentationNode")
         segmentationNode.SetName("Comparison")
@@ -984,11 +940,10 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             node.SetOrientationToAxial()
 
     def createCompareObserversBox(self):
-        currentSelectedDataset = self.settingsHandler.getContentByKeys(["savedDatasetAndObserverSelection", "dataset"])
-        currentSelectedObserver = self.settingsHandler.getContentByKeys(["savedDatasetAndObserverSelection", "observer"])
+        currentDataset, currentObserver = self.settingsHandler.getCurrentDatasetAndObserver()
 
-        allObserversList = list(self.settingsHandler.getContentByKeys(["datasets", currentSelectedDataset, "observers"]).keys())
-        allObserversList.remove(currentSelectedObserver)
+        allObserversList = list(self.settingsHandler.getContentByKeys(["datasets", currentDataset, "observers"]).keys())
+        allObserversList.remove(currentObserver)
 
         self.ui.CompareObserver1Selector.clear()
         self.ui.CompareObserver1Selector.addItems(allObserversList)
@@ -1004,9 +959,10 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.comparisonObserver2 = secondObserverList[0]
 
     def onComparisonChangeFirstObserver(self, id=None):
-        currentSelectedDataset = self.settingsHandler.getContentByKeys(["savedDatasetAndObserverSelection", "dataset"])
-        availableObservers = list(self.settingsHandler.getContentByKeys(["datasets", currentSelectedDataset, "observers"]).keys())
-        availableObservers.remove(self.settingsHandler.getContentByKeys(["savedDatasetAndObserverSelection", "observer"]))
+        dataset, observer = self.settingsHandler.getCurrentDatasetAndObserver()
+
+        availableObservers = list(self.settingsHandler.getContentByKeys(["datasets", dataset, "observers"]).keys())
+        availableObservers.remove(observer)
 
         self.comparisonObserver1 = availableObservers[id]
 
@@ -1019,9 +975,10 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.comparisonObserver2 = secondObserverList[0]
 
     def onComparisonChangeSecondObserver(self, id=None):
-        currentSelectedDataset = self.settingsHandler.getContentByKeys(["savedDatasetAndObserverSelection", "dataset"])
-        availableObservers = list(self.settingsHandler.getContentByKeys(["datasets", currentSelectedDataset, "observers"]).keys())
-        availableObservers.remove(self.settingsHandler.getContentByKeys(["savedDatasetAndObserverSelection", "observer"]))
+        dataset, observer = self.settingsHandler.getCurrentDatasetAndObserver()
+
+        availableObservers = list(self.settingsHandler.getContentByKeys(["datasets", dataset, "observers"]).keys())
+        availableObservers.remove(observer)
         availableObservers.remove( self.comparisonObserver1)
 
         self.comparisonObserver2 = availableObservers[id]
@@ -1046,20 +1003,16 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         imagesPath = self.settingsHandler.getContentByKeys(["datasets", dataset, "imagesPath"])
 
         self.clearCurrentViewedNode(True)
-        self.ui.compareObserversEditor.setHidden(False)
-        self.ui.comparisonLine1.setHidden(False)
-        self.ui.comparisonLine2.setHidden(False)
-        self.ui.comparisonSaveButton.setHidden(False)
 
         self.createColorTable()
         properties = {'Name': "CT_IMAGE"}
 
-        self.currentLoadedNode = slicer.util.loadVolume(os.path.join(imagesPath, filename), properties=properties)
-        self.currentLoadedNode.SetName(filename)
+        self.loadedVolumeNode = slicer.util.loadVolume(os.path.join(imagesPath, filename), properties=properties)
+        self.loadedVolumeNode.SetName(filename)
 
-        slicer.util.setSliceViewerLayers(background=self.currentLoadedNode)
-        self.currentLoadedNode.GetScalarVolumeDisplayNode().AutoWindowLevelOff()
-        self.currentLoadedNode.GetScalarVolumeDisplayNode().SetWindowLevel(800, 180)
+        slicer.util.setSliceViewerLayers(background=self.loadedVolumeNode)
+        self.loadedVolumeNode.GetScalarVolumeDisplayNode().AutoWindowLevelOff()
+        self.loadedVolumeNode.GetScalarVolumeDisplayNode().SetWindowLevel(800, 180)
 
         self.loadComparisonLabels()
         self.changeToComparisonView()
@@ -1097,7 +1050,7 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
     def loadComparisonLabels(self):
         dataset = self.settingsHandler.getContentByKeys(["savedDatasetAndObserverSelection", "dataset"])
-        imageNodeName = self.currentLoadedNode.GetName()
+        imageNodeName = self.loadedVolumeNode.GetName()
         patientFileName = imageNodeName.split(".mhd")[0]
 
         observer1LabelPath = os.path.join(
@@ -1177,7 +1130,7 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         #add label to segmentation
         comparisonSegmentation[binaryLabel == 1] = 100
 
-        imageNode = slicer.util.getNode(self.currentLoadedNode.GetName())
+        imageNode = slicer.util.getNode(self.loadedVolumeNode.GetName())
 
         segmentationNode = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLSegmentationNode")
         segmentationNode.SetName("Comparison")
@@ -1213,7 +1166,7 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
     def loadLabelFromArray(self, labelArray, labelName, labelDescription):
         uniqueKeys = numpy.unique(labelArray)
 
-        imageNode = slicer.util.getNode(self.currentLoadedNode.GetName())
+        imageNode = slicer.util.getNode(self.loadedVolumeNode.GetName())
 
         segmentationNode = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLSegmentationNode")
         segmentationNode.SetName(labelName)
@@ -1297,7 +1250,7 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
     def onSaveComparisonLabel(self):
         #check if label is complete!
-        imageNode = slicer.util.getNode(self.currentLoadedNode.GetName())
+        imageNode = slicer.util.getNode(self.loadedVolumeNode.GetName())
         segmentationNode = slicer.util.getNode("Comparison")
         segmentId = segmentationNode.GetSegmentation().GetSegmentIdBySegmentName("MISMATCH")
 
@@ -1307,7 +1260,7 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             dataset = self.settingsHandler.getContentByKeys(["savedDatasetAndObserverSelection", "dataset"])
             observer = self.settingsHandler.getContentByKeys(["savedDatasetAndObserverSelection", "observer"])
             savePath = self.settingsHandler.getContentByKeys(["datasets", dataset, "observers", observer, "labelsPath"])
-            filename = self.currentLoadedNode.GetName().split(".mhd")[0] + self.settingsHandler.getContentByKeys(["datasets", dataset, "observers", observer, "labelFileSuffix"]) +".nrrd"
+            filename = self.loadedVolumeNode.GetName().split(".mhd")[0] + self.settingsHandler.getContentByKeys(["datasets", dataset, "observers", observer, "labelFileSuffix"]) + ".nrrd"
 
             segmentationNode = slicer.util.getNode("Comparison")
 
@@ -1331,10 +1284,6 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
             self.progressBarUpdate()
             self.clearCurrentViewedNode(False)
-            self.ui.compareObserversEditor.setHidden(True)
-            self.ui.comparisonLine1.setHidden(True)
-            self.ui.comparisonLine2.setHidden(True)
-            self.ui.comparisonSaveButton.setHidden(True)
 
         else:
             print("Not all mismatched regions have been corrected! Check your segmentation for remaining red areas and try again!")
@@ -1354,18 +1303,15 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
             # file exists
             if os.path.isfile(os.path.join(labelsPath, labelName + '.nrrd')):
-                loadedVolumeNode = slicer.util.loadVolume(os.path.join(labelsPath, labelName + '.nrrd'),
-                                                          {"labelmap": True})
-                segmentationNode = slicer.mrmlScene.AddNewNodeByClass(
-                    "vtkMRMLSegmentationNode")  # import into new segmentation node
+                volumeNode = slicer.util.loadVolume(os.path.join(labelsPath, labelName + '.nrrd'), {"labelmap": True})
+                segmentationNode = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLSegmentationNode")  # import into new segmentation node
                 segmentationNode.SetName(labelName)
                 segmentationNode.SetReferenceImageGeometryParameterFromVolumeNode(imageNode)
-                loadedVolumeNode.GetDisplayNode().SetAndObserveColorNodeID(
+                volumeNode.GetDisplayNode().SetAndObserveColorNodeID(
                     colorTableNode.GetID())  # just in case the custom color table has not been already associated with the labelmap volume
-                slicer.modules.segmentations.logic().ImportLabelmapToSegmentationNode(loadedVolumeNode,
-                                                                                      segmentationNode)
+                slicer.modules.segmentations.logic().ImportLabelmapToSegmentationNode(volumeNode, segmentationNode)
 
-                slicer.mrmlScene.RemoveNode(loadedVolumeNode)
+                slicer.mrmlScene.RemoveNode(volumeNode)
             else:
                 segmentationNode = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLSegmentationNode")
                 segmentationNode.SetName(labelName)
