@@ -267,7 +267,7 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             self.compareObserverComboBoxEventBlocked = False
 
     def loadVolumeToSlice(self, filename, imagesPath):
-        self.changeViewCreateView()
+        self.setViewOneWindow()
 
         self.createColorTable()
         properties = {'Name': filename}
@@ -891,13 +891,13 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
         return label
 
-    def changeViewCreateView(self):
+    def setViewOneWindow(self):
         layoutManager = slicer.app.layoutManager()
         layoutManager.setLayout(6)
 
 ## code for comparison
 
-    def changeToComparisonView(self):
+    def setViewThreeWindows(self):
         ## create custom view
         threeViewLayout = """
                <layout type="horizontal">
@@ -1015,7 +1015,7 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.loadedVolumeNode.GetScalarVolumeDisplayNode().SetWindowLevel(800, 180)
 
         self.loadComparisonLabels()
-        self.changeToComparisonView()
+        self.setViewThreeWindows()
         self.disableSegmentationInSpecificViews()
 
         self.ui.compareObserversEditor.setSegmentationNode(slicer.util.getNode("Comparison"))
