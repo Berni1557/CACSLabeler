@@ -8,7 +8,7 @@ from operator import getitem
 class SettingsHandler():
     def __init__(self):
         self.settingsFolderpath = os.path.join(Path(__file__).absolute().parent.parent.parent.parent.parent, "data")
-        self.settingsFilepath = os.path.join(self.settingsFolderpath, "settings_CACSLabelerNew.json")
+        self.settingsFilepath = os.path.join(self.settingsFolderpath, "settings_CACSLabeler5.x.json")
 
         # Holds read settings json!
         self.settingsJson = None
