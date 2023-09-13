@@ -15,6 +15,7 @@ import importlib
 #Processing and exporting calcium scores
 from CACSLabelerLib.CalciumScore import CalciumScore
 from CACSLabelerLib.SettingsHandler import SettingsHandler
+from CACSLabelerLib.SegmentationProcessor import SegmentationProcessor
 
 #
 # CACSLabeler
@@ -69,12 +70,15 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         # on load!
         import CACSLabelerLib.SettingsHandler
         import CACSLabelerLib.CalciumScore
+        import CACSLabelerLib.SegmentationProcessor
 
         importlib.reload(CACSLabelerLib.CalciumScore)
         importlib.reload(CACSLabelerLib.SettingsHandler)
+        importlib.reload(CACSLabelerLib.SegmentationProcessor)
 
         from CACSLabelerLib.CalciumScore import CalciumScore
         from CACSLabelerLib.SettingsHandler import SettingsHandler
+        from CACSLabelerLib.SegmentationProcessor import SegmentationProcessor
 
         # Now you can use the reloaded class
         self.settingsHandler = SettingsHandler()
@@ -85,11 +89,10 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         """
         ScriptedLoadableModuleWidget.setup(self)
 
-        #var TODO!
-        self.loadedVolumeNode = None
-        self.loadedSegmentationNode = None
-        self.comparisonObserver1 = None
-        self.comparisonObserver2 = None
+        self.loadedVolumeNode = None #holds loaded volumes
+        self.loadedSegmentationNode = None #holds loaded segmentation of above Volume
+        self.comparisonObserver1 = None #holds segmentation of first observer when comparing
+        self.comparisonObserver2 = None #holds segmentation of second observer when comparing
 
         self.colorTableNode = None
         self.createColorTable()
@@ -163,8 +166,16 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.ui.tabWidget.setCurrentIndex(self.settingsHandler.getContentByKeys(["tabOpen"]))
 
         if self.settingsHandler.getAvailableDatasetsAndObservers():
+            self.datasetComboBoxEventBlocked = True
+            self.observerComboBoxEventBlocked = True
+            self.compareObserverComboBoxEventBlocked = True
+
             self.changeSelectedDatasetAndObserver()
             self.updateDatasetAndObserverDropdownSelection()
+
+            self.datasetComboBoxEventBlocked = False
+            self.observerComboBoxEventBlocked = False
+            self.compareObserverComboBoxEventBlocked = False
 
             self.initializeMainUI()
         else:
@@ -345,7 +356,7 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         imagesPath, labelsPath, segmentationMode, sliceStepFile, exportFolder, dataset, observer, labelFileSuffix = self.selectedDatasetAndObserverSetting()
         differentLabelType = None
 
-        # check if other labels exist
+        # checks if other label exists with other segmentation Type!
         if "differentSegmentationModeLabels" in self.settingsHandler.getContentByKeys(["datasets", dataset, "observers", observer]):
             if "labelsPath" in self.settingsHandler.getContentByKeys(["datasets", dataset, "observers", observer, "differentSegmentationModeLabels"])\
                     and "segmentationMode" in self.settingsHandler.getContentByKeys(["datasets", dataset, "observers", observer, "differentSegmentationModeLabels"]):
@@ -401,16 +412,16 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
     def changeSelectedDatasetAndObserver(self, dataset = None, observer = None):
         if dataset is None and observer is None:
+            print(self.settingsHandler.getContentByKeys(["savedDatasetAndObserverSelection"]))
+
             if (self.settingsHandler.getContentByKeys(["savedDatasetAndObserverSelection"])) \
                 and ("dataset" in self.settingsHandler.getContentByKeys(["savedDatasetAndObserverSelection"])) \
                 and ("observer" in self.settingsHandler.getContentByKeys(["savedDatasetAndObserverSelection"])):
 
                 if self.settingsHandler.getContentByKeys(["savedDatasetAndObserverSelection", "dataset"]) in self.settingsHandler.getAvailableDatasetsAndObservers():
-                    try:
-                        self.settingsHandler.getAvailableDatasetsAndObservers()[self.settingsHandler.getContentByKeys(["savedDatasetAndObserverSelection", "dataset"])].index(self.settingsHandler.getContentByKeys(["savedDatasetAndObserverSelection", "observer"]))
-                        return
-                    except ValueError:
-                        pass
+                        if self.settingsHandler.getContentByKeys(["savedDatasetAndObserverSelection", "observer"]) in self.settingsHandler.getAvailableDatasetsAndObservers()[self.settingsHandler.getContentByKeys(["savedDatasetAndObserverSelection", "dataset"])]:
+                            return
+
         else:
             if dataset in self.settingsHandler.getAvailableDatasetsAndObservers():
                 self.settingsHandler.changeContentByKey(["savedDatasetAndObserverSelection", "dataset"], dataset)
@@ -445,7 +456,6 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
     def updateDatasetAndObserverDropdownSelection(self):
         self.ui.datasetComboBox.clear()
         self.ui.datasetComboBox.addItems(list(self.settingsHandler.getAvailableDatasetsAndObservers().keys()))
-
         self.ui.datasetComboBox.setCurrentText(self.settingsHandler.getContentByKeys(["savedDatasetAndObserverSelection", "dataset"]))
 
         self.ui.observerComboBox.clear()
@@ -573,15 +583,6 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         else:
             self.ui.compareLabelsButton.enabled = False
 
-    def isSegmentationTypeLowerLevel(self, firstType, secondType):
-        segmentationTypes = ["ArteryLevel", "ArteryLevelWithLM", "SegmentLevelDLNExport", "SegmentLevel"]
-
-        return (segmentationTypes.index(firstType) < segmentationTypes.index(secondType))
-
-    def getEqualAndLowerSegmentationTypes(self, segmentationType):
-        segmentationTypes = ["ArteryLevel", "ArteryLevelWithLM", "SegmentLevelDLNExport", "SegmentLevel"]
-        return segmentationTypes[:segmentationTypes.index(segmentationType)+1]
-
     def checkForComparableLabelSegmentationTypes(self, firstObserver, secondObserver):
         currentDataset = self.settingsHandler.getContentByKeys(["savedDatasetAndObserverSelection", "dataset"])
         firstSegmentationType = self.settingsHandler.getContentByKeys(["datasets", currentDataset, "observers", firstObserver, "segmentationMode"])
@@ -589,13 +590,15 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
         list = []
 
+        processor = SegmentationProcessor()
+
         if firstSegmentationType != secondSegmentationType:
-            if self.isSegmentationTypeLowerLevel(firstSegmentationType, secondSegmentationType):
-                list = self.getEqualAndLowerSegmentationTypes(firstSegmentationType)
+            if processor.isSegmentationTypeLowerLevel(firstSegmentationType, secondSegmentationType):
+                list = processor.getEqualAndLowerSegmentationTypes(firstSegmentationType)
             else:
-                list = self.getEqualAndLowerSegmentationTypes(secondSegmentationType)
+                list = processor.getEqualAndLowerSegmentationTypes(secondSegmentationType)
         else:
-            list = self.getEqualAndLowerSegmentationTypes(firstSegmentationType)
+            list = processor.getEqualAndLowerSegmentationTypes(firstSegmentationType)
 
         self.availableComparisonSegmentationTypes = list[::-1]
         self.comparisonSegmentationType = self.availableComparisonSegmentationTypes[0]
@@ -629,9 +632,10 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         currentObserverSegmentationType = self.settingsHandler.getContentByKeys(["datasets", currentDataset, "observers", currentObserver, "segmentationMode"])
         compareObserverSegmentationType = self.settingsHandler.getContentByKeys(["datasets", currentDataset, "observers", self.selectedComparableObserver, "segmentationMode"])
 
+        processor = SegmentationProcessor()
 
-        labelCurrentObserver = self.processSegmentationLabels(labelCurrentObserver, currentObserverSegmentationType, self.comparisonSegmentationType)
-        labelCompareObserver = self.processSegmentationLabels(labelCompareObserver, compareObserverSegmentationType, self.comparisonSegmentationType)
+        labelCurrentObserver = processor.convert(labelCurrentObserver, currentObserverSegmentationType, self.comparisonSegmentationType)
+        labelCompareObserver = processor.convert(labelCompareObserver, compareObserverSegmentationType, self.comparisonSegmentationType)
 
         self.compareLabels(labelCurrentObserver, labelCompareObserver)
 
@@ -681,214 +685,11 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             segmentArray[comparison == id] = 1  # create segment by simple thresholding of an image
             slicer.util.updateSegmentBinaryLabelmapFromArray(segmentArray, segmentationNode, segmentId, imageNode)
 
-
-    def getLabelIdByName(self, segmentationType, name):
-        return self.settingsHandler.getContentByKeys(["labels", segmentationType, name, "value"])
-
-    def processSegmentationLabels(self, label, oldSegmentationType, newSegmentationType):
-        if oldSegmentationType == "SegmentLevelDLNExport":
-            label[label == 1] = 0
-        else:
-            label[label == self.getLabelIdByName(oldSegmentationType, "OTHER")] = 0
-
-        if oldSegmentationType == "SegmentLevel" and newSegmentationType == "SegmentLevelDLNExport":
-            #Remove not needed labels
-            label[label == self.getLabelIdByName(oldSegmentationType, "OTHER")] = 0
-            label[label == self.getLabelIdByName(oldSegmentationType, "AORTA_ASC")] = 0
-            label[label == self.getLabelIdByName(oldSegmentationType, "AORTA_DSC")] = 0
-            label[label == self.getLabelIdByName(oldSegmentationType, "AORTA_ARC")] = 0
-            label[label == self.getLabelIdByName(oldSegmentationType, "VALVE_AORTIC")] = 0
-            label[label == self.getLabelIdByName(oldSegmentationType, "VALVE_PULMONIC")] = 0
-            label[label == self.getLabelIdByName(oldSegmentationType, "VALVE_TRICUSPID")] = 0
-            label[label == self.getLabelIdByName(oldSegmentationType, "VALVE_MITRAL")] = 0
-            label[label == self.getLabelIdByName(oldSegmentationType, "PAPILLAR_MUSCLE")] = 0
-            label[label == self.getLabelIdByName(oldSegmentationType, "NFS_CACS")] = 0
-
-            label[label == self.getLabelIdByName(oldSegmentationType, "RCA_PROXIMAL")] = self.getLabelIdByName(oldSegmentationType, "RCA_PROXIMAL") + 100
-            label[label == self.getLabelIdByName(oldSegmentationType, "RCA_MID")] = self.getLabelIdByName(oldSegmentationType, "RCA_MID") + 100
-            label[label == self.getLabelIdByName(oldSegmentationType, "RCA_DISTAL")] = self.getLabelIdByName(oldSegmentationType, "RCA_DISTAL") + 100
-            label[label == self.getLabelIdByName(oldSegmentationType, "RCA_SIDE_BRANCH")] = self.getLabelIdByName(oldSegmentationType, "RCA_SIDE_BRANCH") + 100
-
-            label[label == self.getLabelIdByName(oldSegmentationType, "LAD_PROXIMAL")] = self.getLabelIdByName(oldSegmentationType, "LAD_PROXIMAL") + 100
-            label[label == self.getLabelIdByName(oldSegmentationType, "LAD_MID")] = self.getLabelIdByName(oldSegmentationType, "LAD_MID") + 100
-            label[label == self.getLabelIdByName(oldSegmentationType, "LAD_DISTAL")] = self.getLabelIdByName(oldSegmentationType, "LAD_DISTAL") + 100
-            label[label == self.getLabelIdByName(oldSegmentationType, "LAD_SIDE_BRANCH")] = self.getLabelIdByName(oldSegmentationType, "LAD_SIDE_BRANCH") + 100
-
-            label[label == self.getLabelIdByName(oldSegmentationType, "LCX_PROXIMAL")] = self.getLabelIdByName(oldSegmentationType, "LCX_PROXIMAL") + 100
-            label[label == self.getLabelIdByName(oldSegmentationType, "LCX_MID")] = self.getLabelIdByName(oldSegmentationType, "LCX_MID") + 100
-            label[label == self.getLabelIdByName(oldSegmentationType, "LCX_DISTAL")] = self.getLabelIdByName(oldSegmentationType, "LCX_DISTAL") + 100
-            label[label == self.getLabelIdByName(oldSegmentationType, "LCX_SIDE_BRANCH")] = self.getLabelIdByName(oldSegmentationType, "LCX_SIDE_BRANCH") + 100
-
-            label[label == self.getLabelIdByName(oldSegmentationType, "RIM")] = self.getLabelIdByName(oldSegmentationType, "RIM") + 100
-
-            #convert ids
-            label[label == self.getLabelIdByName(oldSegmentationType, "LM_BIF_LAD_LCX")] = self.getLabelIdByName(newSegmentationType, "LM")
-            label[label == self.getLabelIdByName(oldSegmentationType, "LM_BIF_LAD")] = self.getLabelIdByName(newSegmentationType, "LM")
-            label[label == self.getLabelIdByName(oldSegmentationType, "LM_BIF_LCX")] = self.getLabelIdByName(newSegmentationType, "LM")
-            label[label == self.getLabelIdByName(oldSegmentationType, "LM_BRANCH")] = self.getLabelIdByName(newSegmentationType, "LM")
-
-            label[label == self.getLabelIdByName(oldSegmentationType, "RCA_PROXIMAL") + 100] = self.getLabelIdByName(
-                newSegmentationType, "RCA_PROXIMAL")
-            label[label == self.getLabelIdByName(oldSegmentationType, "RCA_MID") + 100] = self.getLabelIdByName(
-                newSegmentationType, "RCA_MID")
-            label[label == self.getLabelIdByName(oldSegmentationType, "RCA_DISTAL") + 100] = self.getLabelIdByName(
-                newSegmentationType, "RCA_DISTAL")
-            label[label == self.getLabelIdByName(oldSegmentationType, "RCA_SIDE_BRANCH") + 100] = self.getLabelIdByName(
-                newSegmentationType, "RCA_SIDE_BRANCH")
-
-            label[label == self.getLabelIdByName(oldSegmentationType, "LAD_PROXIMAL") + 100] = self.getLabelIdByName(
-                newSegmentationType, "LAD_PROXIMAL")
-            label[label == self.getLabelIdByName(oldSegmentationType, "LAD_MID") + 100] = self.getLabelIdByName(
-                newSegmentationType, "LAD_MID")
-            label[label == self.getLabelIdByName(oldSegmentationType, "LAD_DISTAL") + 100] = self.getLabelIdByName(
-                newSegmentationType, "LAD_DISTAL")
-            label[label == self.getLabelIdByName(oldSegmentationType, "LAD_SIDE_BRANCH") + 100] = self.getLabelIdByName(
-                newSegmentationType, "LAD_SIDE_BRANCH")
-
-            label[label == self.getLabelIdByName(oldSegmentationType, "LCX_PROXIMAL") + 100] = self.getLabelIdByName(
-                newSegmentationType, "LCX_PROXIMAL")
-            label[label == self.getLabelIdByName(oldSegmentationType, "LCX_MID") + 100] = self.getLabelIdByName(
-                newSegmentationType, "LCX_MID")
-            label[label == self.getLabelIdByName(oldSegmentationType, "LCX_DISTAL") + 100] = self.getLabelIdByName(
-                newSegmentationType, "LCX_DISTAL")
-            label[label == self.getLabelIdByName(oldSegmentationType, "LCX_SIDE_BRANCH") + 100] = self.getLabelIdByName(
-                newSegmentationType, "LCX_SIDE_BRANCH")
-
-            label[label == self.getLabelIdByName(oldSegmentationType, "RIM") + 100] = self.getLabelIdByName(
-                newSegmentationType, "RIM")
-
-        elif oldSegmentationType == "SegmentLevel" and newSegmentationType == "ArteryLevel":
-            # Combines all lesions in each artery to one group
-            # RCA
-            label[(label >= 4) & (label <= 7)] = 4
-
-            # LM
-            label[(label >= 9) & (label <= 12)] = 2
-
-            # LAD
-            label[(label >= 14) & (label <= 17)] = 2
-
-            # LCX
-            label[(label >= 19) & (label <= 22)] = 3
-
-            # RIM
-            label[(label == 23)] = 2
-
-            label[(label >= 5)] = 0
-
-        elif oldSegmentationType == "SegmentLevel" and newSegmentationType == "ArteryLevelWithLM":
-            # Combines all lesions in each artery to one group
-            # RCA
-            label[(label >= 4) & (label <= 7)] = 4
-
-            # LAD
-            label[(label >= 14) & (label <= 17)] = 2
-
-            # LCX
-            label[(label >= 19) & (label <= 22)] = 3
-
-            # RIM
-            label[(label == 23)] = 2
-
-            # LM
-            label[(label >= 9) & (label <= 12)] = 5
-
-            label[(label >= 6)] = 0
-
-        elif oldSegmentationType == "SegmentLevel" and newSegmentationType == "SegmentLevelOnlyArteries":
-            label[label >= self.getLabelIdByName(oldSegmentationType, "AORTA_ASC")] = 0
-            label[label == self.getLabelIdByName(oldSegmentationType, "LM_BIF_LAD_LCX")] = self.getLabelIdByName(oldSegmentationType, "LM_BRANCH")
-            label[label == self.getLabelIdByName(oldSegmentationType, "LM_BIF_LAD")] = self.getLabelIdByName(oldSegmentationType, "LM_BRANCH")
-            label[label == self.getLabelIdByName(oldSegmentationType, "LM_BIF_LCX")] = self.getLabelIdByName(oldSegmentationType, "LM_BRANCH")
-
-        elif oldSegmentationType == "ArteryLevelWithLM" and newSegmentationType == "ArteryLevel":
-            # LM
-            label[label == 5] = 2
-            label[(label > 5)] = 0
-
-        elif oldSegmentationType == "SegmentLevelDLNExport" and newSegmentationType == "ArteryLevelWithLM":
-            label[label == 2] = 102  # LM
-
-            label[label == 3] = 103  # LAD PROX
-            label[label == 4] = 104  # LAD MID
-            label[label == 5] = 105  # LAD DIST
-            label[label == 6] = 106  # LAD SIDE
-
-            label[label == 7] = 107  # LCX PROX
-            label[label == 8] = 108  # LCX MID
-            label[label == 9] = 109  # LCX DIST
-            label[label == 10] = 110  # LCX SIDE
-
-            label[label == 11] = 111  # RCA PROX
-            label[label == 12] = 112  # RCA MID
-            label[label == 13] = 113  # RCA DIST
-            label[label == 14] = 114  # RCA SIDE
-
-            label[label == 15] = 115  # RIM
-
-            # Combines all lesions in each artery to one group
-            # RCA
-            label[(label >= 111) & (label <= 114)] = 4
-
-            # LAD
-            label[(label >= 103) & (label <= 106)] = 2
-
-            # LCX
-            label[(label >= 107) & (label <= 110)] = 3
-
-            # RIM
-            label[(label == 115)] = 2
-
-            # LM
-            label[label == 102] = 5
-
-            label[(label >= 6)] = 0
-
-        elif oldSegmentationType == "SegmentLevelDLNExport" and newSegmentationType == "ArteryLevel":
-            label[label == 2] = 102  # LM
-
-            label[label == 3] = 103  # LAD PROX
-            label[label == 4] = 104  # LAD MID
-            label[label == 5] = 105  # LAD DIST
-            label[label == 6] = 106  # LAD SIDE
-
-            label[label == 7] = 107  # LCX PROX
-            label[label == 8] = 108  # LCX MID
-            label[label == 9] = 109  # LCX DIST
-            label[label == 10] = 110  # LCX SIDE
-
-            label[label == 11] = 111  # RCA PROX
-            label[label == 12] = 112  # RCA MID
-            label[label == 13] = 113  # RCA DIST
-            label[label == 14] = 114  # RCA SIDE
-
-            label[label == 15] = 115  # RIM
-
-            # Combines all lesions in each artery to one group
-            # RCA
-            label[(label >= 111) & (label <= 114)] = 4
-
-            # LAD
-            label[(label >= 103) & (label <= 106)] = 2
-
-            # LCX
-            label[(label >= 107) & (label <= 110)] = 3
-
-            # RIM
-            label[(label == 115)] = 2
-
-            # LM
-            label[label == 102] = 2
-
-            label[(label >= 5)] = 0
-
-        return label
-
     def setViewOneWindow(self):
         layoutManager = slicer.app.layoutManager()
         layoutManager.setLayout(6)
 
-## code for comparison
+    ## code for comparison logic
 
     def setViewThreeWindows(self):
         ## create custom view
@@ -1085,11 +886,13 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                 for element in elementsToRemove:
                     labelDescription.pop(element)
 
-                observer1Segmentation = self.processSegmentationLabels(observer1SegmentationArray,
+                processor = SegmentationProcessor()
+
+                observer1Segmentation = processor.convert(observer1SegmentationArray,
                                                                        observer1SegmentationType,
                                                                        "SegmentLevelOnlyArteries")
 
-                observer2Segmentation = self.processSegmentationLabels(observer2SegmentationArray,
+                observer2Segmentation = processor.convert(observer2SegmentationArray,
                                                                        observer2SegmentationType,
                                                                        "SegmentLevelOnlyArteries")
 
