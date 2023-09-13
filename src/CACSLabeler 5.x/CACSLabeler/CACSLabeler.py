@@ -412,8 +412,6 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
     def changeSelectedDatasetAndObserver(self, dataset = None, observer = None):
         if dataset is None and observer is None:
-            print(self.settingsHandler.getContentByKeys(["savedDatasetAndObserverSelection"]))
-
             if (self.settingsHandler.getContentByKeys(["savedDatasetAndObserverSelection"])) \
                 and ("dataset" in self.settingsHandler.getContentByKeys(["savedDatasetAndObserverSelection"])) \
                 and ("observer" in self.settingsHandler.getContentByKeys(["savedDatasetAndObserverSelection"])):
