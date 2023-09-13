@@ -22,6 +22,8 @@ from CACSLabelerLib.SegmentationProcessor import SegmentationProcessor
 #
 
 lowerThresholdValue = 130
+imageFileExtension = ".mhd"
+segmentationFileExtension = ".nrrd"
 
 class CACSLabeler(ScriptedLoadableModule):
     """Uses ScriptedLoadableModule base class, available at:
@@ -308,7 +310,7 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
         dataset = self.settingsHandler.getContentByKeys(["savedDatasetAndObserverSelection", "dataset"])
         imagesPath = self.settingsHandler.getContentByKeys(["datasets", dataset, "imagesPath"])
-        filename = imageList["unlabeledImages"][0] + ".mhd"
+        filename = imageList["unlabeledImages"][0] + imageFileExtension
 
         if os.path.isfile(os.path.join(imagesPath, filename)):
             self.loadVolumeToSlice(filename, imagesPath)
@@ -320,7 +322,7 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.clearCurrentViewedNode(True)
 
         # opens file selection window
-        filepath = qt.QFileDialog.getOpenFileName(self.parent, 'Open files', imagesPath, "Files(*.mhd)")
+        filepath = qt.QFileDialog.getOpenFileName(self.parent, 'Open files', imagesPath, ("Files(*"+imageFileExtension+")"))
         filename = filepath.split("/")[-1]
 
         self.loadVolumeToSlice(filename, imagesPath)
@@ -328,7 +330,7 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
     def checkIfOtherLabelIsAvailable(self, filename):
         differentLabelType = self.differentLabelType()
 
-        labelFileName = filename.split(".mhd")[0] + differentLabelType["labelFileSuffix"] + '.nrrd'
+        labelFileName = filename.split(imageFileExtension)[0] + differentLabelType["labelFileSuffix"] + segmentationFileExtension
         file = os.path.join(differentLabelType["labelPath"], labelFileName)
 
         if differentLabelType is not None and os.path.isfile(file):
@@ -507,7 +509,7 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                                                                           slicer.vtkSegmentation.EXTENT_REFERENCE_GEOMETRY,
                                                                           self.colorTableNode)
 
-        filename = self.loadedSegmentationNode.GetName() + ".nrrd"
+        filename = self.loadedSegmentationNode.GetName() + segmentationFileExtension
 
         volumeNode = slicer.mrmlScene.GetFirstNodeByClass('vtkMRMLLabelMapVolumeNode')
         slicer.util.exportNode(volumeNode, os.path.join(labelsPath, filename))
@@ -569,12 +571,12 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         return comparableObservers
 
     def checkIfLabelCanBeCompared(self, filename):
-        file = filename.split(".mhd")[0]
+        file = filename.split(imageFileExtension)[0]
         currentDataset = self.settingsHandler.getContentByKeys(["savedDatasetAndObserverSelection", "dataset"])
         labelsPath = self.settingsHandler.getContentByKeys(["datasets", currentDataset, "observers", self.selectedComparableObserver, "labelsPath"])
         labelFileSuffix = self.settingsHandler.getContentByKeys(["datasets", currentDataset, "observers", self.selectedComparableObserver, "labelFileSuffix"])
 
-        fullLabelFilename = file + labelFileSuffix + ".nrrd"
+        fullLabelFilename = file + labelFileSuffix + segmentationFileExtension
 
         if os.path.isfile(os.path.join(labelsPath, fullLabelFilename)):
             self.ui.compareLabelsButton.enabled = True
@@ -609,7 +611,7 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.comparisonSegmentationType = self.availableComparisonSegmentationTypes[item]
 
     def onCompareLabelsButton(self):
-        file = self.loadedVolumeNode.GetName().split(".mhd")[0]
+        file = self.loadedVolumeNode.GetName().split(imageFileExtension)[0]
 
         currentDataset, currentObserver = self.settingsHandler.getCurrentDatasetAndObserver()
 
@@ -619,8 +621,8 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         compareObserverLabelpath = self.settingsHandler.getContentByKeys(["datasets", currentDataset, "observers", self.selectedComparableObserver, "labelsPath"])
         compareObserverlabelFileSuffix = self.settingsHandler.getContentByKeys(["datasets", currentDataset, "observers", self.selectedComparableObserver, "labelFileSuffix"])
 
-        currentObserverFilePath = os.path.join(currentObserverLabelpath, (file + currentObserverlabelFileSuffix + ".nrrd"))
-        compareObserverFilePath = os.path.join(compareObserverLabelpath, (file + compareObserverlabelFileSuffix + ".nrrd"))
+        currentObserverFilePath = os.path.join(currentObserverLabelpath, (file + currentObserverlabelFileSuffix + segmentationFileExtension))
+        compareObserverFilePath = os.path.join(compareObserverLabelpath, (file + compareObserverlabelFileSuffix + segmentationFileExtension))
 
         # import labels
         labelCurrentObserver = sitk.GetArrayFromImage(sitk.ReadImage(currentObserverFilePath))
@@ -778,14 +780,14 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
     def onComparisonSelectNextImage(self):
         slicer.mrmlScene.Clear()
         imageList = self.getImageList(self.selectedDatasetAndObserverSetting())
-        self.loadImageToCompare(imageList["unlabeledImages"][0] + ".mhd")
+        self.loadImageToCompare(imageList["unlabeledImages"][0] + imageFileExtension)
 
     def onComparisonSelectImageToLoad(self):
         dataset = self.settingsHandler.getContentByKeys(["savedDatasetAndObserverSelection", "dataset"])
         imagesPath = self.settingsHandler.getContentByKeys(["datasets", dataset, "imagesPath"])
 
         # opens file selection window
-        filepath = qt.QFileDialog.getOpenFileName(self.parent, 'Open files', imagesPath, "Files(*.mhd)")
+        filepath = qt.QFileDialog.getOpenFileName(self.parent, 'Open files', imagesPath, "Files(*"+imageFileExtension+")")
         filename = filepath.split("/")[-1]
 
         self.loadImageToCompare(filename)
@@ -843,15 +845,15 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
     def loadComparisonLabels(self):
         dataset = self.settingsHandler.getContentByKeys(["savedDatasetAndObserverSelection", "dataset"])
         imageNodeName = self.loadedVolumeNode.GetName()
-        patientFileName = imageNodeName.split(".mhd")[0]
+        patientFileName = imageNodeName.split(imageFileExtension)[0]
 
         observer1LabelPath = os.path.join(
             self.settingsHandler.getContentByKeys(["datasets", dataset, "observers", self.comparisonObserver1, "labelsPath"]),
-            patientFileName + self.settingsHandler.getContentByKeys(["datasets", dataset, "observers", self.comparisonObserver1, "labelFileSuffix"]) + ".nrrd")
+            patientFileName + self.settingsHandler.getContentByKeys(["datasets", dataset, "observers", self.comparisonObserver1, "labelFileSuffix"]) + segmentationFileExtension)
 
         observer2LabelPath = os.path.join(
             self.settingsHandler.getContentByKeys(["datasets", dataset, "observers", self.comparisonObserver2, "labelsPath"]),
-            patientFileName + self.settingsHandler.getContentByKeys(["datasets", dataset, "observers", self.comparisonObserver2, "labelFileSuffix"]) + ".nrrd")
+            patientFileName + self.settingsHandler.getContentByKeys(["datasets", dataset, "observers", self.comparisonObserver2, "labelFileSuffix"]) + segmentationFileExtension)
 
         # generate comparison mask
         # import labels
@@ -1015,12 +1017,12 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
         for referenceFileName in sorted(filter(lambda x: os.path.isfile(os.path.join(labelsPath, x)),os.listdir(labelsPath))):
             name, extension = os.path.splitext(referenceFileName)
-            if extension == ".nrrd" and os.path.isfile(os.path.join(imagesPath, name.split(labelFileSuffix)[0] + ".mhd")):
+            if extension == segmentationFileExtension and os.path.isfile(os.path.join(imagesPath, name.split(labelFileSuffix)[0] + imageFileExtension)):
                references.append(name.split(labelFileSuffix)[0])
 
         for imageFileName in sorted(filter(lambda x: os.path.isfile(os.path.join(imagesPath, x)),os.listdir(imagesPath))):
             name, extension = os.path.splitext(imageFileName)
-            if extension == ".mhd":
+            if extension == imageFileExtension:
                 if filterActive:
                     fileName = name + extension
 
@@ -1054,7 +1056,7 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             dataset = self.settingsHandler.getContentByKeys(["savedDatasetAndObserverSelection", "dataset"])
             observer = self.settingsHandler.getContentByKeys(["savedDatasetAndObserverSelection", "observer"])
             savePath = self.settingsHandler.getContentByKeys(["datasets", dataset, "observers", observer, "labelsPath"])
-            filename = self.loadedVolumeNode.GetName().split(".mhd")[0] + self.settingsHandler.getContentByKeys(["datasets", dataset, "observers", observer, "labelFileSuffix"]) + ".nrrd"
+            filename = self.loadedVolumeNode.GetName().split(imageFileExtension)[0] + self.settingsHandler.getContentByKeys(["datasets", dataset, "observers", observer, "labelFileSuffix"]) + segmentationFileExtension
 
             segmentationNode = slicer.util.getNode("Comparison")
 
@@ -1096,8 +1098,8 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             segmentation = None
 
             # file exists
-            if os.path.isfile(os.path.join(labelsPath, labelName + '.nrrd')):
-                volumeNode = slicer.util.loadVolume(os.path.join(labelsPath, labelName + '.nrrd'), {"labelmap": True})
+            if os.path.isfile(os.path.join(labelsPath, labelName + segmentationFileExtension)):
+                volumeNode = slicer.util.loadVolume(os.path.join(labelsPath, labelName + segmentationFileExtension), {"labelmap": True})
                 segmentationNode = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLSegmentationNode")  # import into new segmentation node
                 segmentationNode.SetName(labelName)
                 segmentationNode.SetReferenceImageGeometryParameterFromVolumeNode(imageNode)
@@ -1127,7 +1129,7 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                 segment.SetColor(r / 255, g / 255, b / 255)  # red
                 displayNode.SetSegmentOpacity3D(key, 1)  # Set opacity of a single segment
 
-                if key == "OTHER" and not os.path.isfile(os.path.join(labelsPath, labelName + '.nrrd')):
+                if key == "OTHER" and not os.path.isfile(os.path.join(labelsPath, labelName + segmentationFileExtension)):
                     segmentId = segmentationNode.GetSegmentation().GetSegmentIdBySegmentName(key)
                     segmentArray = slicer.util.arrayFromSegmentBinaryLabelmap(segmentationNode, key, imageNode)
                     segmentArray[slicer.util.arrayFromVolume(
@@ -1136,9 +1138,9 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                                                                      imageNode)
 
             # converts label if other label is available
-            if differentLabelType is not None and not os.path.isfile(os.path.join(labelsPath, labelName + '.nrrd')):
-                if os.path.isfile(os.path.join(differentLabelType["labelPath"], labelName + '.nrrd')):
-                    label = sitk.ReadImage(os.path.join(differentLabelType["labelPath"], labelName + '.nrrd'))
+            if differentLabelType is not None and not os.path.isfile(os.path.join(labelsPath, labelName + segmentationFileExtension)):
+                if os.path.isfile(os.path.join(differentLabelType["labelPath"], labelName + segmentationFileExtension)):
+                    label = sitk.ReadImage(os.path.join(differentLabelType["labelPath"], labelName + segmentationFileExtension))
                     labelArray = sitk.GetArrayFromImage(label)
 
                     if differentLabelType[
