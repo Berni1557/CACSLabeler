@@ -1,0 +1,405 @@
+{
+    "datasets": {
+        "VAR_DATASET_NAME": {
+            "imagesPath": "",
+            "sliceStepFile": "",
+            "observers": {
+                "VAR_OBSERVER_NAME": {
+                    "labelsPath": "",
+                    "labelFileSuffix": "",
+                    "segmentationMode": "",
+                    "differentSegmentationModeLabels": {
+                        "labelsPath": "",
+                        "segmentationMode": "",
+                        "labelFileSuffix": ""
+                    },
+                    "includedImageFilter" :""
+                }
+            }
+        }
+    },
+    "exportType": "SegmentLevel",
+    "exportFolder": "",
+    "savedDatasetAndObserverSelection": {
+        "dataset": "",
+        "observer": ""
+    },
+    "labels": {
+        "SegmentLevel": {
+            "OTHER": {
+                "value": 1,
+                "color": "#00ff00"
+            },
+            "RCA_PROXIMAL": {
+                "value": 4,
+                "color": "#fc5000"
+            },
+            "RCA_MID": {
+                "value": 5,
+                "color": "#feda00"
+            },
+            "RCA_DISTAL": {
+                "value": 6,
+                "color": "#ffe4a5"
+            },
+            "RCA_SIDE_BRANCH": {
+                "value": 7,
+                "color": "#ffc2c2"
+            },
+            "LM_BIF_LAD_LCX": {
+                "value": 9,
+                "color": "#0bfde0"
+            },
+            "LM_BIF_LAD": {
+                "value": 10,
+                "color": "#1acbee"
+            },
+            "LM_BIF_LCX": {
+                "value": 11,
+                "color": "#208482"
+            },
+            "LM_BRANCH": {
+                "value": 12,
+                "color": "#d8ffcd"
+            },
+            "LAD_PROXIMAL": {
+                "value": 14,
+                "color": "#0050fd"
+            },
+            "LAD_MID": {
+                "value": 15,
+                "color": "#00ffff"
+            },
+            "LAD_DISTAL": {
+                "value": 16,
+                "color": "#91ffff"
+            },
+            "LAD_SIDE_BRANCH": {
+                "value": 17,
+                "color": "#00b3ff"
+            },
+            "LCX_PROXIMAL": {
+                "value": 19,
+                "color": "#ff00ff"
+            },
+            "LCX_MID": {
+                "value": 20,
+                "color": "#ff66ff"
+            },
+            "LCX_DISTAL": {
+                "value": 21,
+                "color": "#ff99ff"
+            },
+            "LCX_SIDE_BRANCH": {
+                "value": 22,
+                "color": "#ffccff"
+            },
+            "RIM": {
+                "value": 23,
+                "color": "#edfc9f"
+            },
+            "AORTA_ASC": {
+                "value": 26,
+                "color": "#483fff"
+            },
+            "AORTA_DSC": {
+                "value": 27,
+                "color": "#0c00f6"
+            },
+            "AORTA_ARC": {
+                "value": 28,
+                "color": "#8b85ff"
+            },
+            "VALVE_AORTIC": {
+                "value": 30,
+                "color": "#caffa7"
+            },
+            "VALVE_PULMONIC": {
+                "value": 31,
+                "color": "#8dff4f"
+            },
+            "VALVE_TRICUSPID": {
+                "value": 32,
+                "color": "#009900"
+            },
+            "VALVE_MITRAL": {
+                "value": 33,
+                "color": "#5dcc80"
+            },
+            "PAPILLAR_MUSCLE": {
+                "value": 34,
+                "color": "#a7954b"
+            },
+            "NFS_CACS": {
+                "value": 35,
+                "color": "#d8cfa8"
+            }
+        },
+        "SegmentLevelDLNExport":{
+            "LM": {
+                "value": 2,
+                "color": "#feda00"
+            },
+            "LAD_PROXIMAL": {
+                "value": 3,
+                "color": "#4dff00"
+            },
+            "LAD_MID": {
+                "value": 4,
+                "color": "#d0ff85"
+            },
+            "LAD_DISTAL": {
+                "value": 5,
+                "color": "#03ad00"
+            },
+            "LAD_SIDE_BRANCH": {
+                "value": 6,
+                "color": "#0ec9fd"
+            },
+            "LCX_PROXIMAL": {
+                "value": 7,
+                "color": "#b300ff"
+            },
+            "LCX_MID": {
+                "value": 8,
+                "color": "#ff93b9"
+            },
+            "LCX_DISTAL": {
+                "value": 9,
+                "color": "#b8b3ff"
+            },
+            "LCX_SIDE_BRANCH": {
+                "value": 10,
+                "color": "#97d2ff"
+            },
+            "RCA_PROXIMAL": {
+                "value": 11,
+                "color": "#ff0000"
+            },
+            "RCA_MID": {
+                "value": 12,
+                "color": "#ff8989"
+            },
+            "RCA_DISTAL": {
+                "value": 13,
+                "color": "#ffe5c1"
+            },
+            "RCA_SIDE_BRANCH": {
+                "value": 14,
+                "color": "#e3ffb8"
+            },
+            "RIM": {
+                "value": 15,
+                "color": "#ffaa00"
+            }
+        },
+        "ArteryLevel": {
+            "OTHER": {
+                "value": 1,
+                "color": "#00ff00"
+            },
+            "LAD": {
+                "value": 2,
+                "color": "#ffcc66"
+            },
+            "LCX": {
+                "value": 3,
+                "color": "#ff00ff"
+            },
+            "RCA": {
+                "value": 4,
+                "color": "#cc0000"
+            }
+        },
+        "ArteryLevelWithLM": {
+            "OTHER": {
+                "value": 1,
+                "color": "#00ff00"
+            },
+            "LAD": {
+                "value": 2,
+                "color": "#ffcc66"
+            },
+            "LCX": {
+                "value": 3,
+                "color": "#ff00ff"
+            },
+            "RCA": {
+                "value": 4,
+                "color": "#cc0000"
+            },
+            "LM": {
+                "value": 5,
+                "color": "#00c3ff"
+            }
+        }
+    },
+    "exportedLabels": {
+        "SegmentLevel": {
+            "CC": [
+                "RCA_PROXIMAL",
+                "RCA_MID",
+                "RCA_DISTAL",
+                "RCA_SIDE_BRANCH",
+                "LM_BIF_LAD_LCX",
+                "LM_BIF_LAD",
+                "LM_BIF_LCX",
+                "LM_BRANCH",
+                "LAD_PROXIMAL",
+                "LAD_MID",
+                "LAD_DISTAL",
+                "LAD_SIDE_BRANCH",
+                "LCX_PROXIMAL",
+                "LCX_MID",
+                "LCX_DISTAL",
+                "LCX_SIDE_BRANCH",
+                "RIM"
+            ],
+            "RCA": [
+                "RCA_PROXIMAL",
+                "RCA_MID",
+                "RCA_DISTAL",
+                "RCA_SIDE_BRANCH"
+            ],
+            "RCA_PROXIMAL": "RCA_PROXIMAL",
+            "RCA_MID": "RCA_MID",
+            "RCA_DISTAL": "RCA_DISTAL",
+            "RCA_SIDE_BRANCH": "RCA_SIDE_BRANCH",
+            "LM": [
+                "LM_BIF_LAD_LCX",
+                "LM_BIF_LAD",
+                "LM_BIF_LCX",
+                "LM_BRANCH"
+            ],
+            "LM_BIF_LAD_LCX": "LM_BIF_LAD_LCX",
+            "LM_BIF_LAD": "LM_BIF_LAD",
+            "LM_BIF_LCX": "LM_BIF_LCX",
+            "LM_BRANCH": "LM_BRANCH",
+            "LAD": [
+                "LAD_PROXIMAL",
+                "LAD_MID",
+                "LAD_DISTAL",
+                "LAD_SIDE_BRANCH"
+            ],
+            "LAD_PROXIMAL": "LAD_PROXIMAL",
+            "LAD_MID": "LAD_MID",
+            "LAD_DISTAL": "LAD_DISTAL",
+            "LAD_SIDE_BRANCH": "LAD_SIDE_BRANCH",
+            "LCX": [
+                "LCX_PROXIMAL",
+                "LCX_MID",
+                "LCX_DISTAL",
+                "LCX_SIDE_BRANCH"
+            ],
+            "LCX_PROXIMAL": "LCX_PROXIMAL",
+            "LCX_MID": "LCX_MID",
+            "LCX_DISTAL": "LCX_DISTAL",
+            "LCX_SIDE_BRANCH": "LCX_SIDE_BRANCH",
+            "RIM": "RIM",
+            "NCC": [
+                "AORTA_ASC",
+                "AORTA_DSC",
+                "AORTA_ARC",
+                "VALVE_AORTIC",
+                "VALVE_PULMONIC",
+                "VALVE_TRICUSPID",
+                "VALVE_MITRAL",
+                "NFS_CACS",
+                "PAPILLAR_MUSCLE"
+            ],
+            "AORTA": [
+                "AORTA_ASC",
+                "AORTA_DSC",
+                "AORTA_ARC"
+            ],
+            "AORTA_ASC": "AORTA_ASC",
+            "AORTA_DSC": "AORTA_DSC",
+            "AORTA_ARC": "AORTA_ARC",
+            "VALVES": [
+                "VALVE_AORTIC",
+                "VALVE_PULMONIC",
+                "VALVE_TRICUSPID",
+                "VALVE_MITRAL"
+            ],
+            "VALVE_AORTIC": "VALVE_AORTIC",
+            "VALVE_PULMONIC": "VALVE_PULMONIC",
+            "VALVE_TRICUSPID": "VALVE_TRICUSPID",
+            "VALVE_MITRAL": "VALVE_MITRAL",
+            "PAPILLAR_MUSCLE": "PAPILLAR_MUSCLE",
+            "NFS_CACS": "NFS_CACS"
+        },
+        "SegmentLevelDLNExport": {
+            "CC": [
+                "LM",
+                "LAD_PROXIMAL",
+                "LAD_MID",
+                "LAD_DISTAL",
+                "LAD_SIDE_BRANCH",
+                "LCX_PROXIMAL",
+                "LCX_MID",
+                "LCX_DISTAL",
+                "LCX_SIDE_BRANCH",
+                "RCA_PROXIMAL",
+                "RCA_MID",
+                "RCA_DISTAL",
+                "RCA_SIDE_BRANCH",
+                "RIM"
+            ],
+            "LM": "LM",
+            "LAD": [
+                "LAD_PROXIMAL",
+                "LAD_MID",
+                "LAD_DISTAL",
+                "LAD_SIDE_BRANCH"
+            ],
+            "LAD_PROXIMAL": "LAD_PROXIMAL",
+            "LAD_MID": "LAD_MID",
+            "LAD_DISTAL": "LAD_DISTAL",
+            "LAD_SIDE_BRANCH": "LAD_SIDE_BRANCH",
+            "RCA": [
+                "RCA_PROXIMAL",
+                "RCA_MID",
+                "RCA_DISTAL",
+                "RCA_SIDE_BRANCH"
+            ],
+            "RCA_PROXIMAL": "RCA_PROXIMAL",
+            "RCA_MID": "RCA_MID",
+            "RCA_DISTAL": "RCA_DISTAL",
+            "RCA_SIDE_BRANCH": "RCA_SIDE_BRANCH",
+            "LCX": [
+                "LCX_PROXIMAL",
+                "LCX_MID",
+                "LCX_DISTAL",
+                "LCX_SIDE_BRANCH"
+            ],
+            "LCX_PROXIMAL": "LCX_PROXIMAL",
+            "LCX_MID": "LCX_MID",
+            "LCX_DISTAL": "LCX_DISTAL",
+            "LCX_SIDE_BRANCH": "LCX_SIDE_BRANCH",
+            "RIM": "RIM"
+        },
+        "ArteryLevel": {
+            "CC": [
+                "LAD",
+                "RCA",
+                "LCX"
+            ],
+            "LAD": "LAD",
+            "RCA": "RCA",
+            "LCX": "LCX"
+        },
+        "ArteryLevelWithLM": {
+            "CC": [
+                "LAD",
+                "RCA",
+                "LCX",
+                "LM"
+            ],
+            "LAD": "LAD",
+            "RCA": "RCA",
+            "LCX": "LCX",
+            "LM": "LM"
+        }
+    },
+    "tabOpen": 0
+}
