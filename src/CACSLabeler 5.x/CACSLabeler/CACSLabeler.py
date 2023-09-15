@@ -96,9 +96,6 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.comparisonObserver1 = None #holds segmentation of first observer when comparing
         self.comparisonObserver2 = None #holds segmentation of second observer when comparing
 
-        self.colorTableNode = None
-        self.createColorTable()
-
         #used to add dependencies that are not shipped with 3dSlicer!
         self.checkIfDependenciesAreInstalled()
 
@@ -106,25 +103,9 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         # All interaction with the settings is handled through the handler
         self.settingsHandler = SettingsHandler()
 
+        self.colorTableNode = None
+        self.createColorTable()
         self.createUI()
-
-    def cleanup(self):
-        """
-        Called when the application closes and the module widget is destroyed.
-        """
-        pass
-
-    def enter(self):
-        """
-        Called each time the user opens this module.
-        """
-        pass
-
-    def exit(self):
-        """
-        Called each time the user opens a different module.
-        """
-        pass
 
     def onTabChange(self, index):
         self.settingsHandler.changeContentByKey(["tabOpen"], index)
@@ -477,7 +458,6 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         segmentNamesToLabels = []
 
         for key in self.settingsHandler.getContentByKeys(["labels", segmentationMode]):
-
             value = self.settingsHandler.getContentByKeys(["labels", segmentationMode, key, "value"])
             color = self.settingsHandler.getContentByKeys(["labels", segmentationMode, key, "color"])
 
@@ -739,18 +719,19 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         allObserversList = list(self.settingsHandler.getContentByKeys(["datasets", currentDataset, "observers"]).keys())
         allObserversList.remove(currentObserver)
 
-        self.ui.CompareObserver1Selector.clear()
-        self.ui.CompareObserver1Selector.addItems(allObserversList)
-        self.ui.CompareObserver1Selector.setCurrentText(allObserversList[0])
-        self.comparisonObserver1 = allObserversList[0]
+        if len(allObserversList) != 0:
+            self.ui.CompareObserver1Selector.clear()
+            self.ui.CompareObserver1Selector.addItems(allObserversList)
+            self.ui.CompareObserver1Selector.setCurrentText(allObserversList[0])
+            self.comparisonObserver1 = allObserversList[0]
 
-        secondObserverList = allObserversList
-        secondObserverList.remove(self.comparisonObserver1)
+            secondObserverList = allObserversList
+            secondObserverList.remove(self.comparisonObserver1)
 
-        self.ui.CompareObserver2Selector.clear()
-        self.ui.CompareObserver2Selector.addItems(secondObserverList)
-        self.ui.CompareObserver2Selector.setCurrentText(secondObserverList[0])
-        self.comparisonObserver2 = secondObserverList[0]
+            self.ui.CompareObserver2Selector.clear()
+            self.ui.CompareObserver2Selector.addItems(secondObserverList)
+            self.ui.CompareObserver2Selector.setCurrentText(secondObserverList[0])
+            self.comparisonObserver2 = secondObserverList[0]
 
     def onComparisonChangeFirstObserver(self, id=None):
         dataset, observer = self.settingsHandler.getCurrentDatasetAndObserver()
