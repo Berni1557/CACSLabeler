@@ -95,6 +95,7 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.loadedSegmentationNode = None #holds loaded segmentation of above Volume
         self.comparisonObserver1 = None #holds segmentation of first observer when comparing
         self.comparisonObserver2 = None #holds segmentation of second observer when comparing
+        self.selectedComparableObserver = None
 
         #used to add dependencies that are not shipped with 3dSlicer!
         self.checkIfDependenciesAreInstalled()
@@ -274,11 +275,13 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.loadedVolumeNode.GetScalarVolumeDisplayNode().SetWindowLevel(800, 180)
 
         # Activate buttons
-        self.ui.compareCollapsibleButton.enabled = True
         self.ui.thresholdVolumeButton.enabled = True
         self.ui.selectedVolumeTextField.text = filename
         self.ui.selectedVolumeTextField.cursorPosition = 0
         self.ui.selectedVolumeLabel.enabled = True
+
+        if len(self.compareObserverAvailableList()) > 0:
+            self.ui.compareCollapsibleButton.enabled = True
 
         self.checkIfOtherLabelIsAvailable(filename)
 
@@ -500,7 +503,7 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
     def onCompareObserverComboBoxChange(self, item=None):
         if not self.compareObserverComboBoxEventBlocked:
-            self.selectedComparableObserver = self.comparableObserversList[item]
+            self.selectedComparableObserver = self.self.compareObserverAvailableList()[item]
             self.updateSecondObserverSegmentationTypeLabel(self.selectedComparableObserver)
 
     def updateSecondObserverSegmentationTypeLabel(self, observer):
@@ -525,7 +528,6 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             self.ui.compareObserverComboBox.setCurrentText(list[0])
             self.updateSecondObserverSegmentationTypeLabel(list[0])
 
-            self.comparableObserversList = list
             self.selectedComparableObserver = list[0]
         else:
             self.ui.compareObserverComboBox.enabled = False
@@ -551,17 +553,18 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         return comparableObservers
 
     def checkIfLabelCanBeCompared(self, filename):
-        file = filename.split(imageFileExtension)[0]
-        currentDataset = self.settingsHandler.getContentByKeys(["savedDatasetAndObserverSelection", "dataset"])
-        labelsPath = self.settingsHandler.getContentByKeys(["datasets", currentDataset, "observers", self.selectedComparableObserver, "labelsPath"])
-        labelFileSuffix = self.settingsHandler.getContentByKeys(["datasets", currentDataset, "observers", self.selectedComparableObserver, "labelFileSuffix"])
+        if len(self.compareObserverAvailableList()) > 0:
+            file = filename.split(imageFileExtension)[0]
+            currentDataset = self.settingsHandler.getContentByKeys(["savedDatasetAndObserverSelection", "dataset"])
+            labelsPath = self.settingsHandler.getContentByKeys(["datasets", currentDataset, "observers", self.selectedComparableObserver, "labelsPath"])
+            labelFileSuffix = self.settingsHandler.getContentByKeys(["datasets", currentDataset, "observers", self.selectedComparableObserver, "labelFileSuffix"])
 
-        fullLabelFilename = file + labelFileSuffix + segmentationFileExtension
+            fullLabelFilename = file + labelFileSuffix + segmentationFileExtension
 
-        if os.path.isfile(os.path.join(labelsPath, fullLabelFilename)):
-            self.ui.compareLabelsButton.enabled = True
-        else:
-            self.ui.compareLabelsButton.enabled = False
+            if os.path.isfile(os.path.join(labelsPath, fullLabelFilename)):
+                self.ui.compareLabelsButton.enabled = True
+            else:
+                self.ui.compareLabelsButton.enabled = False
 
     def checkForComparableLabelSegmentationTypes(self, firstObserver, secondObserver):
         currentDataset = self.settingsHandler.getContentByKeys(["savedDatasetAndObserverSelection", "dataset"])
