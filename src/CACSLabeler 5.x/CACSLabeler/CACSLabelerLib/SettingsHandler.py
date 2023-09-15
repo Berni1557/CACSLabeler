@@ -19,6 +19,8 @@ class SettingsHandler():
         else:
             self.createDefaultSettings()
 
+        self.setDefaultDatasetAndObserver()
+
     def readFile(self, path):
         with open(path, 'r', encoding='utf-8') as file:
             return (json.load(file))
@@ -53,6 +55,18 @@ class SettingsHandler():
     def changeContentByKey(self, keys, value):
         reduce(getitem, keys[:-1], self.settingsJson)[keys[-1]] = value
         self.saveFile()
+
+    def setDefaultDatasetAndObserver(self):
+        dataset = self.getContentByKeys(["savedDatasetAndObserverSelection", "dataset"])
+        observer = self.getContentByKeys(["savedDatasetAndObserverSelection", "observer"])
+
+        if dataset == "" or observer == "":
+            datasets = list(self.getContentByKeys(["datasets"]).keys())
+
+            if len(datasets) != 0:
+                self.changeContentByKey(["savedDatasetAndObserverSelection", "dataset"], datasets[0])
+                observers = list(self.getContentByKeys(["datasets", datasets[0], "observers"]).keys())
+                self.changeContentByKey(["savedDatasetAndObserverSelection", "observer"], observers[0])
 
     def getCurrentDatasetAndObserver(self):
         dataset = self.getContentByKeys(["savedDatasetAndObserverSelection", "dataset"])
