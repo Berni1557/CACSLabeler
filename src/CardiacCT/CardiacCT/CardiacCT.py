@@ -175,9 +175,47 @@ class CardiacCTWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         uiElement.setMRMLSegmentEditorNode(self.getSegmentEditorNode(editorNodeName))
         uiElement.setSegmentationNode(slicer.util.getNode(assignedSegmentation))
 
+        for element in uiElement.children():
+            elementToHide = ["SpecifyGeometryButton", "Show3DButton", "SwitchToSegmentationsButton"]
+
+            #hides elements from segmentation Editor Widget
+            if element.objectName in elementToHide:
+                element.hide()
+
+            # add on Click event to effect button
+            if element.objectName == "EffectsGroupBox":
+                effects = ["Paint", "Erase"]
+
+                for effect in element.children():
+                    if effect.objectName in effects:
+                        effect.connect('clicked(bool)', lambda: self.onClick(editorNodeName))
+
         # uiElement.setSegmentationNodeSelectorVisible(False)
         # uiElement.setSourceVolumeNodeSelectorVisible(False)
         # uiElement.setSwitchToSegmentationsButtonVisible(False)
+
+    def onClick(self, editorName):
+        # used to prevent multiple editor effects from being active!
+        if editorName == "CTA_EditorAnatomical":
+
+            self.ui.CACSEditorWidgetAnatomical.setActiveEffectByName(None)
+            self.ui.CTAEditorWidgetLesions.setActiveEffectByName(None)
+            self.ui.CACSEditorWidgetLesions.setActiveEffectByName(None)
+        elif editorName == "CACS_EditorAnatomical":
+            self.ui.CTAEditorWidgetAnatomical.setActiveEffectByName(None)
+
+            self.ui.CTAEditorWidgetLesions.setActiveEffectByName(None)
+            self.ui.CACSEditorWidgetLesions.setActiveEffectByName(None)
+        elif editorName == "CTA_EditorLesions":
+            self.ui.CTAEditorWidgetAnatomical.setActiveEffectByName(None)
+            self.ui.CACSEditorWidgetAnatomical.setActiveEffectByName(None)
+
+            self.ui.CACSEditorWidgetLesions.setActiveEffectByName(None)
+        elif editorName == "CACS_EditorLesions":
+            self.ui.CTAEditorWidgetAnatomical.setActiveEffectByName(None)
+            self.ui.CACSEditorWidgetAnatomical.setActiveEffectByName(None)
+            self.ui.CTAEditorWidgetLesions.setActiveEffectByName(None)
+
 
     def getSegmentEditorNode(self, editorNodeName):
         segmentEditorNode = slicer.mrmlScene.GetSingletonNode(editorNodeName, "vtkMRMLSegmentEditorNode")
