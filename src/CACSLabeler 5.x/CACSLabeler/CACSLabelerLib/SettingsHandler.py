@@ -87,15 +87,10 @@ class SettingsHandler():
                     for observer in self.settingsJson["datasets"][dataset]["observers"]:
                         if os.path.isdir(self.settingsJson["datasets"][dataset]["observers"][observer]["labelsPath"]):
 
-                            # Options: ArteryLevel, SegmentLevel, ArteryLevelWithLM, SegmentLevelDLNExport
+                            availableSegmentationModes = list(self.settingsJson["labels"].keys())
+
                             if self.settingsJson["datasets"][dataset]["observers"][observer][
-                                "segmentationMode"] == "ArteryLevel" \
-                                    or self.settingsJson["datasets"][dataset]["observers"][observer][
-                                "segmentationMode"] == "SegmentLevel" \
-                                    or self.settingsJson["datasets"][dataset]["observers"][observer][
-                                "segmentationMode"] == "SegmentLevelDLNExport" \
-                                    or self.settingsJson["datasets"][dataset]["observers"][observer][
-                                "segmentationMode"] == "ArteryLevelWithLM":
+                                "segmentationMode"] in availableSegmentationModes:
                                 array[dataset].append(observer)
 
                             else:

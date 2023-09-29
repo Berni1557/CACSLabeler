@@ -25,6 +25,132 @@
         "observer": ""
     },
     "labels": {
+        "17Segment": {
+            "OTHER": {
+                "value": 1,
+                "color": "#00ff00"
+            },
+            "RCA_PROXIMAL": {
+                "value": 2,
+                "color": "#fc5000"
+            },
+            "RCA_SIDE_PROXIMAL": {
+                "value": 3,
+                "color": "#ffc2c2"
+            },
+            "RCA_MID": {
+                "value": 4,
+                "color": "#feda00"
+            },
+            "RCA_SIDE_MID": {
+                "value": 5,
+                "color": "#ffffff"
+            },
+            "RCA_DISTAL": {
+                "value": 6,
+                "color": "#ffe4a5"
+            },
+            "R-PDA-4a": {
+                "value": 7,
+                "color": "#ffffff"
+            },
+            "R-PLB-4b": {
+                "value": 8,
+                "color": "#ffffff"
+            },
+            "LM": {
+                "value": 9,
+                "color": "#d8ffcd"
+            },
+            "LAD_PROXIMAL": {
+                "value": 10,
+                "color": "#0050fd"
+            },
+            "LAD_SIDE_D1": {
+                "value": 11,
+                "color": "#ffffff"
+            },
+            "LAD_MID": {
+                "value": 12,
+                "color": "#00ffff"
+            },
+            "LAD_SIDE_D2": {
+                "value": 13,
+                "color": "#ffffff"
+            },
+            "LAD_DISTAL": {
+                "value": 14,
+                "color": "#91ffff"
+            },
+            "LCX_PROXIMAL": {
+                "value": 15,
+                "color": "#ff00ff"
+            },
+            "LCX_SIDE_OM1": {
+                "value": 16,
+                "color": "#ffccff"
+            },
+            "LCX_MID": {
+                "value": 17,
+                "color": "#ff66ff"
+            },
+            "LCX_SIDE_OM2": {
+                "value": 18,
+                "color": "#ffffff"
+            },
+            "LCX_DISTAL": {
+                "value": 19,
+                "color": "#ff99ff"
+            },
+            "L-PDA-16a": {
+                "value": 20,
+                "color": "#ffffff"
+            },
+            "L-PLB-16b": {
+                "value": 21,
+                "color": "#ffffff"
+            },
+            "RIM": {
+                "value": 22,
+                "color": "#edfc9f"
+            },
+            "AORTA_ASC": {
+                "value": 23,
+                "color": "#483fff"
+            },
+            "AORTA_DSC": {
+                "value": 24,
+                "color": "#0c00f6"
+            },
+            "AORTA_ARC": {
+                "value": 25,
+                "color": "#8b85ff"
+            },
+            "VALVE_AORTIC": {
+                "value": 26,
+                "color": "#caffa7"
+            },
+            "VALVE_PULMONIC": {
+                "value": 27,
+                "color": "#8dff4f"
+            },
+            "VALVE_TRICUSPID": {
+                "value": 28,
+                "color": "#009900"
+            },
+            "VALVE_MITRAL": {
+                "value": 29,
+                "color": "#5dcc80"
+            },
+            "PAPILLAR_MUSCLE": {
+                "value": 30,
+                "color": "#a7954b"
+            },
+            "NFS_CACS": {
+                "value": 31,
+                "color": "#d8cfa8"
+            }
+        },
         "SegmentLevel": {
             "OTHER": {
                 "value": 1,
@@ -231,6 +357,20 @@
             "LM": {
                 "value": 5,
                 "color": "#00c3ff"
+            }
+        },
+        "NoiseROI": {
+            "AORTA_ASC": {
+                "value": 1,
+                "color": "#ff0000"
+            },
+            "TRACHEA": {
+                "value": 2,
+                "color": "#00ff00"
+            },
+            "Extra cardiac fat": {
+                "value": 3,
+                "color": "#0000ff"
             }
         }
     },

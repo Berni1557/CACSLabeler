@@ -1069,8 +1069,7 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             print("Not all mismatched regions have been corrected! Check your segmentation for remaining red areas and try again!")
             slicer.util.infoDisplay("Not all mismatched regions have been corrected!\nCheck your segmentation for remaining red areas and try again!")
 
-    def runThreshold(self, inputVolumeName, labelName, segmentationMode, labelsPath, colorTableNode,
-                     differentLabelType):
+    def runThreshold(self, inputVolumeName, labelName, segmentationMode, labelsPath, colorTableNode, differentLabelType):
         node = slicer.util.getFirstNodeByName(labelName)
         if node is None:
             print('----- Thresholding -----')
@@ -1121,18 +1120,83 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                     slicer.util.updateSegmentBinaryLabelmapFromArray(segmentArray, segmentationNode, segmentId,
                                                                      imageNode)
 
+            converter = SegmentationProcessor()
+
             # converts label if other label is available
             if differentLabelType is not None and not os.path.isfile(os.path.join(labelsPath, labelName + segmentationFileExtension)):
                 if os.path.isfile(os.path.join(differentLabelType["labelPath"], labelName + segmentationFileExtension)):
                     label = sitk.ReadImage(os.path.join(differentLabelType["labelPath"], labelName + segmentationFileExtension))
                     labelArray = sitk.GetArrayFromImage(label)
 
-                    if differentLabelType[
-                        "labelSegmentationMode"] == "ArteryLevelWithLM" and segmentationMode == "SegmentLevel":
+                    if differentLabelType["labelSegmentationMode"] == "ArteryLevelWithLM" and segmentationMode == "SegmentLevel":
                         self.convertLabelType(labelArray, 5, 'LM_BRANCH', imageNode, segmentationNode)
                         self.convertLabelType(labelArray, 2, 'LAD_PROXIMAL', imageNode, segmentationNode)
                         self.convertLabelType(labelArray, 4, "RCA_PROXIMAL", imageNode, segmentationNode)
                         self.convertLabelType(labelArray, 3, "LCX_PROXIMAL", imageNode, segmentationNode)
+
+                    if differentLabelType["labelSegmentationMode"] == "SegmentLevel" and segmentationMode == "17Segment":
+                        oldType = "SegmentLevel"
+
+                        self.convertLabelType(labelArray, converter.getLabelValueByName(oldType, "RCA_PROXIMAL"),
+                                              'RCA_PROXIMAL', imageNode, segmentationNode)
+                        self.convertLabelType(labelArray, converter.getLabelValueByName(oldType, "RCA_MID"),
+                                              'RCA_MID', imageNode, segmentationNode)
+                        self.convertLabelType(labelArray, converter.getLabelValueByName(oldType, "RCA_DISTAL"),
+                                              'RCA_DISTAL', imageNode, segmentationNode)
+                        self.convertLabelType(labelArray, converter.getLabelValueByName(oldType, "RCA_SIDE_BRANCH"),
+                                              'RCA_SIDE_PROXIMAL', imageNode, segmentationNode)
+
+                        self.convertLabelType(labelArray, converter.getLabelValueByName(oldType, "LM_BIF_LAD_LCX"),
+                                              'LM', imageNode, segmentationNode)
+                        self.convertLabelType(labelArray, converter.getLabelValueByName(oldType, "LM_BIF_LAD"),
+                                              'LM', imageNode, segmentationNode)
+                        self.convertLabelType(labelArray, converter.getLabelValueByName(oldType, "LM_BIF_LCX"),
+                                              'LM', imageNode, segmentationNode)
+                        self.convertLabelType(labelArray, converter.getLabelValueByName(oldType, "LM_BRANCH"),
+                                              'LM', imageNode, segmentationNode)
+
+                        self.convertLabelType(labelArray, converter.getLabelValueByName(oldType, "LAD_PROXIMAL"),
+                                              'LAD_PROXIMAL', imageNode, segmentationNode)
+                        self.convertLabelType(labelArray, converter.getLabelValueByName(oldType, "LAD_MID"),
+                                              'LAD_MID', imageNode, segmentationNode)
+                        self.convertLabelType(labelArray, converter.getLabelValueByName(oldType, "LAD_DISTAL"),
+                                              'LAD_DISTAL', imageNode, segmentationNode)
+                        self.convertLabelType(labelArray, converter.getLabelValueByName(oldType, "LAD_SIDE_BRANCH"),
+                                              'LAD_SIDE_D1', imageNode, segmentationNode)
+
+                        self.convertLabelType(labelArray, converter.getLabelValueByName(oldType, "LCX_PROXIMAL"),
+                                              'LCX_PROXIMAL', imageNode, segmentationNode)
+                        self.convertLabelType(labelArray, converter.getLabelValueByName(oldType, "LCX_MID"),
+                                              'LCX_MID', imageNode, segmentationNode)
+                        self.convertLabelType(labelArray, converter.getLabelValueByName(oldType, "LCX_DISTAL"),
+                                              'LCX_DISTAL', imageNode, segmentationNode)
+                        self.convertLabelType(labelArray, converter.getLabelValueByName(oldType, "LCX_SIDE_BRANCH"),
+                                              'LCX_SIDE_OM1', imageNode, segmentationNode)
+
+                        self.convertLabelType(labelArray, converter.getLabelValueByName(oldType, "RIM"),
+                                              'RIM', imageNode, segmentationNode)
+
+                        self.convertLabelType(labelArray, converter.getLabelValueByName(oldType, "AORTA_ASC"),
+                                              'AORTA_ASC', imageNode, segmentationNode)
+                        self.convertLabelType(labelArray, converter.getLabelValueByName(oldType, "AORTA_DSC"),
+                                              'AORTA_DSC', imageNode, segmentationNode)
+                        self.convertLabelType(labelArray, converter.getLabelValueByName(oldType, "AORTA_ARC"),
+                                              'AORTA_ARC', imageNode, segmentationNode)
+
+                        self.convertLabelType(labelArray, converter.getLabelValueByName(oldType, "VALVE_AORTIC"),
+                                              'VALVE_AORTIC', imageNode, segmentationNode)
+                        self.convertLabelType(labelArray, converter.getLabelValueByName(oldType, "VALVE_PULMONIC"),
+                                              'VALVE_PULMONIC', imageNode, segmentationNode)
+                        self.convertLabelType(labelArray, converter.getLabelValueByName(oldType, "VALVE_TRICUSPID"),
+                                              'VALVE_TRICUSPID', imageNode, segmentationNode)
+                        self.convertLabelType(labelArray, converter.getLabelValueByName(oldType, "VALVE_MITRAL"),
+                                              'VALVE_MITRAL', imageNode, segmentationNode)
+
+                        self.convertLabelType(labelArray, converter.getLabelValueByName(oldType, "PAPILLAR_MUSCLE"),
+                                              'PAPILLAR_MUSCLE', imageNode, segmentationNode)
+
+                        self.convertLabelType(labelArray, converter.getLabelValueByName(oldType, "NFS_CACS"),
+                                              'NFS_CACS', imageNode, segmentationNode)
 
     def convertLabelType(self, oldLabelArray, oldArrayId, segmentIdName, imageNode, segmentationNode):
         segmentId = segmentationNode.GetSegmentation().GetSegmentIdBySegmentName(segmentIdName)
