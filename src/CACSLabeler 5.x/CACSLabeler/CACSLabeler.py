@@ -105,8 +105,9 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.settingsHandler = SettingsHandler()
 
         self.colorTableNode = None
-        self.createColorTable()
         self.createUI()
+        self.createColorTable()
+
 
     def onTabChange(self, index):
         self.settingsHandler.changeContentByKey(["tabOpen"], index)
@@ -118,6 +119,17 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             if importlib.util.find_spec(dependency) is None:
                 if slicer.util.confirmOkCancelDisplay("This module requires '" + dependency + "' Python package. Click OK to install it now."):
                     slicer.util.pip_install(dependency)
+
+    def checkIfSelectedDatasetAndObserverAreAvailable(self):
+        currentDataset, currentObserver = self.settingsHandler.getCurrentDatasetAndObserver()
+        available = self.settingsHandler.getAvailableDatasetsAndObservers()
+
+        if currentDataset in available.keys():
+            if currentObserver in available[currentDataset]:
+                return
+
+        #else change Dataset and Observer to default!
+        self.changeSelectedDatasetAndObserver()
 
     def createUI(self):
         # Load widget from .ui file (created by Qt Designer).
@@ -132,6 +144,9 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         uiWidget.setMRMLScene(slicer.mrmlScene)
 
         self.connectUIEvents()
+
+        #checking if current observer and dataset are available!
+        self.checkIfSelectedDatasetAndObserverAreAvailable()
 
         #used to prevent onChange
         self.datasetComboBoxEventBlocked = False
@@ -250,8 +265,11 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             self.observerComboBoxEventBlocked = True
             self.compareObserverComboBoxEventBlocked = True
 
+            observer = self.settingsHandler.getAvailableDatasetsAndObservers()[self.settingsHandler.getContentByKeys(["savedDatasetAndObserverSelection", "dataset"])][item]
+
             self.changeSelectedDatasetAndObserver(self.settingsHandler.getContentByKeys(["savedDatasetAndObserverSelection", "dataset"]),
-                                                  self.settingsHandler.getAvailableDatasetsAndObservers()[self.settingsHandler.getContentByKeys(["savedDatasetAndObserverSelection", "dataset"])][item])
+                                                  observer)
+
             self.initializeMainUI()
 
             self.createObserverAvailableList()
@@ -722,7 +740,7 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         allObserversList = list(self.settingsHandler.getContentByKeys(["datasets", currentDataset, "observers"]).keys())
         allObserversList.remove(currentObserver)
 
-        if len(allObserversList) != 0:
+        if len(allObserversList) >= 3:
             self.ui.CompareObserver1Selector.clear()
             self.ui.CompareObserver1Selector.addItems(allObserversList)
             self.ui.CompareObserver1Selector.setCurrentText(allObserversList[0])
@@ -740,17 +758,18 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         dataset, observer = self.settingsHandler.getCurrentDatasetAndObserver()
 
         availableObservers = list(self.settingsHandler.getContentByKeys(["datasets", dataset, "observers"]).keys())
-        availableObservers.remove(observer)
 
-        self.comparisonObserver1 = availableObservers[id]
+        if len(availableObservers) >= 3:
+            availableObservers.remove(observer)
+            self.comparisonObserver1 = availableObservers[id]
 
-        secondObserverList = availableObservers
-        secondObserverList.remove(self.comparisonObserver1)
+            secondObserverList = availableObservers
+            secondObserverList.remove(self.comparisonObserver1)
 
-        self.ui.CompareObserver2Selector.clear()
-        self.ui.CompareObserver2Selector.addItems(secondObserverList)
-        self.ui.CompareObserver2Selector.setCurrentText(secondObserverList[0])
-        self.comparisonObserver2 = secondObserverList[0]
+            self.ui.CompareObserver2Selector.clear()
+            self.ui.CompareObserver2Selector.addItems(secondObserverList)
+            self.ui.CompareObserver2Selector.setCurrentText(secondObserverList[0])
+            self.comparisonObserver2 = secondObserverList[0]
 
     def onComparisonChangeSecondObserver(self, id=None):
         dataset, observer = self.settingsHandler.getCurrentDatasetAndObserver()
@@ -1197,6 +1216,28 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
                         self.convertLabelType(labelArray, converter.getLabelValueByName(oldType, "NFS_CACS"),
                                               'NFS_CACS', imageNode, segmentationNode)
+
+                        # Adding Text
+                        Text = ""
+
+                        elements = numpy.unique(labelArray)
+
+                        if converter.getLabelValueByName(oldType, 'LAD_SIDE_BRANCH') in elements:
+                            Text = Text + " LAD_SIDE "
+
+                        if converter.getLabelValueByName(oldType, 'LCX_SIDE_BRANCH') in elements:
+                            Text = Text + " LCX_SIDE "
+
+                        if converter.getLabelValueByName(oldType, 'LCX_DISTAL') in elements:
+                            Text = Text + " LCX_DISTAL "
+
+                        if converter.getLabelValueByName(oldType, 'RCA_SIDE_BRANCH') in elements:
+                            Text = Text + " RCA_SIDE "
+
+                        if converter.getLabelValueByName(oldType, 'RCA_DISTAL') in elements:
+                            Text = Text + " RCA_DISTAL "
+
+                        print(inputVolumeName, " | ", Text)
 
     def convertLabelType(self, oldLabelArray, oldArrayId, segmentIdName, imageNode, segmentationNode):
         segmentId = segmentationNode.GetSegmentation().GetSegmentIdBySegmentName(segmentIdName)

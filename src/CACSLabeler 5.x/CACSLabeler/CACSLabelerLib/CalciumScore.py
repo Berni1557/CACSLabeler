@@ -27,8 +27,9 @@ class CalciumScore():
 
         self.segmentationMode = segmentationMode
         self.dataset = dataset
+        self.fileSuffix = fileSuffix
 
-        exportTypesOrder = ["ArteryLevel", "ArteryLevelWithLM", "SegmentLevelDLNExport", "SegmentLevel"]
+        exportTypesOrder = ["ArteryLevel", "ArteryLevelWithLM", "SegmentLevelDLNExport", "SegmentLevel", "17Segment"]
 
         if exportTypesOrder.index(segmentationMode) >= exportTypesOrder.index(self.settingsHandler.getContentByKeys(["exportType"])):
             self.exportType = self.settingsHandler.getContentByKeys(["exportType"])
@@ -118,19 +119,18 @@ class CalciumScore():
                                            os.listdir(self.filepaths["referenceFolder"])))]
 
     def processFilename(self, filepath):
-        if self.dataset == "DISCHARGE" or self.dataset == "CADMAN":
-            fileName = filepath.split("/")[-1]
-            PatientID = fileName.split("_")[0]
-            fileId = PatientID + "_" + fileName.split("_")[1].split("-")[0]
-            SeriesInstanceUID = fileId.split("_")[1]
+        filename = os.path.basename(filepath)
+        filenameWithoutExtensions = filename.split(self.fileSuffix)[0]
 
-        elif self.dataset == "OrCaScore":
-            fileName = filepath.split("/")[-1]
-            fileId = fileName.split("-")[0]
-            PatientID = fileId.split("_")[0]
-            SeriesInstanceUID = fileId.split("_")[1]
+        patientID = filenameWithoutExtensions.split("_")[0]
+        seriesInstanceUID = filenameWithoutExtensions.split("_")[1]
 
-        return fileName, fileId, PatientID, SeriesInstanceUID
+        return {
+            "filenameWithExtension": filename,
+            "filenameWithoutExtension": filenameWithoutExtensions,
+            "patientID": patientID,
+            "seriesInstanceUID": seriesInstanceUID
+        }
 
     def label(self, referenceTemporaryCopy, uniqueId, structureConnections2d, iterator, connectedElements2d):
         labeled_array, num_features = ndi.label((referenceTemporaryCopy == uniqueId).astype(int),structure=structureConnections2d)
@@ -505,8 +505,8 @@ class CalciumScore():
     def processImages(self, filename, sliceStepDataframe):
         processedFilename = self.processFilename(os.path.join(self.filepaths["referenceFolder"], filename))
 
-        if os.path.isfile(os.path.join(self.filepaths["imageFolder"], processedFilename[1] + ".mhd")):
-            image = sitk.ReadImage(os.path.join(self.filepaths["imageFolder"], processedFilename[1] + ".mhd"))
+        if os.path.isfile(os.path.join(self.filepaths["imageFolder"], processedFilename["filenameWithoutExtension"] + ".mhd")):
+            image = sitk.ReadImage(os.path.join(self.filepaths["imageFolder"], processedFilename["filenameWithoutExtension"] + ".mhd"))
             label = sitk.ReadImage(os.path.join(self.filepaths["referenceFolder"], filename))
 
             # Convert the image to a numpy array first and then shuffle the dimensions to get axis in the order z,y,x
@@ -515,27 +515,26 @@ class CalciumScore():
 
             # Read the spacing along each dimension
             spacing = numpy.array(list(reversed(image.GetSpacing())))
-            sliceThickness = sliceStepDataframe.loc[(sliceStepDataframe['patient_id'] == processedFilename[2])].slice_thickness.item()
-            sliceStep = sliceStepDataframe.loc[(sliceStepDataframe['patient_id'] == processedFilename[2])].slice_step.item()
+            sliceThickness = sliceStepDataframe.loc[(sliceStepDataframe['patient_id'] == processedFilename["patientID"])].slice_thickness.item()
+            sliceStep = sliceStepDataframe.loc[(sliceStepDataframe['patient_id'] == processedFilename["patientID"])].slice_step.item()
 
-            self.exportJson[processedFilename[2]] = {}
-            self.exportJson[processedFilename[2]][processedFilename[3]] = {}
-            self.exportJson[processedFilename[2]][processedFilename[3]]["sliceRatio"] = sliceThickness / 3.0
-            self.exportJson[processedFilename[2]][processedFilename[3]]["voxelLength"] = spacing[1]  # voxel length in mm
-            self.exportJson[processedFilename[2]][processedFilename[3]]["lesions"] = {}
-            self.exportJson[processedFilename[2]][processedFilename[3]]["sliceCount"] = len(imageArray)
-            self.exportJson[processedFilename[2]][processedFilename[3]]["sliceStep"] = sliceStep
+            self.exportJson[processedFilename["patientID"]] = {}
+            self.exportJson[processedFilename["patientID"]][processedFilename["seriesInstanceUID"]] = {}
+            self.exportJson[processedFilename["patientID"]][processedFilename["seriesInstanceUID"]]["sliceRatio"] = sliceThickness / 3.0
+            self.exportJson[processedFilename["patientID"]][processedFilename["seriesInstanceUID"]]["voxelLength"] = spacing[1]  # voxel length in mm
+            self.exportJson[processedFilename["patientID"]][processedFilename["seriesInstanceUID"]]["lesions"] = {}
+            self.exportJson[processedFilename["patientID"]][processedFilename["seriesInstanceUID"]]["sliceCount"] = len(imageArray)
+            self.exportJson[processedFilename["patientID"]][processedFilename["seriesInstanceUID"]]["sliceStep"] = sliceStep
 
             countingSlices = []
 
             for sliceNumber in range(0, len(imageArray), sliceStep):
                 countingSlices.append(sliceNumber)
 
-            self.exportJson[processedFilename[2]][processedFilename[3]]["countingSlices"] = countingSlices
+            self.exportJson[processedFilename["patientID"]][processedFilename["seriesInstanceUID"]]["countingSlices"] = countingSlices
+            result = self.calculateScoreFromImage(imageArray, labelArray, processedFilename["patientID"], processedFilename["seriesInstanceUID"])
 
-            result = self.calculateScoreFromImage(imageArray, labelArray, processedFilename[2], processedFilename[3])
-
-            print("Exported " + processedFilename[1])
+            print("Exported " + processedFilename["patientID"])
             self.exportList.append(result)
             self.createExportFilesAndSaveContent(createJson=True)
 
