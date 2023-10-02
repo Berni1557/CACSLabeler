@@ -423,7 +423,6 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                 if self.settingsHandler.getContentByKeys(["savedDatasetAndObserverSelection", "dataset"]) in self.settingsHandler.getAvailableDatasetsAndObservers():
                         if self.settingsHandler.getContentByKeys(["savedDatasetAndObserverSelection", "observer"]) in self.settingsHandler.getAvailableDatasetsAndObservers()[self.settingsHandler.getContentByKeys(["savedDatasetAndObserverSelection", "dataset"])]:
                             return
-
         else:
             if dataset in self.settingsHandler.getAvailableDatasetsAndObservers():
                 self.settingsHandler.changeContentByKey(["savedDatasetAndObserverSelection", "dataset"], dataset)
@@ -437,11 +436,18 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                     return
 
         # if not already selected in settings selecting first element
-        firstDataset = list(self.settingsHandler.getAvailableDatasetsAndObservers().keys())[0]
-        firstObserver = self.settingsHandler.getAvailableDatasetsAndObservers()[firstDataset][0]
+        datasetList = list(self.settingsHandler.getAvailableDatasetsAndObservers().keys())
 
-        self.settingsHandler.changeContentByKey(["savedDatasetAndObserverSelection", "dataset"], firstDataset)
-        self.settingsHandler.changeContentByKey(["savedDatasetAndObserverSelection", "observer"], firstObserver)
+        if len(datasetList) > 0:
+            firstDataset = list(self.settingsHandler.getAvailableDatasetsAndObservers().keys())[0]
+
+            observerList = self.settingsHandler.getAvailableDatasetsAndObservers()[firstDataset]
+
+            if len(observerList) > 0:
+                firstObserver = self.settingsHandler.getAvailableDatasetsAndObservers()[firstDataset][0]
+
+                self.settingsHandler.changeContentByKey(["savedDatasetAndObserverSelection", "dataset"], firstDataset)
+                self.settingsHandler.changeContentByKey(["savedDatasetAndObserverSelection", "observer"], firstObserver)
 
     def selectedDatasetAndObserverSetting(self):
         dataset, observer = self.settingsHandler.getCurrentDatasetAndObserver()
@@ -737,22 +743,26 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
     def createCompareObserversBox(self):
         currentDataset, currentObserver = self.settingsHandler.getCurrentDatasetAndObserver()
 
-        allObserversList = list(self.settingsHandler.getContentByKeys(["datasets", currentDataset, "observers"]).keys())
-        allObserversList.remove(currentObserver)
 
-        if len(allObserversList) >= 3:
-            self.ui.CompareObserver1Selector.clear()
-            self.ui.CompareObserver1Selector.addItems(allObserversList)
-            self.ui.CompareObserver1Selector.setCurrentText(allObserversList[0])
-            self.comparisonObserver1 = allObserversList[0]
+        observers = self.settingsHandler.getContentByKeys(["datasets", currentDataset, "observers"])
 
-            secondObserverList = allObserversList
-            secondObserverList.remove(self.comparisonObserver1)
+        if observers is not None:
+            allObserversList = list(observers.keys())
+            allObserversList.remove(currentObserver)
 
-            self.ui.CompareObserver2Selector.clear()
-            self.ui.CompareObserver2Selector.addItems(secondObserverList)
-            self.ui.CompareObserver2Selector.setCurrentText(secondObserverList[0])
-            self.comparisonObserver2 = secondObserverList[0]
+            if len(allObserversList) >= 3:
+                self.ui.CompareObserver1Selector.clear()
+                self.ui.CompareObserver1Selector.addItems(allObserversList)
+                self.ui.CompareObserver1Selector.setCurrentText(allObserversList[0])
+                self.comparisonObserver1 = allObserversList[0]
+
+                secondObserverList = allObserversList
+                secondObserverList.remove(self.comparisonObserver1)
+
+                self.ui.CompareObserver2Selector.clear()
+                self.ui.CompareObserver2Selector.addItems(secondObserverList)
+                self.ui.CompareObserver2Selector.setCurrentText(secondObserverList[0])
+                self.comparisonObserver2 = secondObserverList[0]
 
     def onComparisonChangeFirstObserver(self, id=None):
         dataset, observer = self.settingsHandler.getCurrentDatasetAndObserver()
