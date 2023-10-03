@@ -345,7 +345,8 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
         #removes file extension
         inputVolumeName = self.loadedVolumeNode.GetName()
-        labelName = os.path.splitext(inputVolumeName)[0] + labelFileSuffix
+
+        labelName = os.path.splitext(inputVolumeName)[0] + labelFileSuffix + segmentationFileExtension
 
         differentLabelType = self.differentLabelType()
 
@@ -516,7 +517,7 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                                                                           slicer.vtkSegmentation.EXTENT_REFERENCE_GEOMETRY,
                                                                           self.colorTableNode)
 
-        filename = self.loadedSegmentationNode.GetName() + segmentationFileExtension
+        filename = self.loadedSegmentationNode.GetName()
 
         volumeNode = slicer.mrmlScene.GetFirstNodeByClass('vtkMRMLLabelMapVolumeNode')
         slicer.util.exportNode(volumeNode, os.path.join(labelsPath, filename))
@@ -1030,8 +1031,14 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
         for referenceFileName in sorted(filter(lambda x: os.path.isfile(os.path.join(labelsPath, x)),os.listdir(labelsPath))):
             name, extension = os.path.splitext(referenceFileName)
-            if extension == segmentationFileExtension and os.path.isfile(os.path.join(imagesPath, name.split(labelFileSuffix)[0] + imageFileExtension)):
-               references.append(name.split(labelFileSuffix)[0])
+
+            if labelFileSuffix:
+                nameWithoutSuffix = name.split(labelFileSuffix)[0]
+            else:
+                nameWithoutSuffix = name
+
+            if extension == segmentationFileExtension and os.path.isfile(os.path.join(imagesPath, nameWithoutSuffix + imageFileExtension)):
+               references.append(nameWithoutSuffix)
 
         for imageFileName in sorted(filter(lambda x: os.path.isfile(os.path.join(imagesPath, x)),os.listdir(imagesPath))):
             name, extension = os.path.splitext(imageFileName)
@@ -1110,8 +1117,8 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             segmentation = None
 
             # file exists
-            if os.path.isfile(os.path.join(labelsPath, labelName + segmentationFileExtension)):
-                volumeNode = slicer.util.loadVolume(os.path.join(labelsPath, labelName + segmentationFileExtension), {"labelmap": True})
+            if os.path.isfile(os.path.join(labelsPath, labelName)):
+                volumeNode = slicer.util.loadVolume(os.path.join(labelsPath, labelName), {"labelmap": True})
                 segmentationNode = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLSegmentationNode")  # import into new segmentation node
                 segmentationNode.SetName(labelName)
                 segmentationNode.SetReferenceImageGeometryParameterFromVolumeNode(imageNode)
@@ -1141,7 +1148,7 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                 segment.SetColor(r / 255, g / 255, b / 255)  # red
                 displayNode.SetSegmentOpacity3D(key, 1)  # Set opacity of a single segment
 
-                if key == "OTHER" and not os.path.isfile(os.path.join(labelsPath, labelName + segmentationFileExtension)):
+                if key == "OTHER" and not os.path.isfile(os.path.join(labelsPath, labelName)):
                     segmentId = segmentationNode.GetSegmentation().GetSegmentIdBySegmentName(key)
                     segmentArray = slicer.util.arrayFromSegmentBinaryLabelmap(segmentationNode, key, imageNode)
                     segmentArray[slicer.util.arrayFromVolume(
@@ -1152,13 +1159,19 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             converter = SegmentationProcessor()
 
             # converts label if other label is available
-            if differentLabelType is not None and not os.path.isfile(os.path.join(labelsPath, labelName + segmentationFileExtension)):
-                if os.path.isfile(os.path.join(differentLabelType["labelPath"], labelName + segmentationFileExtension)):
-                    label = sitk.ReadImage(os.path.join(differentLabelType["labelPath"], labelName + segmentationFileExtension))
+            if differentLabelType is not None and not os.path.isfile(os.path.join(labelsPath, labelName)):
+                if os.path.isfile(os.path.join(differentLabelType["labelPath"], labelName)):
+                    label = sitk.ReadImage(os.path.join(differentLabelType["labelPath"], labelName))
                     labelArray = sitk.GetArrayFromImage(label)
 
                     if differentLabelType["labelSegmentationMode"] == "ArteryLevelWithLM" and segmentationMode == "SegmentLevel":
                         self.convertLabelType(labelArray, 5, 'LM_BRANCH', imageNode, segmentationNode)
+                        self.convertLabelType(labelArray, 2, 'LAD_PROXIMAL', imageNode, segmentationNode)
+                        self.convertLabelType(labelArray, 4, "RCA_PROXIMAL", imageNode, segmentationNode)
+                        self.convertLabelType(labelArray, 3, "LCX_PROXIMAL", imageNode, segmentationNode)
+
+                    if differentLabelType["labelSegmentationMode"] == "ArteryLevelWithLM" and segmentationMode == "17Segment":
+                        self.convertLabelType(labelArray, 5, 'LM', imageNode, segmentationNode)
                         self.convertLabelType(labelArray, 2, 'LAD_PROXIMAL', imageNode, segmentationNode)
                         self.convertLabelType(labelArray, 4, "RCA_PROXIMAL", imageNode, segmentationNode)
                         self.convertLabelType(labelArray, 3, "LCX_PROXIMAL", imageNode, segmentationNode)
