@@ -751,7 +751,7 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             allObserversList = list(observers.keys())
             allObserversList.remove(currentObserver)
 
-            if len(allObserversList) >= 3:
+            if len(allObserversList) >= 2:
                 self.ui.CompareObserver1Selector.clear()
                 self.ui.CompareObserver1Selector.addItems(allObserversList)
                 self.ui.CompareObserver1Selector.setCurrentText(allObserversList[0])
@@ -909,6 +909,44 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                 observer2Segmentation = processor.convert(observer2SegmentationArray,
                                                                        observer2SegmentationType,
                                                                        "SegmentLevelOnlyArteries")
+
+                self.loadLabelFromArray(observer1SegmentationArray, "Observer1", labelDescription)
+                self.loadLabelFromArray(observer2SegmentationArray, "Observer2", labelDescription)
+
+                labelDescription["MISMATCH"] = {
+                    'value': 100,
+                    'color': "#ff0000"
+                }
+
+                self.createComparisonLabel(observer1Segmentation, observer2Segmentation, labelDescription)
+
+            elif observer1SegmentationType == "17Segment":
+                labelDescription = self.settingsHandler.getContentByKeys(["labels", "17Segment"]).copy()
+
+                elementsToRemove = [
+                    "AORTA_ASC",
+                    "AORTA_DSC",
+                    "AORTA_ARC",
+                    "VALVE_AORTIC",
+                    "VALVE_PULMONIC",
+                    "VALVE_TRICUSPID",
+                    "VALVE_MITRAL",
+                    "PAPILLAR_MUSCLE",
+                    "NFS_CACS",
+                ]
+
+                for element in elementsToRemove:
+                    labelDescription.pop(element)
+
+                processor = SegmentationProcessor()
+
+                observer1Segmentation = processor.convert(observer1SegmentationArray,
+                                                          observer1SegmentationType,
+                                                          "17SegmentOnlyArteries")
+
+                observer2Segmentation = processor.convert(observer2SegmentationArray,
+                                                          observer2SegmentationType,
+                                                          "17SegmentOnlyArteries")
 
                 self.loadLabelFromArray(observer1SegmentationArray, "Observer1", labelDescription)
                 self.loadLabelFromArray(observer2SegmentationArray, "Observer2", labelDescription)

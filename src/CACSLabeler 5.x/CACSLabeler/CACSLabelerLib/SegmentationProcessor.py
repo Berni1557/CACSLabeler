@@ -8,7 +8,7 @@ class SegmentationProcessor():
         self.settingsHandler = SettingsHandler()
         
         # segmentation types in order => Definition in settings json!
-        self.availableSegmentationTypes = ["ArteryLevel", "ArteryLevelWithLM", "SegmentLevelDLNExport", "SegmentLevelOnlyArteries" ,"SegmentLevel"]
+        self.availableSegmentationTypes = ["ArteryLevel", "ArteryLevelWithLM", "SegmentLevelDLNExport", "SegmentLevelOnlyArteries" ,"SegmentLevel", "17SegmentOnlyArteries", "17Segment"]
 
     def isSegmentationTypeLowerLevel(self, firstType, secondType):
         return (self.availableSegmentationTypes.index(firstType) < self.availableSegmentationTypes.index(secondType))
@@ -205,6 +205,8 @@ class SegmentationProcessor():
 
                 segmentation[(segmentation >= 5)] = 0
 
+            elif oldSegmentationType == "17Segment" and newSegmentationType == "17SegmentOnlyArteries":
+                segmentation[segmentation >= self.getLabelValueByName(oldSegmentationType, "AORTA_ASC")] = 0
 
             return segmentation
 
