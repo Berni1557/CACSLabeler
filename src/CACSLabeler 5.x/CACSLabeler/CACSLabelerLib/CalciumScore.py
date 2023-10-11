@@ -118,6 +118,10 @@ class CalciumScore():
              for filename in sorted(filter(lambda x: os.path.isfile(os.path.join(self.filepaths["referenceFolder"], x)),
                                            os.listdir(self.filepaths["referenceFolder"])))]
 
+        # Test code without concurrent!
+        # for filename in sorted(filter(lambda x: os.path.isfile(os.path.join(self.filepaths["referenceFolder"], x)), os.listdir(self.filepaths["referenceFolder"]))):
+        #     self.processImages(filename, sliceStepDataframe)
+
     def processFilename(self, filepath):
         filename = os.path.basename(filepath)
         filenameWithoutExtensions = filename.split(self.fileSuffix)[0]
@@ -137,8 +141,10 @@ class CalciumScore():
         return numpy.where(labeled_array > 0, labeled_array + iterator, 0).astype(connectedElements2d.dtype)
 
     def findLesions(self, reference):
-        # preprocessing label
-        reference[reference == 24] = 35
+        if self.segmentationMode == "SegmentLevel":
+            # preprocessing label
+            # Fixes labels that had NFS_CACS as id 24 and 35!
+            reference[reference == 24] = 35
 
         # Options: ArteryLevel, SegmentLevel, ArteryLevelWithLM, SegmentLevelDLNExport
         if self.segmentationMode == "SegmentLevel" and self.exportType == "ArteryLevel":
@@ -501,7 +507,6 @@ class CalciumScore():
         self.calculateLesions(image, reference, connectedElements, patientID, seriesInstanceUID)
         return self.calculateScore(patientID, seriesInstanceUID)
 
-
     def processImages(self, filename, sliceStepDataframe):
         processedFilename = self.processFilename(os.path.join(self.filepaths["referenceFolder"], filename))
 
@@ -528,15 +533,22 @@ class CalciumScore():
 
             countingSlices = []
 
-            for sliceNumber in range(0, len(imageArray), sliceStep):
+            # using float numbers instead of int!
+            for sliceNumber in numpy.arange(0, len(imageArray), sliceStep):
                 countingSlices.append(sliceNumber)
 
-            self.exportJson[processedFilename["patientID"]][processedFilename["seriesInstanceUID"]]["countingSlices"] = countingSlices
-            result = self.calculateScoreFromImage(imageArray, labelArray, processedFilename["patientID"], processedFilename["seriesInstanceUID"])
+            #for sliceNumber in range(0, len(imageArray), sliceStep):
+            #    countingSlices.append(sliceNumber)
 
-            print("Exported " + processedFilename["patientID"])
-            self.exportList.append(result)
-            self.createExportFilesAndSaveContent(createJson=True)
+            try:
+                self.exportJson[processedFilename["patientID"]][processedFilename["seriesInstanceUID"]]["countingSlices"] = countingSlices
+                result = self.calculateScoreFromImage(imageArray, labelArray, processedFilename["patientID"], processedFilename["seriesInstanceUID"])
+
+                self.exportList.append(result)
+                self.createExportFilesAndSaveContent(createJson=True)
+                print("Exported " + processedFilename["patientID"])
+            except:
+                print("Error", processedFilename["patientID"])
 
     def densityFactor(self, maxDensity):
         if maxDensity >= 130 and maxDensity <= 199:
