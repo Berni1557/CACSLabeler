@@ -356,7 +356,7 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.ui.embeddedSegmentEditorWidget.setSegmentationNode(slicer.util.getNode(labelName))
         self.getSegmentEditorNode("createEditor").SetMasterVolumeIntensityMask(True)
         self.getSegmentEditorNode("createEditor").SetSourceVolumeIntensityMaskRange(float(lowerThresholdValue), 10000.0)
-        
+
         #disable threshold button
         self.ui.thresholdVolumeButton.enabled = False
 
@@ -791,14 +791,42 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
         availableObservers = list(self.settingsHandler.getContentByKeys(["datasets", dataset, "observers"]).keys())
         availableObservers.remove(observer)
-        availableObservers.remove( self.comparisonObserver1)
+        availableObservers.remove(self.comparisonObserver1)
 
         self.comparisonObserver2 = availableObservers[id]
 
+    def getListOfAvailableLabels(self, dataset, observer):
+        path = self.settingsHandler.getContentByKeys(["datasets", dataset, "observers", observer, "labelsPath"])
+        labelFileSuffix = self.settingsHandler.getContentByKeys(["datasets", dataset, "observers", observer, "labelFileSuffix"])
+
+        returnList = []
+
+        for file in os.listdir(path):
+            filenameWithoutExtensions = file.split(labelFileSuffix + segmentationFileExtension)[0]
+            returnList.append(filenameWithoutExtensions)
+
+        return returnList
+
     def onComparisonSelectNextImage(self):
         slicer.mrmlScene.Clear()
-        imageList = self.getImageList(self.selectedDatasetAndObserverSetting())
-        self.loadImageToCompare(imageList["unlabeledImages"][0] + imageFileExtension)
+
+        datasetAndObserver = self.selectedDatasetAndObserverSetting()
+        imagesPath, labelsPath, segmentationMode, sliceStepFile, exportFolder, dataset, observer, labelFileSuffix = datasetAndObserver
+
+        #image list of observer comparing
+        imageList = self.getImageList(datasetAndObserver)
+
+        #finding common files between observer comparing and other 2 observers!
+        filesObserver1 = self.getListOfAvailableLabels(dataset, self.comparisonObserver1)
+        filesObserver2 = self.getListOfAvailableLabels(dataset, self.comparisonObserver2)
+
+        intersectionBetweenObservers = numpy.intersect1d(filesObserver1, filesObserver2)
+        intersectionUnlabeled = numpy.intersect1d(intersectionBetweenObservers, imageList["unlabeledImages"])
+
+        if len(intersectionUnlabeled) > 0:
+            self.loadImageToCompare(intersectionUnlabeled[0] + imageFileExtension)
+        else:
+            print("No common labels found! Check if labels exists for both observers that are being compared! Check if comparing observer does not contain the same images e.g. because of a filter.")
 
     def onComparisonSelectImageToLoad(self):
         dataset = self.settingsHandler.getContentByKeys(["savedDatasetAndObserverSelection", "dataset"])
