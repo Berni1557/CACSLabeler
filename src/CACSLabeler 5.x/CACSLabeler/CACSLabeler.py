@@ -356,6 +356,9 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.ui.embeddedSegmentEditorWidget.setSegmentationNode(slicer.util.getNode(labelName))
         self.getSegmentEditorNode("createEditor").SetMasterVolumeIntensityMask(True)
         self.getSegmentEditorNode("createEditor").SetSourceVolumeIntensityMaskRange(float(lowerThresholdValue), 10000.0)
+        
+        #disable threshold button
+        self.ui.thresholdVolumeButton.enabled = False
 
     def differentLabelType(self):
         imagesPath, labelsPath, segmentationMode, sliceStepFile, exportFolder, dataset, observer, labelFileSuffix = self.selectedDatasetAndObserverSetting()
@@ -524,6 +527,7 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
         slicer.mrmlScene.RemoveNode(labelmapVolumeNode)
         self.progressBarUpdate()
+        self.clearCurrentViewedNode(False)
         print(f"Saved {filename}")
 
     def onCompareObserverComboBoxChange(self, item=None):
