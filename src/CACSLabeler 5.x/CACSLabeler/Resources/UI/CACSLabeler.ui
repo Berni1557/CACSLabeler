@@ -106,6 +106,47 @@
         </item>
        </layout>
       </item>
+      <item row="4" column="0" colspan="2">
+       <layout class="QHBoxLayout" name="layoutProgressFilter">
+        <property name="spacing">
+         <number>40</number>
+        </property>
+        <item>
+         <widget class="QLabel" name="progressBarLabelFilter">
+          <property name="text">
+           <string>Filter:          </string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLabel" name="counterProgressFilter">
+          <property name="text">
+           <string>? / ?</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QProgressBar" name="progressBarFilter">
+          <property name="font">
+           <font>
+            <weight>50</weight>
+            <bold>false</bold>
+            <kerning>true</kerning>
+           </font>
+          </property>
+          <property name="value">
+           <number>24</number>
+          </property>
+          <property name="textVisible">
+           <bool>true</bool>
+          </property>
+          <property name="format">
+           <string>%p%</string>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
      </layout>
     </widget>
    </item>
@@ -168,6 +209,19 @@
               </property>
              </widget>
             </item>
+            <item>
+             <widget class="QPushButton" name="loadFilteredDataset">
+              <property name="enabled">
+               <bool>true</bool>
+              </property>
+              <property name="styleSheet">
+               <string notr="true"/>
+              </property>
+              <property name="text">
+               <string>Load filtered dataset</string>
+              </property>
+             </widget>
+            </item>
            </layout>
           </item>
           <item>
@@ -184,11 +238,17 @@
             </item>
             <item>
              <widget class="QLineEdit" name="selectedVolumeTextField">
+              <property name="layoutDirection">
+               <enum>Qt::LeftToRight</enum>
+              </property>
               <property name="autoFillBackground">
                <bool>false</bool>
               </property>
+              <property name="styleSheet">
+               <string notr="true"/>
+              </property>
               <property name="text">
-               <string/>
+               <string>sdfsdfadsf</string>
               </property>
               <property name="maxLength">
                <number>100</number>
@@ -197,7 +257,7 @@
                <bool>true</bool>
               </property>
               <property name="cursorPosition">
-               <number>0</number>
+               <number>10</number>
               </property>
               <property name="dragEnabled">
                <bool>false</bool>
@@ -226,6 +286,9 @@
               <property name="enabled">
                <bool>false</bool>
               </property>
+              <property name="styleSheet">
+               <string notr="true">color: red;</string>
+              </property>
               <property name="frame">
                <bool>true</bool>
               </property>
@@ -235,6 +298,16 @@
              </widget>
             </item>
            </layout>
+          </item>
+          <item>
+           <widget class="QLineEdit" name="labelsToBeChanged">
+            <property name="styleSheet">
+             <string notr="true">color: red;</string>
+            </property>
+            <property name="readOnly">
+             <bool>true</bool>
+            </property>
+           </widget>
           </item>
           <item>
            <widget class="QPushButton" name="thresholdVolumeButton">
@@ -543,19 +616,6 @@
       </layout>
      </widget>
     </widget>
-   </item>
-   <item>
-    <spacer name="verticalSpacer_2">
-     <property name="orientation">
-      <enum>Qt::Vertical</enum>
-     </property>
-     <property name="sizeHint" stdset="0">
-      <size>
-       <width>20</width>
-       <height>40</height>
-      </size>
-     </property>
-    </spacer>
    </item>
    <item>
     <widget class="ctkCollapsibleButton" name="exportCollapsibleButton">

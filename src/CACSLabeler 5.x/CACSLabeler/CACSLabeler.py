@@ -108,6 +108,102 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.createUI()
         self.createColorTable()
 
+    def checkIfLoadFilterExists(self):
+        self.ui.progressBarLabelFilter.setHidden(True)
+        self.ui.counterProgressFilter.setHidden(True)
+        self.ui.progressBarFilter.setHidden(True)
+
+        currentDataset, currentObserver = self.settingsHandler.getCurrentDatasetAndObserver()
+        currentSettings = self.settingsHandler.getContentByKeys(["datasets", currentDataset, "observers", currentObserver])
+
+        if 'loadFilter' in currentSettings:
+            if os.path.isfile(currentSettings["loadFilter"]):
+                self.ui.loadFilteredDataset.enabled = True
+
+                self.ui.progressBarLabelFilter.setHidden(False)
+                self.ui.counterProgressFilter.setHidden(False)
+                self.ui.progressBarFilter.setHidden(False)
+
+                return currentSettings["loadFilter"]
+            else:
+                self.ui.loadFilteredDataset.enabled = False
+                return None
+        else:
+            self.ui.loadFilteredDataset.enabled = False
+            return None
+
+    def changeProgressFilter(self):
+        filter = self.checkIfLoadFilterExists()
+        pandas = importlib.import_module('pandas')
+        csv = pandas.read_csv(filter)
+
+        max = len(csv)
+        currentValue = (csv['Done'] == 1).sum()
+
+        self.ui.progressBarFilter.minimum = 0
+        self.ui.progressBarFilter.maximum = max
+        self.ui.progressBarFilter.value = currentValue
+
+        self.ui.counterProgressFilter.text = str(currentValue) + " / " + str(max)
+
+    def onLoadFilteredDataset(self):
+        filter = self.checkIfLoadFilterExists()
+        currentDataset, currentObserver = self.settingsHandler.getCurrentDatasetAndObserver()
+
+        pandas = importlib.import_module('pandas')
+        csv = pandas.read_csv(filter)
+
+        # Find the index of the first row where 'Done' column equals 0
+        index = csv.index[csv['Done'] == 0].tolist()[0]
+
+        # Select the value of the 'Name' column in the first row where 'Done' equals 0
+        filename = csv.loc[index, 'Filename']
+
+        filename = filename.split("-label-lesion.nrrd")[0] + ".mhd"
+
+        imagesPath = self.settingsHandler.getContentByKeys(["datasets", currentDataset, "imagesPath"])
+
+        self.loadVolumeToSlice(filename, imagesPath)
+        self.onThresholdVolume()
+        self.customFunctionLoader()
+
+    def customFunctionLoader(self):
+        volumeNode = slicer.util.getNode(self.loadedVolumeNode.GetName())
+
+        currentDataset, currentObserver = self.settingsHandler.getCurrentDatasetAndObserver()
+        referencePath = self.settingsHandler.getContentByKeys(["datasets", currentDataset, "observers", currentObserver, "labelsPath"])
+
+        filename = self.loadedVolumeNode.GetName().split(".mhd")[0] + self.settingsHandler.getContentByKeys(["datasets", currentDataset, "observers", currentObserver, "labelFileSuffix"]) + ".nrrd"
+
+        referenceITK = sitk.ReadImage(os.path.join(referencePath, filename))
+        referenceArray = sitk.GetArrayViewFromImage(referenceITK)
+
+        # Get the segmentation node (assuming it's the only one loaded)
+        segmentationNode = slicer.mrmlScene.GetFirstNodeByClass('vtkMRMLSegmentationNode')
+
+        voxels = slicer.util.arrayFromVolume(volumeNode)
+
+        # Create a new segment
+        segment = slicer.vtkSegment()
+        segment.SetName('TemporarySegment')
+        segment.SetColor(1.0, 0.0, 0.0)  # RGB color
+
+        # Add the segment to the segmentation node
+        segmentation = segmentationNode.GetSegmentation()
+        segmentation.AddSegment(segment)
+
+        # Request an update of the display
+        segmentationNode.Modified()
+
+        segmentId = segmentationNode.GetSegmentation().GetSegmentIdBySegmentName('TemporarySegment')
+
+        segmentArray = slicer.util.arrayFromSegmentBinaryLabelmap(segmentationNode, segmentId, volumeNode)
+        segmentArray[voxels >= 130] = 1  # create segment by simple thresholding of an image
+        segmentArray[referenceArray > 0] = 0  # create segment by simple thresholding of an image
+
+        slicer.util.updateSegmentBinaryLabelmapFromArray(segmentArray, segmentationNode, segmentId, volumeNode)
+
+        self.customThreshold = True
 
     def onTabChange(self, index):
         self.settingsHandler.changeContentByKey(["tabOpen"], index)
@@ -205,6 +301,8 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.ui.comparisonSaveButton.connect('clicked(bool)', self.onSaveComparisonLabel)
         self.ui.tabWidget.currentChanged.connect(self.onTabChange)
 
+        self.ui.loadFilteredDataset.connect('clicked(bool)', self.onLoadFilteredDataset)
+
     def createMessagePopup(self, message):
         slicer.util.infoDisplay(message)
 
@@ -257,6 +355,9 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             self.observerComboBoxEventBlocked = False
             self.compareObserverComboBoxEventBlocked = False
 
+        if self.checkIfLoadFilterExists() != None:
+            self.changeProgressFilter()
+
     def onChangeObserver(self, item=None):
         self.clearCurrentViewedNode(True)
 
@@ -278,6 +379,9 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             self.datasetComboBoxEventBlocked = False
             self.observerComboBoxEventBlocked = False
             self.compareObserverComboBoxEventBlocked = False
+
+        if self.checkIfLoadFilterExists() !=  None:
+            self.changeProgressFilter()
 
     def loadVolumeToSlice(self, filename, imagesPath):
         self.setViewOneWindow()
@@ -355,7 +459,7 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
         self.ui.embeddedSegmentEditorWidget.setSegmentationNode(slicer.util.getNode(labelName))
         self.getSegmentEditorNode("createEditor").SetMasterVolumeIntensityMask(True)
-        self.getSegmentEditorNode("createEditor").SetSourceVolumeIntensityMaskRange(float(lowerThresholdValue), 10000.0)
+        self.getSegmentEditorNode("createEditor").SetSourceVolumeIntensityMaskRange(float(lowerThresholdValue), 100000.0)
 
         #disable threshold button
         self.ui.thresholdVolumeButton.enabled = False
@@ -404,6 +508,9 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.ui.availableLabelType.cursorPosition = 0
         self.ui.availableLabel.enabled = False
         self.loadedVolumeNode = None
+
+        self.ui.labelsToBeChanged.text = ""
+        self.ui.labelsToBeChanged.cursorPosition = 0
 
     def progressBarUpdate(self):
         images = self.getImageList(self.selectedDatasetAndObserverSetting())
@@ -509,26 +616,65 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
             self.colorTableNode.SetColor(labelValue, segmentName, r, g, b, a)
 
     def onSaveButton(self):
-        imagesPath, labelsPath, segmentationMode, sliceStepFile, exportFolder, dataset, observer, labelFileSuffix = self.selectedDatasetAndObserverSetting()
+        try:
+            imagesPath, labelsPath, segmentationMode, sliceStepFile, exportFolder, dataset, observer, labelFileSuffix = self.selectedDatasetAndObserverSetting()
 
-        labelmapVolumeNode = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLLabelMapVolumeNode")
-        labelmapVolumeNode.SetName("temporaryExportLabel")
-        referenceVolumeNode = None  # it could be set to the master volume
-        segmentIds = self.loadedSegmentationNode.GetSegmentation().GetSegmentIDs()  # export all segments
-        slicer.modules.segmentations.logic().ExportSegmentsToLabelmapNode(self.loadedSegmentationNode, segmentIds,
-                                                                          labelmapVolumeNode, referenceVolumeNode,
-                                                                          slicer.vtkSegmentation.EXTENT_REFERENCE_GEOMETRY,
-                                                                          self.colorTableNode)
+            if self.customThreshold:
+                # Get the segmentation node (assuming it's the only one loaded)
+                segmentationNode = slicer.mrmlScene.GetFirstNodeByClass('vtkMRMLSegmentationNode')
+                volumeNode = slicer.util.getNode(self.loadedVolumeNode.GetName())
+                segmentId = segmentationNode.GetSegmentation().GetSegmentIdBySegmentName("TemporarySegment")
+                segmentArray = slicer.util.arrayFromSegmentBinaryLabelmap(segmentationNode, "TemporarySegment", volumeNode)
 
-        filename = self.loadedSegmentationNode.GetName()
+                if len(numpy.unique(segmentArray)) == 1:
+                    segmentation = segmentationNode.GetSegmentation()
+                    # Find the segment ID by segment name
+                    segmentId = segmentation.GetSegmentIdBySegmentName('TemporarySegment')
 
-        volumeNode = slicer.mrmlScene.GetFirstNodeByClass('vtkMRMLLabelMapVolumeNode')
-        slicer.util.exportNode(volumeNode, os.path.join(labelsPath, filename))
+                    # Check if the segment exists
+                    if segmentId:
+                        # Remove the segment by its ID
+                        segmentation.RemoveSegment(segmentId)
+                else:
+                    print("Not all mismatched regions have been corrected! Check your segmentation for remaining red areas and try again!")
+                    slicer.util.infoDisplay("Not all mismatched regions have been corrected!\nCheck your segmentation for remaining red areas and try again!")
+                    return
 
-        slicer.mrmlScene.RemoveNode(labelmapVolumeNode)
-        self.progressBarUpdate()
-        self.clearCurrentViewedNode(False)
-        print(f"Saved {filename}")
+
+            labelmapVolumeNode = slicer.mrmlScene.AddNewNodeByClass("vtkMRMLLabelMapVolumeNode")
+            labelmapVolumeNode.SetName("temporaryExportLabel")
+            referenceVolumeNode = None  # it could be set to the master volume
+            segmentIds = self.loadedSegmentationNode.GetSegmentation().GetSegmentIDs()  # export all segments
+            slicer.modules.segmentations.logic().ExportSegmentsToLabelmapNode(self.loadedSegmentationNode, segmentIds,
+                                                                              labelmapVolumeNode, referenceVolumeNode,
+                                                                              slicer.vtkSegmentation.EXTENT_REFERENCE_GEOMETRY,
+                                                                              self.colorTableNode)
+
+            filename = self.loadedSegmentationNode.GetName()
+
+            volumeNode = slicer.mrmlScene.GetFirstNodeByClass('vtkMRMLLabelMapVolumeNode')
+            slicer.util.exportNode(volumeNode, os.path.join(labelsPath, filename))
+
+            slicer.mrmlScene.RemoveNode(labelmapVolumeNode)
+            self.progressBarUpdate()
+            self.clearCurrentViewedNode(False)
+            print(f"Saved {filename} {labelsPath}")
+
+            if self.customThreshold:
+                self.customThreshold = False
+                pandas = importlib.import_module('pandas')
+                filter = self.checkIfLoadFilterExists()
+                csv = pandas.read_csv(filter)
+                # Change the value in the 'done' column where 'id' is 1
+                csv.loc[csv['Filename'] == filename, 'Done'] = 1
+                csv.to_csv(filter, index=False)
+
+                self.changeProgressFilter()
+
+        except Exception as error:
+            # handle the exception
+            print("An exception occurred:", error)
+
 
     def onCompareObserverComboBoxChange(self, item=None):
         if not self.compareObserverComboBoxEventBlocked:
@@ -738,7 +884,9 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         layoutManager = slicer.app.layoutManager()
         layoutManager.layoutLogic().GetLayoutNode().AddLayoutDescription(threeViewLayoutId, threeViewLayout)
 
-        layoutManager.setLayout(threeViewLayoutId)
+        #set three layers
+        #layoutManager.setLayout(threeViewLayoutId)
+        layoutManager.setLayout(6) # red layer
 
         nodes = slicer.util.getNodes("vtkMRMLSliceNode*")
 
@@ -1234,6 +1382,12 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                     label = sitk.ReadImage(os.path.join(differentLabelType["labelPath"], labelName))
                     labelArray = sitk.GetArrayFromImage(label)
 
+                    if differentLabelType["labelSegmentationMode"] == segmentationMode:
+                        for key in self.settingsHandler.getContentByKeys(["labels", segmentationMode]):
+
+                            if key != "OTHER":
+                                self.convertLabelType(labelArray, converter.getLabelValueByName(segmentationMode, key), key, imageNode, segmentationNode)
+
                     if differentLabelType["labelSegmentationMode"] == "ArteryLevelWithLM" and segmentationMode == "SegmentLevel":
                         self.convertLabelType(labelArray, 5, 'LM_BRANCH', imageNode, segmentationNode)
                         self.convertLabelType(labelArray, 2, 'LAD_PROXIMAL', imageNode, segmentationNode)
@@ -1330,7 +1484,8 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                         if converter.getLabelValueByName(oldType, 'RCA_DISTAL') in elements:
                             Text = Text + " RCA_DISTAL "
 
-                        print(inputVolumeName, " | ", Text)
+                        self.ui.labelsToBeChanged.text = Text
+                        self.ui.labelsToBeChanged.cursorPosition = 0
 
     def convertLabelType(self, oldLabelArray, oldArrayId, segmentIdName, imageNode, segmentationNode):
         segmentId = segmentationNode.GetSegmentation().GetSegmentIdBySegmentName(segmentIdName)
