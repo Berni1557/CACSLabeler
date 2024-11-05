@@ -108,6 +108,8 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
         self.createUI()
         self.createColorTable()
 
+        self.customThreshold = False
+
     def checkIfLoadFilterExists(self):
         self.ui.progressBarLabelFilter.setHidden(True)
         self.ui.counterProgressFilter.setHidden(True)
@@ -1142,10 +1144,37 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
                 #TODO: Implement for all Segmentation Types
                 print("Function only implemented for SegmentLevel")
         else:
-            print("Segmentation Types not matching!")
+            if (observer1SegmentationType == "17Segment" and observer2SegmentationType == "ArteryLevelWithLM") or (observer1SegmentationType == "ArteryLevelWithLM" and observer2SegmentationType == "17Segment"):
+
+                if observer1SegmentationType == "17Segment":
+                    print("observer1")
+                    processor = SegmentationProcessor()
+                    observer1SegmentationArray = processor.convert(observer1SegmentationArray,
+                                                                   observer1SegmentationType, observer2SegmentationType)
+                elif observer2SegmentationType == "17Segment":
+                    print("observer2")
+                    processor = SegmentationProcessor()
+                    observer2SegmentationArray = processor.convert(observer2SegmentationArray,
+                                                                   observer2SegmentationType, observer1SegmentationType)
+
+                labelDescription = self.settingsHandler.getContentByKeys(["labels", "ArteryLevelWithLM"]).copy()
+
+                self.loadLabelFromArray(observer1SegmentationArray, "Observer1", labelDescription)
+                self.loadLabelFromArray(observer2SegmentationArray, "Observer2", labelDescription)
+
+                labelDescription["MISMATCH"] = {
+                     'value': 100,
+                      'color': "#ff0000"
+                }
+
+                self.createComparisonLabel(observer1SegmentationArray, observer2SegmentationArray, labelDescription)
 
     def createComparisonLabel(self, observer1Segmentation, observer2Segmentation, labelDescription):
         comparisonSegmentation = numpy.copy(observer1Segmentation)
+
+        # removes other label
+        observer1Segmentation[observer1Segmentation == 1] = 0
+        observer2Segmentation[observer2Segmentation == 1] = 0
 
         #finding differences using binary label
         binaryLabel = numpy.where(numpy.equal(observer1Segmentation, observer2Segmentation) == True, 2, 1)
@@ -1186,7 +1215,7 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
             if key == "OTHER":
                 segmentArray[slicer.util.arrayFromVolume(imageNode) >= lowerThresholdValue] = 1
-                segmentArray[comparisonSegmentation > self.settingsHandler.getContentByKeys(["labels", "SegmentLevel", key, "value"])] = 0
+                segmentArray[comparisonSegmentation > 1] = 0
 
             segmentArray[comparisonSegmentation == value] = 1  # create segment by simple thresholding of an image
             slicer.util.updateSegmentBinaryLabelmapFromArray(segmentArray, segmentationNode, segmentId, imageNode)

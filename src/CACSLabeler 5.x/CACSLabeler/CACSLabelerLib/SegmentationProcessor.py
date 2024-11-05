@@ -208,6 +208,41 @@ class SegmentationProcessor():
             elif oldSegmentationType == "17Segment" and newSegmentationType == "17SegmentOnlyArteries":
                 segmentation[segmentation >= self.getLabelValueByName(oldSegmentationType, "AORTA_ASC")] = 0
 
+            elif oldSegmentationType == "17Segment" and newSegmentationType == "ArteryLevelWithLM":
+                #removed all other labels
+                segmentation[segmentation >= self.getLabelValueByName(oldSegmentationType, "AORTA_ASC")] = self.getLabelValueByName(newSegmentationType, "OTHER")
+
+                segmentation = segmentation + 100
+                segmentation[segmentation == 100] = 0
+                segmentation[segmentation == 101] = 1
+
+                segmentation[segmentation == self.getLabelValueByName(oldSegmentationType, "RCA_PROXIMAL") + 100] = self.getLabelValueByName(newSegmentationType, "RCA")
+                segmentation[segmentation == self.getLabelValueByName(oldSegmentationType, "RCA_SIDE_PROXIMAL") + 100] = self.getLabelValueByName(newSegmentationType, "RCA")
+                segmentation[segmentation == self.getLabelValueByName(oldSegmentationType, "RCA_MID") + 100] = self.getLabelValueByName(newSegmentationType, "RCA")
+                segmentation[segmentation == self.getLabelValueByName(oldSegmentationType, "RCA_SIDE_MID") + 100] = self.getLabelValueByName(newSegmentationType, "RCA")
+                segmentation[segmentation == self.getLabelValueByName(oldSegmentationType, "RCA_DISTAL") + 100] = self.getLabelValueByName(newSegmentationType, "RCA")
+                segmentation[segmentation == self.getLabelValueByName(oldSegmentationType, "R_PDA_4a") + 100] = self.getLabelValueByName(newSegmentationType, "RCA")
+                segmentation[segmentation == self.getLabelValueByName(oldSegmentationType, "R_PLB_4b") + 100] = self.getLabelValueByName(newSegmentationType, "RCA")
+
+                segmentation[segmentation == self.getLabelValueByName(oldSegmentationType, "LM") + 100] = self.getLabelValueByName(newSegmentationType, "LM")
+
+                segmentation[segmentation == self.getLabelValueByName(oldSegmentationType, "LAD_PROXIMAL") + 100] = self.getLabelValueByName(newSegmentationType, "LAD")
+                segmentation[segmentation == self.getLabelValueByName(oldSegmentationType, "LAD_SIDE_D1") + 100] = self.getLabelValueByName(newSegmentationType, "LAD")
+                segmentation[segmentation == self.getLabelValueByName(oldSegmentationType, "LAD_MID") + 100] = self.getLabelValueByName(newSegmentationType, "LAD")
+                segmentation[segmentation == self.getLabelValueByName(oldSegmentationType, "LAD_SIDE_D2") + 100] = self.getLabelValueByName(newSegmentationType, "LAD")
+                segmentation[segmentation == self.getLabelValueByName(oldSegmentationType, "LAD_DISTAL") + 100] = self.getLabelValueByName(newSegmentationType, "LAD")
+                segmentation[segmentation == self.getLabelValueByName(oldSegmentationType, "RIM") + 100] = self.getLabelValueByName(newSegmentationType, "LAD")
+
+                segmentation[segmentation == self.getLabelValueByName(oldSegmentationType, "LCX_PROXIMAL") + 100] = self.getLabelValueByName(newSegmentationType, "LCX")
+                segmentation[segmentation == self.getLabelValueByName(oldSegmentationType, "LCX_SIDE_OM1") + 100] = self.getLabelValueByName(newSegmentationType, "LCX")
+                segmentation[segmentation == self.getLabelValueByName(oldSegmentationType, "LCX_MID") + 100] = self.getLabelValueByName(newSegmentationType, "LCX")
+                segmentation[segmentation == self.getLabelValueByName(oldSegmentationType, "LCX_SIDE_OM2") + 100] = self.getLabelValueByName(newSegmentationType, "LCX")
+                segmentation[segmentation == self.getLabelValueByName(oldSegmentationType, "LCX_DISTAL") + 100] = self.getLabelValueByName(newSegmentationType, "LCX")
+                segmentation[segmentation == self.getLabelValueByName(oldSegmentationType, "L_PDA_16a") + 100] = self.getLabelValueByName(newSegmentationType, "LCX")
+                segmentation[segmentation == self.getLabelValueByName(oldSegmentationType, "L_PLB_16b") + 100] = self.getLabelValueByName(newSegmentationType, "LCX")
+
+                print(numpy.unique(segmentation))
+
             return segmentation
 
         elif oldSegmentationType == newSegmentationType:
