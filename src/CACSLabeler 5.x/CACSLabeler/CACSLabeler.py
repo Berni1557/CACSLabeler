@@ -1140,6 +1140,19 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
                 self.createComparisonLabel(observer1Segmentation, observer2Segmentation, labelDescription)
 
+            elif observer1SegmentationType == "ArteryLevelWithLM":
+                labelDescription = self.settingsHandler.getContentByKeys(["labels", "ArteryLevelWithLM"]).copy()
+
+                self.loadLabelFromArray(observer1SegmentationArray, "Observer1", labelDescription)
+                self.loadLabelFromArray(observer2SegmentationArray, "Observer2", labelDescription)
+
+                labelDescription["MISMATCH"] = {
+                    'value': 100,
+                    'color': "#ff0000"
+                }
+
+                self.createComparisonLabel(observer1SegmentationArray, observer2SegmentationArray, labelDescription)
+
             else:
                 #TODO: Implement for all Segmentation Types
                 print("Function only implemented for SegmentLevel")
