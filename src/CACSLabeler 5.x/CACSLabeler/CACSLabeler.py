@@ -1182,6 +1182,33 @@ class CACSLabelerWidget(ScriptedLoadableModuleWidget, VTKObservationMixin):
 
                 self.createComparisonLabel(observer1SegmentationArray, observer2SegmentationArray, labelDescription)
 
+            elif (observer1SegmentationType == "ArteryLevelWithLM" and observer2SegmentationType == "SegmentLevel") or (observer1SegmentationType == "SegmentLevel" and observer2SegmentationType == "ArteryLevelWithLM"):
+                if observer1SegmentationType == "SegmentLevel":
+                    print("observer1")
+                    processor = SegmentationProcessor()
+                    observer1SegmentationArray = processor.convert(observer1SegmentationArray,
+                                                                   observer1SegmentationType, observer2SegmentationType)
+                elif observer2SegmentationType == "SegmentLevel":
+                    print("observer2")
+                    processor = SegmentationProcessor()
+                    observer2SegmentationArray = processor.convert(observer2SegmentationArray,
+                                                                   observer2SegmentationType, observer1SegmentationType)
+
+                labelDescription = self.settingsHandler.getContentByKeys(["labels", "ArteryLevelWithLM"]).copy()
+
+                self.loadLabelFromArray(observer1SegmentationArray, "Observer1", labelDescription)
+                self.loadLabelFromArray(observer2SegmentationArray, "Observer2", labelDescription)
+
+                labelDescription["MISMATCH"] = {
+                    'value': 100,
+                    'color': "#ff0000"
+                }
+
+                self.createComparisonLabel(observer1SegmentationArray, observer2SegmentationArray, labelDescription)
+
+            else:
+                print("Error - Changing segmentation Type not possible!")
+
     def createComparisonLabel(self, observer1Segmentation, observer2Segmentation, labelDescription):
         comparisonSegmentation = numpy.copy(observer1Segmentation)
 
