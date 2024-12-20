@@ -113,14 +113,14 @@ class CalciumScore():
     def exportFromReferenceFolder(self):
         sliceStepDataframe = self.pandas.read_csv(self.filepaths["sliceStepFile"], dtype={'patient_id': 'string'})
 
-        with concurrent.futures.ThreadPoolExecutor() as executor:
-            [executor.submit(self.processImages, filename, sliceStepDataframe)
-             for filename in sorted(filter(lambda x: os.path.isfile(os.path.join(self.filepaths["referenceFolder"], x)),
-                                           os.listdir(self.filepaths["referenceFolder"])))]
+        # with concurrent.futures.ThreadPoolExecutor() as executor:
+        #     [executor.submit(self.processImages, filename, sliceStepDataframe)
+        #      for filename in sorted(filter(lambda x: os.path.isfile(os.path.join(self.filepaths["referenceFolder"], x)),
+        #                                    os.listdir(self.filepaths["referenceFolder"])))]
 
         # Test code without concurrent!
-        # for filename in sorted(filter(lambda x: os.path.isfile(os.path.join(self.filepaths["referenceFolder"], x)), os.listdir(self.filepaths["referenceFolder"]))):
-        #     self.processImages(filename, sliceStepDataframe)
+        for filename in sorted(filter(lambda x: os.path.isfile(os.path.join(self.filepaths["referenceFolder"], x)), os.listdir(self.filepaths["referenceFolder"]))):
+            self.processImages(filename, sliceStepDataframe)
 
     def processFilename(self, filepath):
         filename = os.path.basename(filepath)
@@ -520,10 +520,12 @@ class CalciumScore():
 
             # Read the spacing along each dimension
             spacing = numpy.array(list(reversed(image.GetSpacing())))
-            sliceThickness = sliceStepDataframe.loc[(sliceStepDataframe['patient_id'] == processedFilename["patientID"])].slice_thickness.item()
-            sliceStep = sliceStepDataframe.loc[(sliceStepDataframe['patient_id'] == processedFilename["patientID"])].slice_step.item()
+            sliceThickness = sliceStepDataframe.loc[(sliceStepDataframe['series_instance_uid'] == processedFilename["seriesInstanceUID"])].slice_thickness.item()
+            sliceStep = sliceStepDataframe.loc[(sliceStepDataframe['series_instance_uid'] == processedFilename["seriesInstanceUID"])].slice_step.item()
 
-            self.exportJson[processedFilename["patientID"]] = {}
+            if processedFilename["patientID"] not in self.exportJson:
+                self.exportJson[processedFilename["patientID"]] = {}
+
             self.exportJson[processedFilename["patientID"]][processedFilename["seriesInstanceUID"]] = {}
             self.exportJson[processedFilename["patientID"]][processedFilename["seriesInstanceUID"]]["sliceRatio"] = sliceThickness / 3.0
             self.exportJson[processedFilename["patientID"]][processedFilename["seriesInstanceUID"]]["voxelLength"] = spacing[1]  # voxel length in mm
