@@ -111,7 +111,7 @@ class CalciumScore():
                 json.dump(dict(self.exportJson), file, ensure_ascii=False, indent=4, cls=NumpyJsonEncoder)
 
     def exportFromReferenceFolder(self):
-        sliceStepDataframe = self.pandas.read_csv(self.filepaths["sliceStepFile"], dtype={'patient_id': 'string'})
+        sliceStepDataframe = self.pandas.read_csv(self.filepaths["sliceStepFile"], dtype={'patient_id': 'string', 'series_instance_uid': 'string'})
 
         # with concurrent.futures.ThreadPoolExecutor() as executor:
         #     [executor.submit(self.processImages, filename, sliceStepDataframe)
