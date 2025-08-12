@@ -113,14 +113,14 @@ class CalciumScore():
     def exportFromReferenceFolder(self):
         sliceStepDataframe = self.pandas.read_csv(self.filepaths["sliceStepFile"], dtype={'patient_id': 'string', 'series_instance_uid': 'string'})
 
-        # with concurrent.futures.ThreadPoolExecutor() as executor:
-        #     [executor.submit(self.processImages, filename, sliceStepDataframe)
-        #      for filename in sorted(filter(lambda x: os.path.isfile(os.path.join(self.filepaths["referenceFolder"], x)),
-        #                                    os.listdir(self.filepaths["referenceFolder"])))]
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+             [executor.submit(self.processImages, filename, sliceStepDataframe)
+              for filename in sorted(filter(lambda x: os.path.isfile(os.path.join(self.filepaths["referenceFolder"], x)),
+                                            os.listdir(self.filepaths["referenceFolder"])))]
 
         # Test code without concurrent!
-        for filename in sorted(filter(lambda x: os.path.isfile(os.path.join(self.filepaths["referenceFolder"], x)), os.listdir(self.filepaths["referenceFolder"]))):
-            self.processImages(filename, sliceStepDataframe)
+        #for filename in sorted(filter(lambda x: os.path.isfile(os.path.join(self.filepaths["referenceFolder"], x)), os.listdir(self.filepaths["referenceFolder"]))):
+        #    self.processImages(filename, sliceStepDataframe)
 
     def processFilename(self, filepath):
         filename = os.path.basename(filepath)
@@ -452,7 +452,41 @@ class CalciumScore():
 
         return score
 
+    def volumeScore(self, voxelLength, voxelCount, sliceThickness, ratio):
+        score = 0.0
+
+        if (voxelLength is not None) and (voxelCount is not None) and (sliceThickness is not None) and (ratio is not None):
+            voxelArea = voxelLength * voxelLength
+            lesionArea = voxelArea * voxelCount
+
+            score = lesionArea * sliceThickness * ratio
+
+        return score
+
+    def addPrefixToKey(self, object, prefix):
+        newObject = {}
+
+        for key in object:
+            if key != "PatientID" and key != "SeriesInstanceUID":
+                newObject[prefix + key] = object[key]
+            else:
+                newObject[key] = object[key]
+
+        return newObject
+
     def calculateScore(self, patientID, seriesInstanceUID):
+        agatstonScore = self.addPrefixToKey(self.calculateVariationsOfCalciumScore(patientID, seriesInstanceUID, "Agatston"), "Agatston_")
+        volumeScore = self.addPrefixToKey(self.calculateVariationsOfCalciumScore(patientID, seriesInstanceUID, "Volume"), "Volume_")
+
+        combined = agatstonScore
+
+        for key in volumeScore:
+            if key != "PatientID" and key != "SeriesInstanceUID":
+                combined[key] = volumeScore[key]
+
+        return combined
+
+    def calculateVariationsOfCalciumScore(self, patientID, seriesInstanceUID, typeOfScore):
         total = {"PatientID": patientID, "SeriesInstanceUID": seriesInstanceUID}
 
         for key in self.Items:
@@ -470,7 +504,10 @@ class CalciumScore():
                             voxelCount = self.exportJson[patientID][seriesInstanceUID]["lesions"][lesionsJson]["slices"][sliceJson]["labeledAs"][arteryJson]
                             voxelLength = self.exportJson[patientID][seriesInstanceUID]["voxelLength"]
 
-                            score = self.agatstonScore(voxelLength, voxelCount, attenuation,self.exportJson[patientID][seriesInstanceUID]["sliceRatio"])
+                            if typeOfScore == "Agatston":
+                                score = self.agatstonScore(voxelLength, voxelCount, attenuation, self.exportJson[patientID][seriesInstanceUID]["sliceRatio"])
+                            if typeOfScore == "Volume":
+                                score = self.volumeScore(voxelLength, voxelCount, self.exportJson[patientID][seriesInstanceUID]["sliceThickness"], self.exportJson[patientID][seriesInstanceUID]["sliceRatio"])
 
                             if arteryJson in total:
                                 total[arteryJson] += score
@@ -483,7 +520,10 @@ class CalciumScore():
                                 voxelLength = self.exportJson[patientID][seriesInstanceUID]["voxelLength"]
                                 voxelCount = self.exportJson[patientID][seriesInstanceUID]["lesions"][lesionsJson]["slices"][sliceJson]["labeledAs"][subLabelId][sublabelArtery]["voxelCount"]
 
-                                score = self.agatstonScore(voxelLength, voxelCount, maxAttenuation, self.exportJson[patientID][seriesInstanceUID]["sliceRatio"])
+                                if typeOfScore == "Agatston":
+                                    score = self.agatstonScore(voxelLength, voxelCount, maxAttenuation, self.exportJson[patientID][seriesInstanceUID]["sliceRatio"])
+                                if typeOfScore == "Volume":
+                                    score = self.volumeScore(voxelLength, voxelCount, self.exportJson[patientID][seriesInstanceUID]["sliceThickness"], self.exportJson[patientID][seriesInstanceUID]["sliceRatio"])
 
                                 if sublabelArtery in total:
                                     total[sublabelArtery] += score
@@ -528,6 +568,7 @@ class CalciumScore():
 
             self.exportJson[processedFilename["patientID"]][processedFilename["seriesInstanceUID"]] = {}
             self.exportJson[processedFilename["patientID"]][processedFilename["seriesInstanceUID"]]["sliceRatio"] = sliceThickness / 3.0
+            self.exportJson[processedFilename["patientID"]][processedFilename["seriesInstanceUID"]]["sliceThickness"] = sliceThickness
             self.exportJson[processedFilename["patientID"]][processedFilename["seriesInstanceUID"]]["voxelLength"] = spacing[1]  # voxel length in mm
             self.exportJson[processedFilename["patientID"]][processedFilename["seriesInstanceUID"]]["lesions"] = {}
             self.exportJson[processedFilename["patientID"]][processedFilename["seriesInstanceUID"]]["sliceCount"] = len(imageArray)
